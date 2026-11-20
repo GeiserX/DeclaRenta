@@ -1035,6 +1035,10 @@ const en: TranslationKeys = {
     "{{count}} Kraken ledger movement(s) of types that are not processed were ignored: {{types}}.",
   "kraken.ledger_rows_ignored.hint":
     "DeclaRenta reads from the ledger only staking and Earn rewards and airdrops. It reads purchases and sales from the trades CSV (Trades). A transfer that does not move coins between your own accounts can be income, such as a fork. If it is, declare it by hand in Renta Web.",
+  "kraken.ledger_income_not_booked":
+    "Kraken: {{count}} ledger movement(s) may be income and are not calculated: {{rows}}.",
+  "kraken.ledger_income_not_booked.hint":
+    "They are rows of type reward, dividend or credit that give you coins or money. DeclaRenta does not know what income they are, so it does not add them. A reward or a bonus can be a capital gain (general base). A dividend can be income from movable capital (savings base). If it is income of the year you file, declare it by hand in Renta Web at its value in euros on that day.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} trade(s) have no calculated commission, because their cash entries do not match the trade: {{rows}}.",
   "flatex.commission.not_recovered.hint":

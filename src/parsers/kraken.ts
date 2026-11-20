@@ -454,6 +454,9 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
  */
 const LEDGER_TRADE_TYPES = new Set(["trade", "spend", "receive", "conversion", "sale"]);
 
+/** Ledger types that give coins or money and may be income (#467). */
+const LEDGER_INCOME_TYPES = new Set(["reward", "dividend", "credit"]);
+
 /** Ledger transfer subtypes that move the user's own coins between wallets. */
 const OWN_COIN_TRANSFERS = new Set([
   "spottostaking", "stakingfromspot", "stakingtospot", "spotfromstaking", "spotfromfutures", "spottofutures",
@@ -479,6 +482,8 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
   const unreadableIncome: string[] = [];
   // Staking and Earn rows that take coins away, named (#467).
   const negativeIncome: string[] = [];
+  // Reward, dividend and credit rows that give coins or money, named (#467).
+  const possibleIncome: string[] = [];
   // Trade rows by refid: the date and each leg, "XXBT -0.1" (#467).
   const ledgerTrades = new Map<string, { date: string; legs: string[] }>();
 
@@ -579,6 +584,14 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
       if (!entry.date && isReadableTradeDate(tradeDate)) entry.date = tradeDate;
       entry.legs.push(`${type === "trade" ? "" : `${type} `}${asset || "—"} ${(fields[cols.amount] ?? "").trim() || "—"}`);
       ledgerTrades.set(refid, entry);
+    } else if (LEDGER_INCOME_TYPES.has(type) && (amountDec.gt(0) || quantityUnreadable(fields[cols.amount]))) {
+      // A reward, dividend or credit that gives coins or money may be income.
+      // It was only counted by type, so the income could go undeclared with
+      // no row named. DeclaRenta does not know what income it is, so it
+      // books nothing and names the row (#467).
+      const tradeDate = krakenDate(timeStr);
+      const shownDate = isReadableTradeDate(tradeDate) ? tradeDate : timeStr || "—";
+      possibleIncome.push(`${type} ${cleanSymbol(asset) || "—"} ${(fields[cols.amount] ?? "").trim() || "—"} ${shownDate}`);
     } else if (type === "transfer") {
       // Only moves between the user's own wallets are skipped with no word.
       // Any other transfer (a fork, an empty subtype) may be income: named.
@@ -601,6 +614,14 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
         message: `Kraken: ${negativeIncome.length} recompensa(s) de staking o Earn son negativas y no se calculan: ${negativeIncome.join("; ")}.`,
         hint: "Una recompensa negativa suele ser una recompensa que Kraken te ha retirado. También sale negativa cuando la comisión (fee) es mayor que el importe (amount). DeclaRenta no sabe qué recompensa anula, así que no cambia ningún importe. Sigue contando las demás recompensas como ingreso y sus monedas como compradas a su valor de ese día. Si la fila anula un ingreso del año que declaras, quítalo a mano en Renta Web. Si después vendiste esa criptomoneda, el coste de la venta puede ser demasiado alto. Revisa en Renta Web el coste de esas ventas.",
         context: { count: String(negativeIncome.length), rows: negativeIncome.join("; ") },
+      }]
+    : []), ...(possibleIncome.length > 0
+    ? [{
+        id: "kraken.ledger_income_not_booked",
+        severity: "warning" as const,
+        message: `Kraken: ${possibleIncome.length} movimiento(s) del libro mayor pueden ser ingresos y no se calculan: ${possibleIncome.join("; ")}.`,
+        hint: "Son filas de tipo reward, dividend o credit que te dan monedas o dinero. DeclaRenta no sabe de qué ingreso se trata, así que no las suma. Una recompensa o un bono puede ser una ganancia patrimonial (base general). Un dividendo puede ser un rendimiento del capital mobiliario (base del ahorro). Si es un ingreso del año que declaras, decláralo a mano en Renta Web con su valor en euros de ese día.",
+        context: { count: String(possibleIncome.length), rows: possibleIncome.join("; ") },
       }]
     : []), ...(ignoredCount > 0
     ? [{

@@ -839,6 +839,13 @@ práctico Renta 2025. The decisions, each pinned in
       cancels, so it books nothing and `kraken.income_negative` names it
       by type, coin, amount, fee and date, as at Binance. A reward whose
       fee equals its amount is booked as 0, as before.
+      A ledger row of type `reward`, `dividend` or `credit` that gives coins
+      or money (or whose amount cannot be read) may be income. It was only
+      counted by type in an info message whose hint never said so. It books
+      nothing, since DeclaRenta does not know what income it is, and
+      `kraken.ledger_income_not_booked` names it by type, coin, amount and
+      date. A row of those types that takes money away or writes zero stays
+      counted in `kraken.ledger_rows_ignored`.
     - Coinbase: a buy, sale or Convert whose `Asset` is empty or whose
       `Quantity Transacted` cannot be read is an unreadable row, named by
       that cell (with no Asset, by its type and quantity). A Convert still

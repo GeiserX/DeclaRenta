@@ -1037,6 +1037,10 @@ const ca: TranslationKeys = {
     "S'han ignorat {{count}} moviment(s) del llibre major de Kraken de tipus que no es processen: {{types}}.",
   "kraken.ledger_rows_ignored.hint":
     "DeclaRenta llegeix del llibre major només les recompenses de staking i Earn i els airdrops. Llegeix les compravendes del CSV d'operacions (Trades). Una transferència (transfer) que no mou monedes entre els teus propis comptes pot ser un ingrés, com una bifurcació (fork). Si ho és, declara-ho a mà a Renta Web.",
+  "kraken.ledger_income_not_booked":
+    "Kraken: {{count}} moviment(s) del llibre major poden ser ingressos i no es calculen: {{rows}}.",
+  "kraken.ledger_income_not_booked.hint":
+    "Són files de tipus reward, dividend o credit que et donen monedes o diners. DeclaRenta no sap de quin ingrés es tracta, així que no les suma. Una recompensa o un bo pot ser un guany patrimonial (base general). Un dividend pot ser un rendiment del capital mobiliari (base de l'estalvi). Si és un ingrés de l'any que declares, declara'l a mà a Renta Web amb el seu valor en euros d'aquell dia.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} operació(ns) no tenen la comissió calculada, perquè els seus apunts de caixa no quadren amb l'operació: {{rows}}.",
   "flatex.commission.not_recovered.hint":

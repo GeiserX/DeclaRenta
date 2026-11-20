@@ -1039,6 +1039,10 @@ const eu: TranslationKeys = {
     "Krakeneko liburu nagusiko {{count}} mugimendu ez dira kontuan hartu, prozesatzen ez diren motakoak direlako: {{types}}.",
   "kraken.ledger_rows_ignored.hint":
     "DeclaRentak liburu nagusitik staking eta Earn sariak eta airdrop-ak bakarrik irakurtzen ditu. Salerosketak eragiketen CSVtik (Trades) irakurtzen ditu. Zure kontuen artean monetak mugitzen ez dituen transferentzia (transfer) bat diru-sarrera bat izan daiteke, adibidez bifurkazio bat (fork). Hala bada, aitortu eskuz Renta Web-en.",
+  "kraken.ledger_income_not_booked":
+    "Kraken: liburu nagusiko {{count}} mugimendu diru-sarrerak izan daitezke, eta ez dira kalkulatzen: {{rows}}.",
+  "kraken.ledger_income_not_booked.hint":
+    "Monetak edo dirua ematen dizkizuten reward, dividend edo credit motako errenkadak dira. DeclaRentak ez daki zer diru-sarrera den, beraz, ez ditu batzen. Sari bat edo bonu bat ondare-irabazi bat izan daiteke (oinarri orokorra). Dibidendu bat kapital higigarriaren etekin bat izan daiteke (aurrezkiaren oinarria). Aitortzen duzun urteko diru-sarrera bada, aitortu eskuz Renta Web-en, egun horretan eurotan zuen balioarekin.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} eragiketak ez dute komisio kalkulaturik, haien kutxa-idazpenak eragiketarekin bat ez datozelako: {{rows}}.",
   "flatex.commission.not_recovered.hint":

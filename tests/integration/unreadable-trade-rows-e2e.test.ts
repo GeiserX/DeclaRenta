@@ -4043,6 +4043,46 @@ describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and a
     });
   });
 
+  describe("ledger rows of type reward, dividend and credit", () => {
+    // A positive reward, dividend or credit row may be income. It was only
+    // counted by type in an info message whose hint never said so, so up to
+    // 1000 € of income could go undeclared with no row named.
+    const KL_H = `"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"`;
+    const ledger = (...rows: string[]): Statement => krakenParser.parse([KL_H, ...rows].join("\n"));
+    const rows = [`"L1","R1","2025-03-01 00:00:00","reward","","currency","XETH","0.5","0","0.5"`,
+      `"L2","R2","2025-03-02 00:00:00","dividend","","currency","ZEUR","50","0","50"`,
+      `"L3","R3","2025-03-03 00:00:00","credit","","currency","ZEUR","abc","0","100"`];
+    const named = (m: readonly TaxMessage[] | undefined): TaxMessage | undefined => m?.find((x) => x.id === "kraken.ledger_income_not_booked");
+
+    it.each(METHODS)("[%s] each row is named by type, coin, amount and date, and nothing is booked", (method) => {
+      const parsed = ledger(...rows);
+      expect(parsed.cashTransactions).toEqual([]);
+      expect(named(parsed.parserMessages)?.context).toEqual({ count: "3", rows: "reward ETH 0.5 20250301; dividend EUR 50 20250302; credit EUR abc 20250303" });
+      expect(parsed.parserMessages?.some((m) => m.id === "kraken.ledger_rows_ignored")).toBe(false);
+      const r = runWith([[parsed, "Kraken"]], 2025, method, manual({ ETH: "2000" }));
+      expect(named(r.messages)?.severity).toBe("warning");
+      expect([r.interest.entries.length, r.generalGains.entries.length]).toEqual([0, 0]);
+    });
+
+    it("control: a row of those types that takes money away or writes zero stays counted, with no row named", () => {
+      const parsed = ledger(`"L4","R4","2025-03-04 00:00:00","credit","","currency","ZEUR","-5","0","95"`,
+        `"L5","R5","2025-03-05 00:00:00","reward","","currency","XETH","0","0","0.5"`);
+      expect(named(parsed.parserMessages)).toBeUndefined();
+      expect(parsed.parserMessages?.find((m) => m.id === "kraken.ledger_rows_ignored")?.context).toEqual({ count: "2", types: "credit (1), reward (1)" });
+    });
+
+    it("the warning is the es locale and exists in the five locales", () => {
+      const m = named(ledger(...rows).parserMessages)!;
+      const fill = (text: string): string => text.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => m.context?.[k] ?? "");
+      expect(m.message).toBe(fill((es as Record<string, string>)["kraken.ledger_income_not_booked"]!));
+      expect(m.hint).toBe((es as Record<string, string>)["kraken.ledger_income_not_booked.hint"]);
+      for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+        expect(locale["kraken.ledger_income_not_booked"]).toContain("{{rows}}");
+        expect(locale["kraken.ledger_income_not_booked.hint"]).toContain("Renta Web");
+      }
+    });
+  });
+
   it("the ignored ledger rows message is the es locale and exists in the five locales", () => {
     const m = krakenParser.parse([`"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"`,
       `"L1","R1","2025-03-01 00:00:00","adjustment","","currency","XXBT","-0.1","0","0"`].join("\n")).parserMessages!.find((x) => x.id === "kraken.ledger_rows_ignored")!;
