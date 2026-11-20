@@ -6,6 +6,9 @@ import { degiroParser } from "../../src/parsers/degiro.js";
 import { flatexParser } from "../../src/parsers/flatex.js";
 import { parseRevolutXlsx } from "../../src/parsers/revolut.js";
 import { parseEtoroXlsx } from "../../src/parsers/etoro.js";
+import { krakenParser } from "../../src/parsers/kraken.js";
+import { reportOptionsForMethod } from "../../src/generators/report.js";
+import type { FxMethod } from "../../src/types/tax.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../../src/parsers/merge.js";
 import { generateTaxReport } from "../../src/generators/report.js";
 import { formatReport } from "../../src/cli/format-report.js";
@@ -134,5 +137,47 @@ describe.each(hugeCases)("a cell of %s", (huge) => {
     const header = ["Date of Payment", "Instrument Name", "Net Dividend Received (USD)", "Withholding Tax Amount (USD)", "ISIN"];
     const st = await parseEtoroXlsx(workbook({ Dividends: [header, ["15/03/2025", "ACME", huge, "1.5", "US0378331005"]] }));
     expectNamedAndShort(statementOf([[st, "eToro"]]));
+  });
+});
+
+// The same for Kraken (#467, #470): a vol, price, cost or fee no broker writes
+// is passed on in exponent form, and the report names the trade and counts
+// none of it. BTC bought on 01/02 (the cell under test) and 01/03, 0.05 sold
+// on 01/06 for 2400 €. A vol out of range books no lot, so the sale takes the
+// second one: a gain of 400 €. With a readable vol the lot keeps its place
+// and has no cost, so the sale that takes it counts its proceeds and no cost,
+// 2400 €, and report.non_finite_disposal names it: the user may overpay,
+// never underpay.
+describe("Kraken, a trade cell no broker writes", () => {
+  const KH = `"txid","ordertxid","pair","time","type","ordertype","price","cost","fee","vol","margin","misc","ledgers"`;
+  const kraken = (cells: { price?: string; cost?: string; fee?: string; vol?: string }): Statement => krakenParser.parse([KH,
+    `"T1","O1","XBTEUR","2025-02-01 10:00:00","buy","limit","${cells.price ?? "40000.00"}","${cells.cost ?? "2000.00"}","${cells.fee ?? "1.00"}","${cells.vol ?? "0.05"}","0.0","","L1"`,
+    `"T2","O2","XBTEUR","2025-03-01 10:00:00","buy","limit","40000.00","2000.00","0.00","0.05","0.0","","L2"`,
+    `"T3","O3","XBTEUR","2025-06-01 10:00:00","sell","limit","48000.00","2400.00","0.00","0.05","0.0","","L3"`,
+  ].join("\n"));
+  const METHODS: FxMethod[] = ["multidivisa", "tradicional-divisa", "monodivisa"];
+  const gain = (st: Statement, method: FxMethod): string[] => {
+    const cg = generateTaxReport(statementOf([[st, "Kraken"]]), RATES, 2025, reportOptionsForMethod(method)).capitalGains;
+    return [cg.transmissionValue, cg.acquisitionValue, cg.netGainLoss].map((d) => d.toFixed(2));
+  };
+
+  it.each(METHODS)("[%s] control: a readable first buy is the lot the sale takes, with no message", (method) => {
+    const st = kraken({});
+    expect(generateTaxReport(statementOf([[st, "Kraken"]]), RATES, 2025, reportOptionsForMethod(method)).messages.map((m) => m.id))
+      .not.toContain("report.trade_out_of_range");
+    expect(gain(st, method)).toEqual(["2400.00", "2001.00", "399.00"]);
+  });
+
+  const cells: [string, string][] = [];
+  for (const huge of [...hugeCases, "1e25", "1e-25"]) for (const field of ["vol", "price", "cost", "fee"]) cells.push([field, huge]);
+  it.each(cells)("a %s of %s is named by the report, counted nowhere, and every output stays short", (field, huge) => {
+    const st = kraken({ [field]: huge });
+    expectNamedAndShort(statementOf([[st, "Kraken"]]));
+    for (const method of METHODS) {
+      expect(gain(st, method), method).toEqual(field === "vol" ? ["2400.00", "2000.00", "400.00"] : ["2400.00", "0.00", "2400.00"]);
+      const r = generateTaxReport(statementOf([[st, "Kraken"]]), RATES, 2025, reportOptionsForMethod(method));
+      expect(r.messages.find((m) => m.id === "report.trade_out_of_range")?.context?.rows, method).toBe("BTC (01/02/2025)");
+      if (field !== "vol") expect(r.messages.map((m) => m.id), method).toContain("report.non_finite_disposal");
+    }
   });
 });
