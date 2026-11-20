@@ -1010,6 +1010,14 @@ práctico Renta 2025. The decisions, each pinned in
       dollar parity on the open day booked its close leg unconverted (a
       120 USD gain became 0). With 1 at open, an FX rate at close that
       cannot be read now makes the row unreadable too.
+    - eToro: a CFD kept its share's ISIN, so FIFO pooled it with the shares
+      and with other CFDs of that ISIN, and a share sale took a CFD's cost
+      (a 2025 gain moved into 2026). A CFD is a contract of its own, never
+      homogeneous with the shares (art. 37.2 LIRPF). Its two legs now carry
+      no ISIN and a `conid` of their own (`etoro-<Position ID>`, else the
+      ISIN or name, open date and row), so each CFD closes only its own
+      lot. Its description keeps the ISIN. The anti-churning rule never
+      read CFDs.
     - eToro: an Account Activity row whose Type names staking was dropped
       with no word, because only interest was read. DeclaRenta does not
       import eToro crypto, so the reward is not booked and its value is not

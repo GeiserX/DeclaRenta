@@ -3250,6 +3250,43 @@ describe("#467 eToro sweep 3: FX rates of 1, CFD lots, quotes with no FX column 
       expect(report(parsed, method).capitalGains.disposals).toEqual([]);
     });
   });
+
+  // English export. Apple shares: 5 units, 10/02/2025 → 10/12/2025, 100 → 300
+  // USD, a 1000 USD gain (920 €). A CFD on Apple: 5 units, 10/01/2025 →
+  // 10/03/2026, 200 → 210 USD, a 50 USD gain (46 €) in 2026.
+  const EN_H = ["Position ID", "Action", "Long / Short", "Amount", "Units / Contracts", "Open Date", "Close Date", "Leverage",
+    "Profit(USD)", "FX rate at open (USD)", "FX rate at close (USD)", "Open Rate", "Close Rate", "Type", "ISIN"];
+  type Pos = { id?: string; leverage?: string; type?: string };
+  const shares = (p: Pos = {}): string[] => [p.id ?? "1", "Apple", "Long", "500", "5", "10/02/2025 10:00:00", "10/12/2025 16:00:00", p.leverage ?? "1",
+    "1000", "1", "1", "100", "300", p.type ?? "Stocks", AAPL];
+  const cfd = (p: Pos = {}): string[] => [p.id ?? "2", "Apple", "Long", "500", "5", "10/01/2025 10:00:00", "10/03/2026 16:00:00", p.leverage ?? "2",
+    "50", "1", "1", "200", "210", p.type ?? "CFD", AAPL];
+  const closed = (rows: string[][], header = EN_H): Promise<Statement> =>
+    book("Closed Positions", [header, ...rows.map((r) => r.filter((_c, i) => header.includes(EN_H[i]!)))]);
+  const noId = EN_H.filter((h) => h !== "Position ID");
+  describe.each([
+    ["a CFD", [shares(), cfd()]],
+    ["a CFD of Type Stocks with leverage 2", [shares(), cfd({ type: "Stocks" })]],
+    ["a CFD, before a CFD whose result is the 2025 one", [shares({ leverage: "2", type: "CFD" }), cfd()]],
+  ] as [string, string[][]][])("Apple shares or a CFD closed in 2025, next to %s closed in 2026", (_label, rows) => {
+    it.each(METHODS)("[%s] each position closes its own lot, never the other's, with or without a Position ID", async (method) => {
+      for (const header of [EN_H, noId]) {
+        const parsed = await closed(rows, header);
+        expect(parsed.parserMessages).toBeUndefined();
+        expect(gain(report(parsed, method))).toBe("920.00");
+        expect(gain(report(parsed, method, 2026))).toBe("46.00");
+      }
+    });
+  });
+  it.each(METHODS)("[%s] a CFD's disposal still names the ISIN of its share", async (method) => {
+    const disposals = report(await closed([shares({ leverage: "2", type: "CFD" })]), method).capitalGains.disposals;
+    expect(disposals.map((d) => [d.description, d.gainLossEur.toFixed(2)])).toEqual([[`Apple (${AAPL})`, "920.00"]]);
+  });
+  it.each(METHODS)("[%s] control: two share positions of one ISIN are homogeneous and stay in one FIFO queue", async (method) => {
+    const parsed = await closed([shares(), cfd({ leverage: "1", type: "Stocks" })]);
+    // The December sale takes the January lot at 200: 5 × 100 USD = 460 €.
+    expect(gain(report(parsed, method))).toBe("460.00");
+  });
 });
 
 describe("#467 Flatex: a cash leg, income row, currency, Kurs or order number the parser cannot read is named, never booked as a fee, as 0, as euros or a crash", () => {

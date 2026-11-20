@@ -170,6 +170,8 @@ La regla anti-churning sí se aplica a bonos (son valores homogéneos).
 
 Los CFDs tributan como ganancias y pérdidas patrimoniales, no como rendimientos del capital mobiliario. DeclaRenta detecta CFDs en eToro por el campo `leverage > 1`, el tipo `"CFD"`, o un tipo de materias primas (`"Commodity"`, `"Materias primas"`) o de divisas (`"Currencies"`, `"Divisas"`), que en eToro son siempre CFDs. Se soportan acciones, índices, materias primas y divisas como CFDs. Las posiciones de criptomonedas no se importan y se avisa de ellas.
 
+Cada CFD es un contrato propio, no un valor homogéneo con las acciones de su ISIN. DeclaRenta calcula el resultado de cada CFD de eToro solo con su apertura y su cierre. No lo mezcla con las acciones ni con otros CFDs en el FIFO.
+
 Las posiciones cortas en CFDs se soportan: si vendes primero sin lotes previos, DeclaRenta registra un coste base de 0 EUR y emite un aviso.
 
 La regla anti-churning no se aplica a CFDs. Los CFDs de criptomonedas no están soportados actualmente.

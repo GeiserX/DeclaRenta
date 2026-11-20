@@ -64,6 +64,7 @@ const TYPE_HEADERS = ["type", "tipo"];
 const LEVERAGE_HEADERS = ["leverage", "apalancamiento"];
 const ISIN_HEADERS = ["isin"];
 const DIRECTION_HEADERS = ["long / short", "long/short"];
+const POSITION_ID_HEADERS = ["position id", "id de posición"];
 
 // Dividend sheet columns
 const DIV_DATE_HEADERS = ["date of payment", "fecha de pago", "date"];
@@ -176,6 +177,7 @@ function parseClosedPositions(
   const leverageCol = findColumn(headers, LEVERAGE_HEADERS);
   const isinCol = findColumn(headers, ISIN_HEADERS);
   const directionCol = findColumn(headers, DIRECTION_HEADERS);
+  const positionIdCol = findColumn(headers, POSITION_ID_HEADERS);
 
   // Column detection failed but the sheet HAS data rows → emit an error rather
   // than silently dropping every trade (eToro renamed/removed the columns).
@@ -349,13 +351,23 @@ function parseClosedPositions(
     // different cost on the BUY leg than proceeds on the SELL leg.
     const buyMoney = toFiniteDecimal(amount).neg().toString();
 
+    // A CFD is a contract of its own, never homogeneous with the shares of
+    // its ISIN nor with another CFD (art. 37.2 LIRPF pools only homogeneous
+    // shares). Under the share's ISIN, FIFO closed a 2025 share sale against a
+    // CFD bought earlier and moved the gain into another year (#467). Its two
+    // legs share a lot of their own, keyed by the Position ID (else by the
+    // row), and its description keeps the ISIN for the user.
+    const positionId = positionIdCol >= 0 ? (row[positionIdCol] ?? "").trim() : "";
+    const lot = assetCat === "CFD"
+      ? { description: isin ? `${symbol} (${isin})` : symbol, isin: "", conid: `etoro-${/^\d+$/.test(positionId) ? positionId : `${isin || symbol}-${openDate}-${i}`}` }
+      : { description: symbol, isin };
+
     // Buy leg (opening)
     trades.push({
       tradeID: `etoro-open-${openDate}-${symbol}-${i}`,
       accountId: "",
       symbol,
-      description: symbol,
-      isin,
+      ...lot,
       assetCategory: assetCat,
       currency,
       tradeDate: openDate,
@@ -385,8 +397,7 @@ function parseClosedPositions(
       tradeID: `etoro-close-${closeDate}-${symbol}-${i}`,
       accountId: "",
       symbol,
-      description: symbol,
-      isin,
+      ...lot,
       assetCategory: assetCat,
       currency,
       tradeDate: closeDate,
