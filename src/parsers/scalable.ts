@@ -298,9 +298,13 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       // cell that cannot be read is no withholding: a dividend is booked in
       // full with none, which can only raise the tax; a reversal is not booked
       // at all, so the dividend it reverses keeps its income, and is named.
+      // An empty, blank or missing tax cell (a short row) on a reversal is no
+      // written zero either: booked with no refund, the reversed dividend kept
+      // its whole withholding on 0 € of income. A written "0" is the file's
+      // word, and a file with no tax column books no withholding to refund.
       const reversal = new Decimal(amount).isNegative();
       const taxCell = cols.tax >= 0 ? fields[cols.tax] : undefined;
-      if (reversal && taxCell !== undefined && taxCell.trim() !== "" && quantityUnreadable(taxCell)) {
+      if (reversal && cols.tax >= 0 && quantityUnreadable(taxCell)) {
         incomeNotRead.push(cashIncomeRowText((fields[cols.type] ?? "").trim(), `${description || "—"} (${isin}) ${amount}`,
           currency || "EUR", tradeDate, [unreadableCell(headers[cols.tax] ?? "tax", taxCell)]));
         continue;

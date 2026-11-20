@@ -15,6 +15,8 @@
  *   was dropped with no word, even a sale or a dividend.
  * - A Distribution with a written 0 amount and a tax booked a 0 dividend that
  *   took its own tax, so the tax raised the 0588 of the country's other dividends.
+ * - A reversed Distribution whose tax cell was empty or missing was booked
+ *   with no refund, so the reversed dividend kept its whole withholding.
  */
 import { describe, it, expect } from "vitest";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
@@ -268,5 +270,36 @@ describe("Scalable round 3: rows booked against what the file says", () => {
 
   it("a written zero Distribution with no tax still books its zero, as the file says", () => {
     expect(cash(parse([dist(GOOG, "0", "0", "2025-06-01")]))).toEqual([`Dividends ${GOOG} 0`]);
+  });
+
+  it.each(METHODS)("[%s] a reversal whose tax cell is empty, blank or missing is not booked and is named", (method) => {
+    const reversals: [string, string][] = [
+      [dist(ES, "-100,00", "", "2025-06-05"), '""'],
+      [dist(ES, "-100,00", "   ", "2025-06-05"), '""'],
+      ["2025-06-05;10:00;Executed;R1;Div;Security;Distribution;ES0113900J37;0;0;-100,00;0", "—"],
+    ];
+    for (const [row, shown] of reversals) {
+      const rows = [dist(ES, "100,00", "-19,00", "2025-06-01"), row];
+      const s = parse(rows);
+      expect(cash(s), row).toEqual([`Dividends ${ES} 100`, `Withholding Tax ${ES} -19`]);
+      expect(msg(s, "scalable.income_row_not_read"), row).toBe(`Distribution Div (${ES}) -100 EUR 20250605 [tax: ${shown}]`);
+      const r = report(rows, method);
+      expect(sums(r), row).toBe("div=100.00 sw=19.00 dtd=0.00");
+      expect(r.messages.map((m) => m.id), row).toContain("scalable.income_row_not_read");
+    }
+    // Control: a written 0 is the file's word, and the reversal is booked.
+    const zero = [dist(ES, "100,00", "-19,00", "2025-06-01"), dist(ES, "-100,00", "0", "2025-06-05")];
+    expect(cash(parse(zero))).toEqual([`Dividends ${ES} 100`, `Withholding Tax ${ES} -19`, `Dividends ${ES} -100`]);
+    expect(parse(zero).parserMessages).toBeUndefined();
+  });
+
+  it.each(METHODS)("[%s] a file with no tax column still books a reversal", (method) => {
+    const header = "date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;currency";
+    const rows = [
+      "2025-06-01;10:00;Executed;D1;Div;Security;Distribution;ES0113900J37;0;0;100,00;0;EUR",
+      "2025-06-05;10:00;Executed;D2;Div;Security;Distribution;ES0113900J37;0;0;-100,00;0;EUR",
+    ];
+    expect(parse(rows, header).parserMessages).toBeUndefined();
+    expect(sums(report(rows, method, header))).toBe("div=0.00 sw=0.00 dtd=0.00");
   });
 });
