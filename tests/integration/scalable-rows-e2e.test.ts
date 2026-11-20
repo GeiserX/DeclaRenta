@@ -420,6 +420,19 @@ describe("Scalable round 4: a Distribution of 0 with a positive tax is a refund,
     expect(sums(report(rows, method))).toBe("div=100.00 sw=24.00 dtd=0.00");
   });
 
+  // decimal.js counts 0 as positive, so a zero tax once read as a refund.
+  it.each(METHODS)("[%s] a zero row whose tax is 0, 0,00, -0,00, empty or unreadable is the file's written zero: no refund, no word", (method) => {
+    for (const tax of ["0", "0,00", "-0,00", "", "abc"]) {
+      const rows = [dist(ES, "100,00", "-19,00", "2025-06-01"), dist(ES, "0,00", tax, "2025-06-03")];
+      const s = parse(rows);
+      expect(s.parserMessages, tax).toBeUndefined();
+      expect(cash(s), tax).toEqual([`Dividends ${ES} 100`, `Withholding Tax ${ES} -19`, `Dividends ${ES} 0`]);
+      const r = report(rows, method);
+      expect(sums(r), tax).toBe("div=100.00 sw=19.00 dtd=0.00");
+      expect(r.messages.map((m) => m.id), tax).not.toContain(REFUND);
+    }
+  });
+
   it("the warning is the es locale and exists in the five locales", () => {
     const m = parse([dist(ES, "0,00", "5,00", "2025-06-03")]).parserMessages!.find((x) => x.id === REFUND)!;
     const fill = (text: string): string => text.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => m.context?.[k] ?? "");

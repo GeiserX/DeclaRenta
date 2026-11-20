@@ -329,9 +329,12 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       // dividend of its ISIN within 7 days, never below 0, and it is named:
       // with no dividend that close the report leaves it out. In a file that
       // writes withholdings positive the row may be a late withholding: booked
-      // as a refund it can only raise the tax (#467).
+      // as a refund it can only raise the tax (#467). A tax of 0 is no refund:
+      // decimal.js counts 0 as positive, so the test is greaterThan(0). A zero
+      // or unreadable tax (read as 0) on a zero row is the file's written
+      // zero and stays booked with no word.
       const taxNum = parseFloat(parseNumber(tax));
-      const zeroRefund = new Decimal(amount).isZero() && new Decimal(tax).isPositive();
+      const zeroRefund = new Decimal(amount).isZero() && new Decimal(tax).greaterThan(0);
       if (zeroRefund) {
         zeroDividendRefund.push(cashIncomeRowText((fields[cols.type] ?? "").trim(), `${description || "—"} (${isin})`, currency || "EUR", tradeDate,
           [unreadableCell(headers[cols.amount] ?? "amount", fields[cols.amount]), unreadableCell(headers[cols.tax] ?? "tax", fields[cols.tax])]));
