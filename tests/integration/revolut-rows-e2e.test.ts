@@ -21,6 +21,8 @@
  * - A split, merger or spin-off with no ticker was dropped with no word: a
  *   split's later sale kept its pre-split cost, a cash merger's money was lost.
  * - A split that paid cash was applied with the cash dropped.
+ * - A currency symbol ("€1500") that disagrees with the Currency column was
+ *   ignored.
  */
 import { describe, it, expect } from "vitest";
 import * as XLSX from "xlsx";
@@ -438,5 +440,58 @@ describe("Revolut splits that pay cash are never applied with the cash dropped",
       // applied with its 750 USD dropped.
       expect(r.capitalGains.netGainLoss.toFixed(2), total).toBe("770.00");
     }
+  });
+});
+
+describe("Revolut amounts written with a currency symbol that disagrees with the Currency column are never booked in the wrong currency", () => {
+  const dividend = (total: string, currency = "USD") => ["2025-05-15T10:00:00Z", "AAPL", "DIVIDEND", "", "", total, currency, "1.1"];
+
+  it.each(METHODS)("[%s] control: \"$150\" and \"$1500\" with a Currency of USD give a 550 € gain, and \"$110\" a 121 € dividend", async (method) => {
+    const r = await report([BUY, sell("$150", "$1500")], method);
+    expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("550.00");
+    const d = await report([dividend("$110")], method);
+    expect(d.dividends.grossIncome.toFixed(2)).toBe("121.00");
+  });
+
+  it.each(METHODS)("[%s] a sale written \"€150\" / \"€1500\" with a Currency of USD is named and books nothing", async (method) => {
+    for (const [price, total, cells] of [
+      ["€150", "€1500", 'Currency: "USD", Price per share: "€150", Total Amount: "€1500"'],
+      ["", "1500 €", 'Currency: "USD", Total Amount: "1500 €"'],
+    ] as const) {
+      const s = await parse([BUY, sell(price, total)]);
+      expect(msg(s, "parser.trade_row_unreadable"), total).toBe(`AAPL 20250603 [${cells}]`);
+      expect(s.openPositions.map((p) => [p.symbol, p.quantityUnknown]), total).toEqual([["AAPL", true]]);
+      const r = await report([BUY, sell(price, total)], method);
+      expect(r.capitalGains.transmissionValue.toFixed(2), total).toBe("0.00");
+    }
+  });
+
+  it.each(METHODS)("[%s] a dividend of \"€110\" with a Currency of GBP or USD is named and not booked", async (method) => {
+    for (const currency of ["GBP", "USD"]) {
+      const s = await parse([dividend("€110", currency)]);
+      expect(s.cashTransactions, currency).toEqual([]);
+      expect(msg(s, "parser.cash_income_amount_unreadable"), currency)
+        .toBe(`DIVIDEND AAPL ${currency} 20250515 [Currency: "${currency}", Total Amount: "€110"]`);
+      const r = await report([dividend("€110", currency)], method);
+      expect(r.dividends.grossIncome.toFixed(2), currency).toBe("0.00");
+    }
+  });
+
+  it.each(METHODS)("[%s] closed positions: proceeds of \"€1500\" against a cost of \"£1000\" with a Currency of GBP keep both legs unreadable", async (method) => {
+    const ctl = await report([closed({ Currency: "GBP", "Cost basis": "£1000", "Gross proceeds": "£1500", Fees: "0" })], method, HC);
+    expect(ctl.capitalGains.netGainLoss.toFixed(2)).toBe("425.00");
+    const o = { Currency: "GBP", "Cost basis": "£1000", "Gross proceeds": "€1500", Fees: "0" };
+    const s = await parse([closed(o)], HC);
+    const cells = 'Currency: "GBP", Gross proceeds: "€1500"';
+    expect(msg(s, "parser.trade_row_unreadable")).toBe(`AAPL 20250203 [${cells}]; AAPL 20250603 [${cells}]`);
+    const r = await report([closed(o)], method, HC);
+    expect(r.capitalGains.transmissionValue.toFixed(2)).toBe("0.00");
+  });
+
+  it.each(METHODS)("[%s] an empty Currency cell takes the currency of the symbol", async (method) => {
+    const s = await parse([dividend("$110", "")]);
+    expect(s.cashTransactions[0]!.currency).toBe("USD");
+    const d = await report([dividend("$110", "")], method);
+    expect(d.dividends.grossIncome.toFixed(2)).toBe("121.00");
   });
 });

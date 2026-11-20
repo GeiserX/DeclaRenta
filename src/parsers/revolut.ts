@@ -372,6 +372,9 @@ function parseTrades(
 // Transaction-log amount parser
 // ---------------------------------------------------------------------------
 
+// The currency a symbol written in a Revolut amount names.
+const CURRENCY_SYMBOLS: Record<string, string> = { "€": "EUR", "$": "USD", "£": "GBP", "¥": "JPY" };
+
 // A number with commas between groups of three digits: "1,500", "1,234,567.5".
 const US_THOUSANDS = /^-?\d{1,3}(,\d{3})+(\.\d+)?$/;
 
@@ -388,8 +391,15 @@ const US_THOUSANDS = /^-?\d{1,3}(,\d{3})+(\.\d+)?$/;
 function readRevolutNumber(raw: string | undefined): { currency: string; amount: Decimal | undefined } {
   const trimmed = (raw ?? "").trim();
   const match = trimmed.match(/^([A-Z]{3})(?:\s+(.*))?$/);
-  const currency = match ? match[1]! : "";
-  const text = (match ? match[2] ?? "" : trimmed).replace(/[€$£¥]/g, "").trim();
+  const rest = match ? match[2] ?? "" : trimmed;
+  // A currency symbol ("€110", "1500 €") names the currency when no code is
+  // written: it was stripped and the amount booked in the Currency cell's
+  // currency, so "€110" with Currency GBP was a 93.50 € dividend (#467). Two
+  // different symbols name no currency, so the cell has no number.
+  const symbols = [...new Set(rest.match(/[€$£¥]/g) ?? [])];
+  if (symbols.length > 1) return { currency: "", amount: undefined };
+  const currency = match ? match[1]! : symbols[0] === undefined ? "" : CURRENCY_SYMBOLS[symbols[0]]!;
+  const text = rest.replace(/[€$£¥]/g, "").trim();
   if (!text) return { currency, amount: undefined };
   const value = toFiniteDecimalString(US_THOUSANDS.test(text) ? text.replace(/,/g, "") : parseNumber(text), "", false);
   return { currency, amount: value === "" ? undefined : new Decimal(value) };
