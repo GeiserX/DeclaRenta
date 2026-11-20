@@ -1010,7 +1010,9 @@ práctico Renta 2025. The decisions, each pinned in
       booked, it gave a 0597 or 0588 credit on 0 € of income. A refund
       (positive) is booked alone, as a refund, which the report takes from
       a dividend of its ISIN within 7 days, never below 0. Before, it was
-      booked as a new withholding.
+      booked as a new withholding. `trade_republic.dividend_tax_refund`
+      names the refund row: with no dividend that close the report leaves
+      the refund out, and the user corrects 0588 or 0597 by hand.
       A Trade Republic dividend read from `original_amount` took its sign
       from that cell alone. When `amount` is a readable nonzero number of
       the other sign, or `original_amount` is 0, the row says two things:

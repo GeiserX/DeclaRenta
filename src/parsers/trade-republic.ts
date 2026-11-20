@@ -141,6 +141,8 @@ function parseTrCsv(lines: string[]): Statement {
   // CASH rows of a type the parser does not know that name a security (#467).
   // Buys and sales with a positive tax, which is not booked (#467).
   const positiveTradeTax: string[] = [];
+  // Dividend rows of a written zero whose tax is a refund, booked alone (#467).
+  const zeroDividendRefund: string[] = [];
   const unknownCash: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
@@ -387,15 +389,18 @@ function parseTrCsv(lines: string[]): Statement {
       // income, with no word: it is not booked, and the row is named. A
       // refund (positive) was booked as a new withholding: it is booked
       // alone, as a refund, so the report lowers the withholding of a
-      // dividend of its ISIN within 7 days, never below 0 (#467). A written
-      // zero with no tax stays as the file writes it.
+      // dividend of its ISIN within 7 days, never below 0. It is named too:
+      // with no dividend that close the report leaves it out (#467). A
+      // written zero with no tax stays as the file writes it.
       if (new Decimal(divAmount).isZero() && !taxDec.isZero()) {
+        const amountCol = fromOriginal ? cols.originalAmount : cols.amount;
         if (taxDec.isNegative()) {
-          const amountCol = fromOriginal ? cols.originalAmount : cols.amount;
           unreadableIncome.push(cashIncomeRowText(field(fields, cols.type), dividendSecurity(name, symbol), divCurrency, tradeDate,
             [unreadableCell(headers[amountCol] ?? "amount", fields[amountCol])], dividendTaxText()));
         } else {
           pushWithholding(taxDec.toString());
+          zeroDividendRefund.push(cashIncomeRowText(field(fields, cols.type), dividendSecurity(name, symbol), currency, tradeDate,
+            [unreadableCell(headers[amountCol] ?? "amount", fields[amountCol]), unreadableCell(headers[cols.tax] ?? "tax", fields[cols.tax])]));
         }
         continue;
       }
@@ -575,6 +580,16 @@ function parseTrCsv(lines: string[]): Statement {
       message: `Trade Republic: ${positiveTradeTax.length} compra(s) o venta(s) traen un impuesto (tax) positivo, y DeclaRenta no lo cuenta: ${rows}.`,
       hint: "Trade Republic escribe en negativo el impuesto que pagas en una compra o una venta. Un impuesto positivo es dinero que te devuelven, así que no es un gasto de la operación. DeclaRenta no lo suma al coste ni lo resta de la venta. Así no pagas de menos. Si es la devolución de un impuesto que DeclaRenta restó en otra operación, esa operación tiene un gasto de más: corrígela a mano en Renta Web.",
       context: { count: String(positiveTradeTax.length), rows },
+    });
+  }
+  if (zeroDividendRefund.length > 0) {
+    const rows = zeroDividendRefund.join("; ");
+    parserMessages.push({
+      id: "trade_republic.dividend_tax_refund",
+      severity: "warning",
+      message: `Trade Republic: ${zeroDividendRefund.length} fila(s) de dividendo traen importe 0 y una devolución de retención (tax positivo): ${rows}.`,
+      hint: "Una fila con importe 0 no es un dividendo. Su retención (tax) positiva es una devolución. DeclaRenta la resta de la retención de un dividendo del mismo valor de 7 días antes o después. Si no hay ninguno, no la resta, y la retención de ese dividendo cuenta entera: así pagarías de menos. Toma la retención final del informe fiscal de Trade Republic y corrige a mano en Renta Web la casilla 0588, o la 0597 si el valor es español.",
+      context: { count: String(zeroDividendRefund.length), rows },
     });
   }
   markUndatedTrades(trades, headers[cols.date] ?? "date");

@@ -1184,6 +1184,10 @@ const eu: TranslationKeys = {
     "Trade Republic: {{count}} dibidenduk ez dute atxikipen (tax) irakurgarririk, eta atxikipenik gabe kalkulatzen dira: {{rows}}.",
   "trade_republic.tax_unreadable.hint":
     "Kortxete artean dago atxikipenaren gelaxka (tax). Ez da zenbaki bat. DeclaRentak dibidendu osoa batzen du, baina ez daki zenbat atxiki zizuten. Horrela ez duzu gutxiago ordaintzen, baina atxikipen horren kenkaria galtzen duzu (0588 laukia, edo 0597 balorea espainiarra bada). Errenkadak dibidendu bat baliogabetzen badu (zenbateko negatiboa), DeclaRentak ez du kentzen, eta baliogabetutako dibidendua batuta geratzen da. Hartu atxikipena Trade Republic-en txosten fiskaletik eta gehitu eskuz Renta Web-en.",
+  "trade_republic.dividend_tax_refund":
+    "Trade Republic: {{count}} dibidendu-errenkadak 0 zenbatekoa eta atxikipen-itzulketa bat (tax positiboa) dakarte: {{rows}}.",
+  "trade_republic.dividend_tax_refund.hint":
+    "0 zenbatekoa duen errenkada ez da dibidendu bat. Bere atxikipen (tax) positiboa itzulketa bat da. DeclaRentak balore bereko dibidendu baten atxikipenetik kentzen du, 7 egun lehenago edo geroago. Ez badago bat ere, ez du kentzen, eta dibidendu horren atxikipena osorik kontatzen da: horrela gutxiago ordainduko zenuke. Hartu azken atxikipena Trade Republic-en zerga-txostenetik eta zuzendu eskuz Renta Web-en 0588 laukia, edo 0597 laukia balorea espainiarra bada.",
   "trade_republic.trade_tax_positive":
     "Trade Republic: {{count}} erosketa edo salmentak zerga (tax) positiboa dakarte, eta DeclaRentak ez du kontatzen: {{rows}}.",
   "trade_republic.trade_tax_positive.hint":

@@ -1180,6 +1180,10 @@ const en: TranslationKeys = {
     "Trade Republic: {{count}} dividend(s) have no readable withholding (tax) and are calculated with no withholding: {{rows}}.",
   "trade_republic.tax_unreadable.hint":
     "The square brackets show the withholding cell (tax). It is not a number. DeclaRenta adds the full dividend, but does not know how much was withheld. So you do not underpay, but you lose the deduction for that withholding (box 0588, or 0597 if the security is Spanish). If the row reverses a dividend (a negative amount), DeclaRenta does not subtract it, and the reversed dividend stays added. Take the withholding from the Trade Republic tax report and add it by hand in Renta Web.",
+  "trade_republic.dividend_tax_refund":
+    "Trade Republic: {{count}} dividend row(s) have an amount of 0 and a withholding refund (a positive tax): {{rows}}.",
+  "trade_republic.dividend_tax_refund.hint":
+    "A row with an amount of 0 is no dividend. Its positive withholding (tax) is a refund. DeclaRenta subtracts it from the withholding of a dividend of the same security from 7 days before or after. If there is none, it does not subtract it, and the withholding of that dividend counts in full: you would underpay. Take the final withholding from the Trade Republic tax report and correct box 0588 by hand in Renta Web, or box 0597 if the security is Spanish.",
   "trade_republic.trade_tax_positive":
     "Trade Republic: {{count}} buy(s) or sale(s) have a positive tax, and DeclaRenta does not count it: {{rows}}.",
   "trade_republic.trade_tax_positive.hint":

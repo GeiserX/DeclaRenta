@@ -458,13 +458,20 @@ describe("Trade Republic dividend of a written zero with a tax: a withholding wi
     expect([r.dividends.grossIncome.toFixed(2), r.doubleTaxation.deduction.toFixed(2)]).toEqual(["99.99", "0.00"]);
   });
 
-  it.each(METHODS)("[%s] a row of amount 0 with a tax of +5.00 is a refund: alone it gives 0597 0.00, after a dividend with -19 it gives 14.00, not 24.00", (method) => {
+  it.each(METHODS)("[%s] a row of amount 0 with a tax of +5.00 is a refund, and named: alone it gives 0597 0.00, after a dividend with -19 it gives 14.00, not 24.00", (method) => {
     const alone = tr(ES_DIV({ amount: "0", tax: "5.00" }));
     expect(alone.cashTransactions.map((c) => [c.type, c.amount])).toEqual([["Withholding Tax", "5"]]);
-    expect(alone.parserMessages).toBeUndefined();
+    expect(alone.parserMessages?.map((m) => m.id)).toEqual(["trade_republic.dividend_tax_refund"]);
+    expect(rowsOf(alone, "trade_republic.dividend_tax_refund")).toBe('DIVIDEND Iberia SA (ES0000001001) EUR 20250515 [amount: "0", tax: "5.00"]');
     expect(report(alone, method).dividends.spanishWithholding.toFixed(2)).toBe("0.00");
     const r = report(tr(ES_DIV({ tax: "-19.00" }), ES_DIV({ date: "2025-05-20", amount: "0", tax: "5.00" })), method);
     expect([r.dividends.grossIncome.toFixed(2), r.dividends.spanishWithholding.toFixed(2)]).toEqual(["100.00", "14.00"]);
+  });
+
+  it.each(METHODS)("[%s] a refund a month after its dividend is out of the report's 7 days: 0597 stays 19.00, and the row is named for the user to correct", (method) => {
+    const s = tr(ES_DIV({ tax: "-19.00" }), ES_DIV({ date: "2025-06-15", amount: "0", tax: "5.00" }));
+    expect(rowsOf(s, "trade_republic.dividend_tax_refund")).toBe('DIVIDEND Iberia SA (ES0000001001) EUR 20250615 [amount: "0", tax: "5.00"]');
+    expect(report(s, method).dividends.spanishWithholding.toFixed(2)).toBe("19.00");
   });
 
   it("a written zero with no tax, or a tax of 0, stays as the file writes it, with no word", () => {
