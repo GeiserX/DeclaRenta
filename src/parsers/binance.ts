@@ -155,8 +155,11 @@ function convertBinanceDate(dateStr: string): string {
   // YYYY-MM-DD (4-digit year)
   const match4 = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (match4) return `${match4[1]}${match4[2]}${match4[3]}`;
-  // YY-MM-DD (2-digit year, Spanish exports)
-  const match2 = trimmed.match(/^(\d{2})-(\d{2})-(\d{2})/);
+  // YY-MM-DD (2-digit year, Spanish exports). The lookahead stops it from
+  // reading the head of a day-first date: "01-06-2025" re-saved by a
+  // spreadsheet is no "01-06-20" (20/06/2001). It falls to the last line,
+  // gives no real day, and markUndatedTrades names the row (#467).
+  const match2 = trimmed.match(/^(\d{2})-(\d{2})-(\d{2})(?!\d)/);
   if (match2) return `20${match2[1]}${match2[2]}${match2[3]}`;
   return trimmed.replace(/-/g, "").slice(0, 8);
 }
@@ -727,6 +730,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       const handBack = (group: TxRow[], unpaired: NetLeg[]): void => {
         const coins = new Set(unpaired.map((l) => l.coin));
         for (const r of group) if (coins.has(r.coin)) r.parsed = false;
+        markRoundTrips(group);
       };
       if (start.operation === "buy crypto with fiat") {
         // Sub-group by funding-wallet Remark before netting. Fiat-buys are ALL
@@ -946,6 +950,26 @@ function parseBinanceTxCsv(lines: string[]): Statement {
     ...(manualRateHints.length > 0 ? { manualRateHints } : {}),
     ...(parserMessages.length > 0 ? { parserMessages } : {}),
   };
+}
+
+/**
+ * Name the rows of a coin that goes out and comes back in one Convert window
+ * (#467). `netLegs` drops a coin whose rows net to zero, so two orders in one
+ * ±1 s window, BTC → ETH and ETH → BTC, left nothing to pair: both disposals
+ * vanished with no word, and the BTC lot kept its old cost. Which row belongs
+ * to which order is a guess, so nothing is booked for that coin and each of
+ * its rows is named (`binance.unpaired_leg`) for the user to add by hand.
+ * Rows of one sign never sum to zero, so a coin with rows of one sign only
+ * is never named here.
+ */
+function markRoundTrips(group: TxRow[]): void {
+  const byCoin = new Map<string, TxRow[]>();
+  for (const r of group) byCoin.set(r.coin, [...(byCoin.get(r.coin) ?? []), r]);
+  for (const coinRows of byCoin.values()) {
+    if (!coinRows.some((r) => r.change.isPositive()) || !coinRows.some((r) => r.change.isNegative())) continue;
+    if (!coinRows.reduce((sum, r) => sum.plus(r.change), new Decimal(0)).isZero()) continue;
+    for (const r of coinRows) r.unpaired = true;
+  }
 }
 
 /** Sum signed quantity and EUR value per coin across a window of paired rows. */

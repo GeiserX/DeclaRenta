@@ -3547,3 +3547,82 @@ describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and a
     });
   });
 });
+
+describe("#467 Binance sweep 2: a date in another order and a Convert round trip are named, never booked in another year or lost", () => {
+  const message = (messages: readonly TaxMessage[] | undefined, id: string): TaxMessage | undefined => messages?.find((m) => m.id === id);
+  const gains = (r: TaxReport, coin: string): string[] => r.capitalGains.disposals.filter((d) => d.symbol === coin).map((d) => new Decimal(d.gainLossEur).toFixed(2));
+
+  // Trade History: BTC bought for 2000 € on 10/01/2025 and sold for 3000 € on
+  // 01/06/2025. A sheet re-saved in a locale with dashed day-first dates
+  // writes the sale as "01-06-2025": the 2-digit-year reader took "01-06-20"
+  // and booked the sale on 20/06/2001, so the 1000 € gain left the year with
+  // no word. Binance itself writes "2025-06-01" or "25-06-01".
+  const TH_H = "Date(UTC),Pair,Side,Price,Executed,Amount,Fee";
+  const history = (saleDate: string): Statement => binanceParser.parse([TH_H,
+    "2025-01-10 10:00:00,BTCEUR,BUY,20000,0.1BTC,2000EUR,0EUR",
+    `${saleDate},BTCEUR,SELL,30000,0.1BTC,3000EUR,0EUR`].join("\n"));
+
+  it.each(METHODS)("[%s] a sale dated 01-06-2025 is kept as a row that books nothing, named, never moved to 2001", (method) => {
+    const parsed = history("01-06-2025 10:00:00");
+    expect(unreadableRows(parsed)).toBe('BTC [Date(UTC): "01062025"]');
+    const r = run([[parsed, "Binance"]], 2025, method);
+    expect(gains(r, "BTC")).toEqual([]);
+    expect(r.messages.some((m) => m.id === "parser.trade_row_unreadable")).toBe(true);
+    expect(run([[parsed, "Binance"]], 2001, method).capitalGains.disposals).toEqual([]);
+  });
+
+  it.each(METHODS)("[%s] a sale dated 15-06-2025 is named the same way, never moved to 2015", (method) => {
+    const parsed = history("15-06-2025 10:00:00");
+    expect(unreadableRows(parsed)).toBe('BTC [Date(UTC): "15062025"]');
+    expect(run([[parsed, "Binance"]], 2015, method).capitalGains.disposals).toEqual([]);
+  });
+
+  it.each(METHODS)("[%s] control: the same sale written 2025-06-01T10:00:00Z or 25-06-01 keeps its 1000 € gain", (method) => {
+    for (const date of ["2025-06-01T10:00:00Z", "25-06-01 10:00:00"]) {
+      const parsed = history(date);
+      expect(parsed.parserMessages).toBeUndefined();
+      expect(gains(run([[parsed, "Binance"]], 2025, method), "BTC")).toEqual(["1000.00"]);
+    }
+  });
+
+  // Transaction History: BTC bought for 2000 € in 2024, then two Convert
+  // orders one second apart: BTC → ETH and ETH → BTC, each worth 3000 €. The
+  // ±1 s window netted every coin to zero, so both disposals vanished with no
+  // word and the 1000 € gain on the 2024 lot left the year.
+  const TXV_H = "User_ID,UTC_Time,Account,Operation,Coin,Change,Remark,EUR_Value";
+  const roundTrip = (back: string): Statement => binanceParser.parse([TXV_H,
+    "1,2024-01-10 10:00:00,Spot,Buy,BTC,0.1,,2000",
+    "1,2024-01-10 10:00:00,Spot,Sell,EUR,-2000,,2000",
+    "1,2025-02-01 10:00:00,Spot,Binance Convert,BTC,-0.1,,3000",
+    "1,2025-02-01 10:00:00,Spot,Binance Convert,ETH,1,,3000",
+    `1,2025-02-01 ${back},Spot,Binance Convert,ETH,-1,,3000`,
+    `1,2025-02-01 ${back},Spot,Binance Convert,BTC,0.1,,3000`].join("\n"));
+
+  it.each(METHODS)("[%s] a Convert round trip in one second names its four rows, never lost with no word", (method) => {
+    const parsed = roundTrip("10:00:01");
+    expect(message(parsed.parserMessages, "binance.unpaired_leg")?.context).toEqual({ count: "4", rows:
+      "BTC Binance Convert -0.1 2025-02-01 10:00:00; ETH Binance Convert 1 2025-02-01 10:00:00; ETH Binance Convert -1 2025-02-01 10:00:01; BTC Binance Convert 0.1 2025-02-01 10:00:01" });
+    const r = run([[parsed, "Binance"]], 2025, method);
+    expect(r.messages.some((m) => m.id === "binance.unpaired_leg")).toBe(true);
+  });
+
+  it.each(METHODS)("[%s] control: the same Converts 5 s apart are booked, and the BTC sale gains 1000 €", (method) => {
+    const parsed = roundTrip("10:00:05");
+    expect(parsed.parserMessages).toBeUndefined();
+    expect(gains(run([[parsed, "Binance"]], 2025, method), "BTC")).toEqual(["1000.00"]);
+  });
+
+  it("control: BTC → USDT → ETH in one second nets only USDT and books BTC → ETH, with the USDT rows named", () => {
+    const parsed = binanceParser.parse([TXV_H,
+      "1,2024-01-10 10:00:00,Spot,Buy,BTC,0.1,,2000",
+      "1,2024-01-10 10:00:00,Spot,Sell,EUR,-2000,,2000",
+      "1,2025-02-01 10:00:00,Spot,Binance Convert,BTC,-0.1,,3000",
+      "1,2025-02-01 10:00:00,Spot,Binance Convert,USDT,3300,,3000",
+      "1,2025-02-01 10:00:01,Spot,Binance Convert,USDT,-3300,,3000",
+      "1,2025-02-01 10:00:01,Spot,Binance Convert,ETH,1,,3000"].join("\n"));
+    expect(parsed.trades.filter((t) => t.tradeDate === "20250201").map((t) => `${t.buySell} ${t.symbol} ${t.quantity}`)).toEqual(["SELL BTC -0.1", "BUY ETH 1"]);
+    expect(message(parsed.parserMessages, "binance.unpaired_leg")?.context?.rows).toBe(
+      "USDT Binance Convert 3300 2025-02-01 10:00:00; USDT Binance Convert -3300 2025-02-01 10:00:01");
+    expect(gains(run([[parsed, "Binance"]], 2025, "multidivisa"), "BTC")).toEqual(["1000.00"]);
+  });
+});
