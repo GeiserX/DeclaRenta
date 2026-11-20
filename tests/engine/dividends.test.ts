@@ -791,6 +791,59 @@ describe("withholding corrections: a refund more than 7 days after its dividend 
   });
 });
 
+// Issue #467, year end: a refund never lowers a withholding dated after it in
+// the next year while a dividend of its own year withheld it.
+describe("withholding corrections: a refund near the year end (issue #467)", () => {
+  const rates = makeRateMap({ "2024-12-01": { USD: "1" }, "2025-06-10": { USD: "1" }, "2026-01-02": { USD: "1" } });
+  const row = (id: string, type: CashTransaction["type"], dateTime: string, amount: string, extra: Partial<CashTransaction> = {}) =>
+    makeCashTx({ transactionID: id, type, dateTime, amount, ...extra });
+  const run = (rows: CashTransaction[]) => {
+    const unjoined: string[] = [];
+    const entries = calculateDividends(rows, rates, { onUnjoinedRefund: (w, amount) => unjoined.push(`${w.transactionID}:${amount.toFixed(2)}`) });
+    return { tax: entries.map((e) => `${e.payDate}:${e.withholdingTaxEur.toFixed(2)}`), unjoined };
+  };
+
+  it("a refund of 30 December goes back to its own year's dividend, not to next year's dividend 3 days later", () => {
+    const rows = [
+      row("d1", "Dividends", "20250610", "10"),
+      row("w1", "Withholding Tax", "20250610", "-1.50"),
+      row("r", "Withholding Tax", "20251230", "1.50"),
+      row("d2", "Dividends", "20260102", "10"),
+      row("w2", "Withholding Tax", "20260102", "-1.50"),
+    ];
+    const want = { tax: ["2025-06-10:0.00", "2026-01-02:1.50"], unjoined: [] };
+    expect(run(rows)).toEqual(want);
+    expect(run([...rows].reverse())).toEqual({ ...want, tax: [...want.tax].reverse() });
+  });
+
+  it("control: with no dividend of its own year, the refund still joins next year's dividend 3 days later", () => {
+    const rows = [row("r", "Withholding Tax", "20251230", "1.50"), row("d2", "Dividends", "20260102", "10"), row("w2", "Withholding Tax", "20260102", "-1.50")];
+    expect(run(rows)).toEqual({ tax: ["2026-01-02:0.00"], unjoined: [] });
+  });
+
+  it("a refund of 30 December still makes room by moving to next year's dividend when its own one is wanted, in either file order", () => {
+    // B, posted next year, reaches only the 27 December dividend; A reaches it
+    // and the 3 January one. A moves on, so B is not left unjoined.
+    const rows = [
+      row("d1", "Dividends", "20241227", "10"),
+      row("w1", "Withholding Tax", "20241227", "-1.00"),
+      row("a", "Withholding Tax", "20241230", "1.00"),
+      row("d2", "Dividends", "20250103", "10"),
+      row("w2", "Withholding Tax", "20250103", "-1.00"),
+      row("b", "Withholding Tax", "20241226", "1.00", { reportDate: "2025-01-20" }),
+    ];
+    const r = makeRateMap({ "2024-12-27": { USD: "1" }, "2025-01-03": { USD: "1" } });
+    const tax = (list: CashTransaction[]) => {
+      const unjoined: string[] = [];
+      const entries = calculateDividends(list, r, { onUnjoinedRefund: (w, amount) => unjoined.push(`${w.transactionID}:${amount.toFixed(2)}`) });
+      return { tax: entries.map((e) => `${e.payDate}:${e.withholdingTaxEur.toFixed(2)}`).sort(), unjoined };
+    };
+    const want = { tax: ["2024-12-27:0.00", "2025-01-03:0.00"], unjoined: [] };
+    expect(tax(rows)).toEqual(want);
+    expect(tax([...rows].reverse())).toEqual(want);
+  });
+});
+
 // Review of #438: a refund must never vanish into a dividend that withheld less
 // than it, a reversed dividend must never take a withholding, and a correction
 // IBKR posts next year must stay with a dividend of its own year.

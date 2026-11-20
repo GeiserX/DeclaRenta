@@ -602,6 +602,32 @@ describe("issue #467 — a refund dated more than 7 days from its dividend", () 
     });
   }
 
+  // A refund dated 30 December, 3 days before next year's dividend of the same
+  // ISIN, for this year's June dividend: it lowers this year's 0588, never next
+  // year's.
+  const yearEnd = (rows: string[]) => merged(statement(rows, "20250101", "20261231"));
+  const nextDividend = [msft("Dividends", "100", "20260102"), msft("Withholding Tax", "-10", "20260102")];
+  for (const method of METHODS) {
+    const opts = reportOptionsForMethod(method);
+    it(`a refund of 30 December lowers its own year's 0588, not next year's dividend 3 days later (${method})`, () => {
+      const st = yearEnd([...paid, msft("Withholding Tax", "10", "20251230"), ...nextDividend, ...goog]);
+      const r2025 = generateTaxReport(st, rates, 2025, opts);
+      const r2026 = generateTaxReport(st, rates, 2026, opts);
+      expect(r2025.doubleTaxation.deduction.toFixed(2)).toBe("18.00");
+      expect(r2026.doubleTaxation.deduction.toFixed(2)).toBe("9.00");
+      expect(unjoined(r2025)).toBeUndefined();
+      expect(unjoined(r2026)).toBeUndefined();
+    });
+
+    it(`control: with no June dividend, the 30 December refund still lowers next year's dividend 3 days later (${method})`, () => {
+      const st = yearEnd([msft("Withholding Tax", "10", "20251230"), ...nextDividend, ...goog]);
+      expect(generateTaxReport(st, rates, 2025, opts).doubleTaxation.deduction.toFixed(2)).toBe("18.00");
+      const r2026 = generateTaxReport(st, rates, 2026, opts);
+      expect(r2026.doubleTaxation.deduction.toFixed(2)).toBe("0.00");
+      expect(unjoined(r2026)).toBeUndefined();
+    });
+  }
+
   it("the Spanish text is the es locale's, byte for byte", () => {
     const r = generateTaxReport(merged(statement([msft("Withholding Tax", "10", "20250701")])), rates, 2025);
     const m = unjoined(r)!;

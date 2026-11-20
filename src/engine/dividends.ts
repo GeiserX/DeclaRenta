@@ -110,8 +110,10 @@ const dateReaches = (w: CashTransaction, wTime: number, postedLate: boolean, div
  * A refund never takes more from a dividend than that dividend withheld: the
  * rest goes to the next dividend it can correct. A refund (or its rest) that
  * no dividend within 7 days can take goes to a dividend of its ISIN and broker
- * paid earlier in the refund's own year (issue #467). What still finds no
- * dividend is in `unjoined`, so the caller names it. No row counts twice.
+ * paid earlier in the refund's own year (issue #467). A dividend of the next
+ * year withheld after the refund takes it only when none of those can. What
+ * still finds no dividend is in `unjoined`, so the caller names it. No row
+ * counts twice.
  */
 export function matchWithholdings(
   cashTransactions: CashTransaction[],
@@ -235,6 +237,14 @@ export function matchWithholdings(
   const candidates = (index: number): number[] =>
     (dividendIndexByIsin.get(withholdings[index]!.isin) ?? []).filter((divIndex) => corrects(index, divIndex) && reaches(index, divIndex));
   const distance = (index: number, divIndex: number) => Math.abs(withholdingTimes[index]! - divTimes[divIndex]!);
+  /**
+   * Dividend `divIndex` is of a later year than refund `index` and withheld
+   * after it (issue #467): the refund cannot give back that tax. It takes the
+   * refund only when no dividend of the refund's own reach (3b, 3c) can (3d).
+   */
+  const isLater = (index: number, divIndex: number): boolean =>
+    yearOf(dividends[divIndex]!.dateTime) > yearOf(withholdings[index]!.dateTime) &&
+    withholdingTimes[pair[divIndex]!]! > withholdingTimes[index]!;
 
   // 3a. Withholdings first (a second row of one payment, a new withholding
   // after a reversal): the nearest dividend, then the first in the file.
@@ -259,11 +269,20 @@ export function matchWithholdings(
   // Then nearest date, then the first dividend in the file. When every
   // dividend in a refund's reach is full, an earlier refund that can go to
   // another dividend in its own reach moves there to make room, so a refund
-  // is only left for 3c when no allocation within 7 days could fit it.
+  // is only left for 3c when no allocation within 7 days could fit it. A
+  // dividend of the next year withheld after the refund is not in this reach:
+  // a refund of 30 December would else lower the 2 January dividend's tax and
+  // leave its own June dividend's (issue #467). It waits for 3d.
+  const nearReachOf = new Map<number, number[]>();
+  const nearReach = (index: number): number[] => {
+    let r = nearReachOf.get(index);
+    if (!r) nearReachOf.set(index, (r = candidates(index)));
+    return r;
+  };
   const reachOf = new Map<number, number[]>();
   const reach = (index: number): number[] => {
     let r = reachOf.get(index);
-    if (!r) reachOf.set(index, (r = candidates(index)));
+    if (!r) reachOf.set(index, (r = nearReach(index).filter((divIndex) => !isLater(index, divIndex))));
     return r;
   };
   // 3c reach (issue #467): what 3b reaches, plus every dividend the refund
@@ -280,6 +299,7 @@ export function matchWithholdings(
       r = (dividendIndexByIsin.get(w.isin) ?? []).filter(
         (divIndex) =>
           corrects(index, divIndex) &&
+          !isLater(index, divIndex) &&
           (reaches(index, divIndex) ||
             (!isReversal[divIndex] && divTimes[divIndex]! <= wTime && yearOf(dividends[divIndex]!.dateTime) === yearOf(w.dateTime))),
       );
@@ -375,11 +395,22 @@ export function matchWithholdings(
   // 3c (issue #467): only once every refund had its 7 days, what is left of
   // a refund goes to a dividend in its late reach (same ISIN, broker and
   // year, paid on or before it). It runs after 3b, so a file where every
-  // refund fits within 7 days matches exactly as before. What still fits
-  // nowhere is `unjoined`: it lowers no tax and the report names it.
+  // refund fits within 7 days matches exactly as before. What 3d still
+  // fits nowhere is `unjoined`: it lowers no tax and the report names it.
+  // 3d (issue #467): what is still left goes, by the same ranking and
+  // room-making, to any dividend within 7 days, now also one of the next
+  // year withheld after the refund. A refund that wants the 27 December
+  // dividend can so still push a 30 December one to 3 January, whatever the
+  // file order. With no such dividend in the file, every move 3d could make
+  // 3c could make too, so nothing changes.
   const unjoined: WithholdingPart[] = [];
+  const stillLeft = new Map<number, Decimal>();
   for (const [index, rest] of left) {
     const after = allocate(index, rest, lateReach);
+    if (after.greaterThan(0)) stillLeft.set(index, after);
+  }
+  for (const [index, rest] of stillLeft) {
+    const after = allocate(index, rest, nearReach);
     if (after.greaterThan(0)) unjoined.push({ index, amount: after });
   }
   // A refund's parts follow the withholdings, in file order.
