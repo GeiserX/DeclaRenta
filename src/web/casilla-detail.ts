@@ -10,6 +10,8 @@ import { fxMethodOf, type FxMethod, type TaxSummary, type FifoDisposal, type FxD
 import { t, localizeMessage, localizeHint, isTranslationKey } from "../i18n/index.js";
 import { fmtEur, fmtQty, formatDate } from "./format.js";
 import { esc } from "./esc.js";
+import { amountCell, costCell } from "./disposal-cells.js";
+import { isCountableAmount } from "../engine/amount-range.js";
 import { copyToClipboard } from "./clipboard.js";
 import { combinedNetGainLoss, computeCasillaBlocksWithFx, groupDividendsByIssuer, isListedShare, type CasillaBlocks } from "../generators/casillas.js";
 
@@ -118,7 +120,7 @@ function renderDisposalsDetail(
           <td>${esc(d.symbol)}</td>
           <td>${esc(formatDate(mode === "acquisition" ? d.acquireDate : d.sellDate))}</td>
           <td>${fmtQty(d.quantity)}</td>
-          <td>${fmtEur(mode === "acquisition" ? d.costBasisEur : d.proceedsEur)}</td>
+          <td>${mode === "acquisition" ? costCell(d) : amountCell(d.proceedsEur)}</td>
         </tr>`).join("")}
       </tbody>
     </table></div>
@@ -297,6 +299,9 @@ function fxTriggerLabel(trigger: string): string {
  * declared (`declaredShiftEur`); the cell shows both parts under the total.
  */
 function fxAcquisitionCell(d: FxDisposal): string {
+  // An amount the boxes leave out shows as in the stock rows: «—», or the
+  // cost marked «(no se suma)» next to proceeds that are left out (#469, #470).
+  if (!isCountableAmount(d.costBasisEur) || !isCountableAmount(d.proceedsEur)) return costCell(d);
   const shift = d.declaredShiftEur;
   if (!shift || shift.toDecimalPlaces(2).isZero()) return fmtEur(d.costBasisEur);
   const split = t("casilla.fx_cost_split", { fx: fmtEur(d.costBasisEur.minus(shift)), shift: fmtEur(shift) });
@@ -327,7 +332,7 @@ function renderFxDisposalsDetail(
           <td>${esc(formatDate(d.disposeDate))}</td>
           <td>${esc(formatDate(d.acquireDate))}</td>
           <td>${fmtEur(d.quantity)}</td>
-          <td>${mode === "acquisition" ? fxAcquisitionCell(d) : fmtEur(d.proceedsEur)}</td>
+          <td>${mode === "acquisition" ? fxAcquisitionCell(d) : amountCell(d.proceedsEur)}</td>
           <td>${esc(fxTriggerLabel(d.trigger))}</td>
           <td>${esc(d.lotId)}</td>
         </tr>`).join("")}

@@ -12,6 +12,8 @@ import { esc } from "./esc.js";
 import { washSaleRowAttr, renderWashSaleDetailRow } from "./wash-sale-row.js";
 import { symbolCell } from "./symbol-cell.js";
 import { showBrokerColumns } from "../generators/broker-columns.js";
+import { finiteDisposalAmounts } from "../generators/casillas.js";
+import { amountCell, costCell, countedResult } from "./disposal-cells.js";
 
 const OPTION_SCENARIO_LABELS: Record<string, TranslationKey> = {
   expiration: "option.expiration",
@@ -52,10 +54,13 @@ export function renderOperationsAnnex(report: TaxSummary): string {
 
   for (const [cat, ops] of groups) {
     const label = assetLabel(cat);
-    const subtotalProceeds = ops.reduce((s, d) => s.plus(d.proceedsEur), new Decimal(0));
-    const subtotalCost = ops.reduce((s, d) => s.plus(d.costBasisEur), new Decimal(0));
+    // The boxes' rule: a non-finite amount of one sale is left out alone, so
+    // the subtotal never reads NaN and matches the casillas (#469 review).
+    const amounts = ops.map(finiteDisposalAmounts);
+    const subtotalProceeds = amounts.reduce((s, a) => s.plus(a.proceeds), new Decimal(0));
+    const subtotalCost = amounts.reduce((s, a) => s.plus(a.cost), new Decimal(0));
     // Rounded to the shown cents, so a subtotal of -0,004 € is not classed as a loss.
-    const subtotalGL = ops.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0)).toDecimalPlaces(2);
+    const subtotalGL = amounts.reduce((s, a) => s.plus(a.gainLoss), new Decimal(0)).toDecimalPlaces(2);
     const glClass = subtotalGL.greaterThanOrEqualTo(0) ? "gain" : "loss";
 
     // Collapsed by default: the per-operation tables can be hundreds of rows
@@ -86,7 +91,11 @@ export function renderOperationsAnnex(report: TaxSummary): string {
           <tbody>`;
 
     ops.forEach((d, i) => {
-      const cls = d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss";
+      // Each cell shows what the subtotal adds (`finiteDisposalAmounts`), so
+      // the column sums to it (disposal-cells.ts, shared with the drill-down
+      // and the operations table).
+      const result = countedResult(d);
+      const cls = result !== null && result.greaterThanOrEqualTo(0) ? "gain" : "loss";
       const blocked = washSaleRowAttr(d);
       const optionInfo = d.optionScenario
         ? ` <span class="option-badge">${esc(optionScenarioLabel(d.optionScenario))}${d.putCall ? ` ${d.putCall === "C" ? "Call" : "Put"}` : ""}${d.strike ? ` @${esc(d.strike)}` : ""}</span>`
@@ -104,9 +113,9 @@ export function renderOperationsAnnex(report: TaxSummary): string {
               <td>${esc(formatDate(d.acquireDate))}</td>
               <td>${esc(formatDate(d.sellDate))}</td>${brokerCells}
               <td>${fmtQty(d.quantity)}</td>
-              <td class="num">${fmtEur(d.costBasisEur)}</td>
-              <td class="num">${fmtEur(d.proceedsEur)}</td>
-              <td class="num ${cls}">${d.gainLossEur.greaterThanOrEqualTo(0) ? "+" : ""}${fmtEur(d.gainLossEur)}</td>
+              <td class="num">${costCell(d)}</td>
+              <td class="num">${amountCell(d.proceedsEur)}</td>
+              <td class="num ${cls}">${result === null ? "—" : `${result.greaterThanOrEqualTo(0) ? "+" : ""}${fmtEur(result)}`}</td>
             </tr>${renderWashSaleDetailRow(d, columnCount)}`;
     });
 

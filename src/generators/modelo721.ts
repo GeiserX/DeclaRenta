@@ -12,7 +12,8 @@
 import Decimal from "decimal.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
+import { hasNoMarketValue, lookupPositionRate, positionValueOf, readPositionNumber } from "../engine/ecb.js";
+import { fitsModelo720Amount } from "./modelo720.js";
 
 export interface Modelo721Entry {
   /** Crypto asset identifier (e.g., BTC, ETH) */
@@ -22,8 +23,14 @@ export interface Modelo721Entry {
   exchangeName: string;
   /** Country code of the exchange */
   countryCode: string;
-  /** Quantity held at Dec 31 */
+  /** Quantity held at Dec 31 (0 when `quantityUnknown`: never a real count) */
   quantity: Decimal;
+  /**
+   * The export gives no readable quantity for this coin (#470): its units are
+   * unknown, never 0. Callers show them as unknown and ask for the year-end
+   * statement's figure.
+   */
+  quantityUnknown?: true;
   /** Valuation in EUR at Dec 31 */
   valuationEur: Decimal;
   /** Acquisition cost in EUR */
@@ -36,16 +43,29 @@ const CRYPTO_CATEGORIES = new Set(["CRYPTO"]);
 /** A valued 721 position plus the per-position EUR valuation for display. */
 export interface Modelo721ValuedPosition {
   entry: Modelo721Entry;
-  /** Year-end EUR valuation, or null when the currency has no resolvable rate. */
+  /** Year-end EUR valuation, or null when it is «sin valorar»: no resolvable rate, no market value, or a value too big for a valoración. */
   valuationEur: Decimal | null;
 }
 
 export interface Modelo721Valuation {
   positions: Modelo721ValuedPosition[];
-  /** Positions whose currency had no resolvable year-end rate (surfaced for manual valuation). */
+  /** Held coins left out of the total (`valuationEur` null), surfaced for manual valuation. */
   unvaluedCount: number;
   /** Sum of all resolvable year-end valuations (EUR). */
   totalValueEur: Decimal;
+}
+
+/**
+ * A coin the Modelo 721 counts as held: a crypto position with a positive
+ * value, or one held with no market value (`hasNoMarketValue`: no number, 0
+ * with units, or a quantity and value of opposite signs), which is unvalued,
+ * never 0 €. `buildModelo721Entries` and the web's missing-holdings notice use
+ * this one filter, so the notice never says the data has no crypto next to a
+ * coin the 721 lists (#470).
+ */
+export function isModelo721Holding(p: OpenPosition): boolean {
+  if (!CRYPTO_CATEGORIES.has(p.assetCategory)) return false;
+  return (positionValueOf(p)?.greaterThan(0) ?? false) || hasNoMarketValue(p);
 }
 
 /**
@@ -53,8 +73,9 @@ export interface Modelo721Valuation {
  * truth for 721 crypto valuation (web section and any future generator consume this).
  *
  * Only `assetCategory === "CRYPTO"` positions with a positive value qualify
- * (fiat/CASH belongs in Modelo 720). Each position is valued at the year-end
- * ECB rate via {@link lookupPositionRate}; positions whose currency has no
+ * (fiat/CASH belongs in Modelo 720), plus held coins with no value (below). A
+ * coin whose quantity the export does not give keeps `quantityUnknown`. Each
+ * position is valued at the year-end ECB rate via {@link lookupPositionRate}; positions whose currency has no
  * resolvable rate (e.g. the crypto coin itself), or held with no market value in
  * the export, are kept with `valuationEur: null` and counted in `unvaluedCount`
  * so callers can surface them for manual valuation.
@@ -74,22 +95,30 @@ export function buildModelo721Entries(
   let totalValueEur = new Decimal(0);
 
   for (const p of openPositions) {
-    if (!CRYPTO_CATEGORIES.has(p.assetCategory)) continue;
+    if (!isModelo721Holding(p)) continue;
     // A coin held with no market value in the export is unvalued, not 0 €.
     const noMarketValue = hasNoMarketValue(p);
-    if (!new Decimal(p.positionValue).greaterThan(0) && !noMarketValue) continue;
+    // A value that is no number ("", "N/A") is no value (`positionValueOf`).
+    const value = positionValueOf(p);
 
-    const rate = noMarketValue ? null : lookupPositionRate(rateMap, yearEnd, p.currency);
-    const valuationEur = rate === null ? null : new Decimal(p.positionValue).mul(rate);
+    const rate = noMarketValue || value === null ? null : lookupPositionRate(rateMap, yearEnd, p.currency);
+    const valued = rate === null || value === null ? null : value.mul(rate);
+    // A value too big for a valoración (12 integer digits in euros) is «sin
+    // valorar», the 720's rule (`fitsModelo720Amount`): one rule in the three
+    // forms, and the 50,000 € verdict never rests on such a number (#470).
+    const valuationEur = valued !== null && fitsModelo720Amount(valued) ? valued : null;
     if (valuationEur === null) {
       unvaluedCount++;
     } else {
       totalValueEur = totalValueEur.plus(valuationEur);
     }
 
-    const acquisitionCostEur = rate === null
+    // Only the disabled fixed-width prototype reads this cost: an unreadable
+    // one is left at 0 there, as an unvalued coin's is, never a crash.
+    const cost = readPositionNumber(p.costBasisMoney || "0");
+    const acquisitionCostEur = rate === null || cost === null
       ? new Decimal(0)
-      : new Decimal(p.costBasisMoney || "0").mul(rate);
+      : cost.mul(rate);
 
     positions.push({
       entry: {
@@ -98,6 +127,7 @@ export function buildModelo721Entries(
         exchangeName: "",
         countryCode: "",
         quantity: new Decimal(p.quantity),
+        ...(p.quantityUnknown === true ? { quantityUnknown: true as const } : {}),
         valuationEur: valuationEur ?? new Decimal(0),
         acquisitionCostEur,
       },
@@ -152,19 +182,62 @@ function fixedWidthText(value: string, length: number, alignRight = false): stri
   return pad(sanitized, length, " ", alignRight);
 }
 
+/** The integer digits of the detail record's quantity field (464-475: 9 + 3 decimals). */
+const QUANTITY_INT_DIGITS = 9;
+
+/**
+ * A coin the 721 file leaves out for manual entry, as the 720 leaves out a
+ * count past «Número de valores» (`quantity_too_large`): 1e9 coins or more do
+ * not fit the quantity field's 9 integer digits. A meme coin held by the
+ * billion is ordinary, so the coin is named, never the whole file failed (#470).
+ */
+export interface Modelo721Omission {
+  reason: "quantity_too_large";
+  entry: Modelo721Entry;
+}
+
+function quantityTooLarge(entry: Modelo721Entry): boolean {
+  // Compared, never written: toFixed of 1e1000000000 runs out of memory.
+  return entry.quantity.abs().floor().greaterThanOrEqualTo(new Decimal(10).pow(QUANTITY_INT_DIGITS));
+}
+
+/**
+ * The coins `generateModelo721` leaves out of the file, each with its reason.
+ * The caller names them for manual entry. They still count toward the
+ * 50,000 € threshold.
+ */
+export function findModelo721Omissions(entries: Modelo721Entry[]): Modelo721Omission[] {
+  return entries.filter(quantityTooLarge).map((entry) => ({ reason: "quantity_too_large" as const, entry }));
+}
+
 function numPad(value: string, intLen: number, decLen: number): string {
   const dec = new Decimal(value).abs();
-  const intPart = dec.floor().toString().padStart(intLen, "0");
-  const fracPart = dec.minus(dec.floor()).mul(new Decimal(10).pow(decLen)).floor().toString().padStart(decLen, "0");
+  // A value past the field fails fast, as the 720's numPad does, never shifting
+  // the record (#470). The size is compared before any digit is written:
+  // toFixed writes one digit per exponent step, so an acquisition cost of
+  // 1e1000000000 (no 720 fit guards it) ran out of memory. The error keeps the
+  // compact form ("1e+25").
+  if (dec.floor().greaterThanOrEqualTo(new Decimal(10).pow(intLen))) {
+    throw new Error(`Modelo 721: importe ${dec.toString()} excede el campo de ${intLen} dígitos enteros`);
+  }
+  // toFixed, never toString: decimal.js writes 1e21 and above in exponent form
+  // ("1e+25"), which padded to the width carried no number.
+  const intDigits = dec.floor().toFixed(0);
+  const intPart = intDigits.padStart(intLen, "0");
+  const fracPart = dec.minus(dec.floor()).mul(new Decimal(10).pow(decLen)).floor().toFixed(0).padStart(decLen, "0");
   return intPart + fracPart;
 }
 
 /**
  * Generate Modelo 721 stub (fixed-width prototype — real format is XML per Orden HFP/886/2023).
  *
+ * A coin whose count does not fit the quantity field is left out
+ * (`findModelo721Omissions` names it); it still counts toward the threshold,
+ * and the summary record sums only the detail records written.
+ *
  * @param entries - Crypto positions at year end
  * @param config - Taxpayer information
- * @returns Fixed-width text content, or empty string if below 50K threshold
+ * @returns Fixed-width text content, or empty string if below 50K threshold or every coin is left out
  */
 export function generateModelo721(
   entries: Modelo721Entry[],
@@ -180,8 +253,13 @@ export function generateModelo721(
     return "";
   }
 
-  const detailRecords = entries.map((e) => buildDetailRecord721(e, config));
-  const summaryRecord = buildSummaryRecord721(config, entries);
+  const written = entries.filter((e) => !quantityTooLarge(e));
+  if (written.length === 0) {
+    return "";
+  }
+
+  const detailRecords = written.map((e) => buildDetailRecord721(e, config));
+  const summaryRecord = buildSummaryRecord721(config, written);
 
   return [summaryRecord, ...detailRecords].join("\n");
 }
@@ -243,7 +321,7 @@ function buildDetailRecord721(
   record += entry.valuationEur.isNegative() ? "N" : " ";     // 448: Valuation sign
   record += numPad(entry.valuationEur.toString(), 13, 2);     // 449-462: Valuation value
   record += " ";                                              // 463: Reserved
-  record += numPad(entry.quantity.toString(), 9, 3);          // 464-475: Quantity
+  record += numPad(entry.quantity.toString(), QUANTITY_INT_DIGITS, 3); // 464-475: Quantity
   record += pad("", 1);                                       // 476: Reserved
   record += numPad("100", 3, 2);                              // 477-481: Ownership %
   record += pad("", 18);                                      // 483-500: Blank

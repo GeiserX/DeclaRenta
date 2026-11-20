@@ -7,7 +7,8 @@
 
 import { getCurrentLocale, t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
-import { hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
+import { hasNoMarketValue, isD6Holding, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
+import { d6ShareCount, fitsModelo720Amount } from "../generators/modelo720.js";
 import type { Statement } from "../types/broker.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
@@ -31,6 +32,27 @@ function effectiveYearEnd(year: number): string {
  */
 function positionRate(rateMap: EcbRateMap, yearEnd: string, p: OpenPosition): Decimal | null {
   return hasNoMarketValue(p) ? null : lookupPositionRate(rateMap, yearEnd, p.currency);
+}
+
+/**
+ * The holding's EUR value, or null when it has no rate, no readable value, no
+ * share count, or a value too big for the 720's valoración (never 0 €). The D-6
+ * generator's rule: an AFORIX entry needs both the share count and the value,
+ * so a holding missing either is left out of the total and counted to declare
+ * by hand, on screen as in the guide (#470).
+ */
+function positionValueEur(rateMap: EcbRateMap, yearEnd: string, p: OpenPosition): Decimal | null {
+  if (d6ShareCount(p) === null) return null;
+  const rate = positionRate(rateMap, yearEnd, p);
+  const value = positionValueOf(p);
+  const valueEur = rate === null || value === null ? null : value.mul(rate);
+  return valueEur !== null && fitsModelo720Amount(valueEur) ? valueEur : null;
+}
+
+/** The share count shown, or "—" when the holding has no valid one (`d6ShareCount`, #470): never 0. */
+function unitsCell(p: OpenPosition): string {
+  const shares = d6ShareCount(p);
+  return shares === null ? "—" : fmtQty(shares);
 }
 
 let cachedStatement: Statement | null = null;
@@ -87,7 +109,8 @@ export function renderSectionD6(
       (p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND") &&
       p.isin.length >= 2 &&
       p.isin.slice(0, 2).toUpperCase() !== "ES" &&
-      new Decimal(p.quantity).greaterThan(0),
+      // The generator's own filter: no short, and no row that holds nothing (#470).
+      isD6Holding(p),
   );
 
   const missingNotice = brokersWithoutHoldings.length > 0
@@ -143,13 +166,21 @@ export function renderSectionD6(
   // surfaced via the warning banner below).
   let unvaluedCount = 0;
   const totalValue = positions.reduce((sum, p) => {
-    const rate = positionRate(rateMap, yearEnd, p);
-    if (rate === null) { unvaluedCount++; return sum; }
-    return sum.plus(new Decimal(p.positionValue).mul(rate));
+    const valueEur = positionValueEur(rateMap, yearEnd, p);
+    if (valueEur === null) { unvaluedCount++; return sum; }
+    return sum.plus(valueEur);
   }, new Decimal(0));
   html += `<p><strong>${t("d6.total_value", { amount: fmtEur(totalValue) })}</strong></p>`;
   if (unvaluedCount > 0) {
     html += `<div class="banner banner-warning">${esc(t("d6.positions_unvalued", { count: String(unvaluedCount) }))}</div>`;
+  }
+  // Holdings whose share count the export does not give: unknown, never 0 (#470).
+  const unknownUnits = positions.filter((p) => p.quantityUnknown === true);
+  if (unknownUnits.length > 0) {
+    html += `<div class="banner banner-warning d6-quantity-unknown">${esc(t("d6.quantity_unknown", {
+      count: String(unknownUnits.length),
+      holdings: unknownUnits.map((p) => `${p.symbol || p.description} (${p.isin})`).join(", "),
+    }))}</div>`;
   }
 
   // Positions table
@@ -161,11 +192,11 @@ export function renderSectionD6(
     </tr></thead>
     <tbody>${positions
       .map((p) => {
-        const rate = positionRate(rateMap, yearEnd, p);
-        const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
+        const valueEur = positionValueEur(rateMap, yearEnd, p);
+        const val = valueEur === null ? "—" : fmtEur(valueEur);
         return `<tr>
         <td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td>
-        <td>${esc(p.isin.slice(0, 2))}</td><td>${fmtQty(p.quantity)}</td><td>${val}</td>
+        <td>${esc(p.isin.slice(0, 2))}</td><td>${unitsCell(p)}</td><td>${val}</td>
       </tr>`;
       })
       .join("")}</tbody>
@@ -255,13 +286,13 @@ function renderAforixGuide(
   // Position fields
   for (let i = 0; i < positions.length; i++) {
     const p = positions[i]!;
-    const rate = positionRate(rateMap, yearEnd, p);
-    const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
+    const valueEur = positionValueEur(rateMap, yearEnd, p);
+    const val = valueEur === null ? "—" : fmtEur(valueEur);
     html += `<p style="margin-top:1rem;font-weight:600">${t("d6.aforix_position_of", { index: String(i + 1), total: String(positions.length) })}</p>`;
     html += aforixField(t("table.isin"), p.isin);
     html += aforixField("Denominación", p.description);
     html += aforixField("País emisor", p.isin.slice(0, 2).toUpperCase());
-    html += aforixField("Nº títulos", fmtQty(p.quantity));
+    html += aforixField("Nº títulos", unitsCell(p));
     html += aforixField("Valor EUR", val);
     html += aforixField(t("table.currency"), p.currency);
   }

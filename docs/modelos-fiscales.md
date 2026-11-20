@@ -74,7 +74,7 @@ DeclaRenta agrupa los dividendos por país de retención y calcula la deducción
 
 ### Correcciones de la retención
 
-A veces el bróker corrige una retención después de cobrarla: devuelve una parte (−1,50 USD y, días después, +0,50 USD) o la anula y vuelve a retener otra cantidad en otra fecha (−1,50, +1,50, −1,00). La deducción solo admite el impuesto pagado de verdad, así que DeclaRenta suma con su signo todas las filas de retención de cada dividendo, del mismo valor y a menos de 7 días de él. En los dos ejemplos la retención es de 1,00 USD. Una devolución nunca resta a un dividendo más de lo que se le retuvo: si es mayor, el resto corrige otro dividendo del mismo valor en esos días. Si dos devoluciones compiten por el mismo dividendo, DeclaRenta las reparte para que cuenten las dos siempre que quepan. Un dividendo anulado (un importe negativo) no lleva retención; la anulación de su retención vuelve al dividendo original. Cada fila se valora en su propia divisa, al tipo del BCE del día del dividendo si está en la misma divisa, o al de su propia fecha si no.
+A veces el bróker corrige una retención después de cobrarla: devuelve una parte (−1,50 USD y, días después, +0,50 USD) o la anula y vuelve a retener otra cantidad en otra fecha (−1,50, +1,50, −1,00). La deducción solo admite el impuesto pagado de verdad, así que DeclaRenta suma con su signo todas las filas de retención de cada dividendo, del mismo valor y a menos de 7 días de él. En los dos ejemplos la retención es de 1,00 USD. Una devolución nunca resta a un dividendo más de lo que se le retuvo: si es mayor, el resto corrige otro dividendo del mismo valor en esos días. Si ningún dividendo de esos 7 días puede tomar la devolución, DeclaRenta la resta de un dividendo anterior del mismo valor y del mismo año. Una devolución del 1 al 7 de enero también puede restarse de un dividendo del año anterior. Si no hay ningún dividendo así, DeclaRenta no la resta y te avisa con la fila. Si dos devoluciones compiten por el mismo dividendo, DeclaRenta las reparte para que cuenten las dos siempre que quepan. Un dividendo anulado (un importe negativo) no lleva retención; la anulación de su retención vuelve al dividendo original. Cada fila se valora en su propia divisa, al tipo del BCE del día del dividendo si está en la misma divisa, o al de su propia fecha si no.
 
 IBKR fecha estas correcciones el día del dividendo, aunque las anote más tarde, a veces en el extracto del año siguiente. Otros brókeres fechan la devolución el día que la hacen, por ejemplo en enero para un dividendo de finales de diciembre. Si el fichero del año que calculas trae correcciones de un año anterior que bajan la retención, verás un aviso con el importe. Esas correcciones no cambian las casillas del año que calculas. La casilla de aquel año pudo salir alta: la 0588 si la retención era extranjera, o la 0597 si era española (un emisor español, ISIN ES…). Sube los ficheros de aquel año junto con este, calcula aquel año y, si esa casilla baja respecto a la que presentaste, corrige aquel año: con una autoliquidación rectificativa si es 2024 o posterior, el único procedimiento desde ese ejercicio, o con una autoliquidación complementaria si es 2023 o anterior.
 
@@ -123,6 +123,8 @@ El formato del fichero JSON es:
 ]
 ```
 
+DeclaRenta no usa una entrada cuyo importe llega a un billón de euros (más de 12 cifras enteras), y la línea de comandos avisa con el año de esa entrada. Ninguna pérdida real llega a esa cifra, y sin esa pérdida solo puedes pagar de más.
+
 ## Otros tipos de activo
 
 Además de acciones (STK) y fondos (FUND), DeclaRenta procesa estos instrumentos financieros:
@@ -169,6 +171,8 @@ La regla anti-churning sí se aplica a bonos (son valores homogéneos).
 ### CFDs (Contratos por Diferencia)
 
 Los CFDs tributan como ganancias y pérdidas patrimoniales, no como rendimientos del capital mobiliario. DeclaRenta detecta CFDs en eToro por el campo `leverage > 1`, el tipo `"CFD"`, o un tipo de materias primas (`"Commodity"`, `"Materias primas"`) o de divisas (`"Currencies"`, `"Divisas"`), que en eToro son siempre CFDs. Se soportan acciones, índices, materias primas y divisas como CFDs. Las posiciones de criptomonedas no se importan y se avisa de ellas.
+
+Cada CFD es un contrato propio, no un valor homogéneo con las acciones de su ISIN. DeclaRenta calcula el resultado de cada CFD de eToro solo con su apertura y su cierre. No lo mezcla con las acciones ni con otros CFDs en el FIFO.
 
 Las posiciones cortas en CFDs se soportan: si vendes primero sin lotes previos, DeclaRenta registra un coste base de 0 EUR y emite un aviso.
 

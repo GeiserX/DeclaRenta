@@ -104,11 +104,21 @@ function tryResolve(map: EcbRateMap, manual: EcbRateMap | undefined, date: strin
  * Resolve every trade to an EUR-valuable state. Only CRYPTO trades can be
  * unresolvable; fiat/stock trades pass through untouched (their currency is
  * already in the ECB map).
+ *
+ * `noValue` holds the trades whose amounts are no number (a number no broker
+ * writes, report.ts, #470): only their quantity moves FIFO and no amount of
+ * theirs counts, so a missing rate for their quote currency does not drop
+ * them. With no rate they go on quoted in EUR (rate 1, which FIFO always
+ * finds), are not listed as unresolved (no hand-typed price can value them)
+ * and take their lot in order. A trap: dropped like an unpriced permuta, such
+ * a sale left its coin in FIFO, and a later sale took that lot instead of its
+ * own (a gain of 100 € on an economic 300 €, CodeRabbit on 10e1918).
  */
 export function resolveCryptoTradeValues(
   trades: Trade[],
   rateMap: EcbRateMap,
   manualRates?: EcbRateMap,
+  noValue?: ReadonlySet<Trade>,
 ): CryptoValuationResult {
   const cloned = cloneRateMap(rateMap);
   const outTrades: Trade[] = [];
@@ -138,6 +148,11 @@ export function resolveCryptoTradeValues(
       if (symbolRate !== null && tradePrice.greaterThan(0)) {
         currencyRate = symbolRate.div(tradePrice);
       }
+    }
+
+    if (currencyRate === null && noValue?.has(trade)) {
+      outTrades.push({ ...trade, currency: "EUR", commissionCurrency: "EUR" });
+      continue;
     }
 
     if (currencyRate === null) {

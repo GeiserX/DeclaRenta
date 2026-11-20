@@ -7,6 +7,10 @@ Anonymized sample files for broker parser tests. All data is fake (dummy ISINs, 
 | `ibkr-sample.xml` | Interactive Brokers | XML (Flex Query) | 2 stock trades (buy+sell), 1 dividend+WHT, 1 open position |
 | `ibkr-434-cycle-2025.xml` | Interactive Brokers | XML (Flex Query) | 2025 USD cycle with manual EUR.USD conversions (issue #434): «Tradicional con divisa» gives 240.38 / −57.36 with the real ECB rates in `tests/integration/ecb-usd-2025.ts` |
 | `ibkr-434-afx-2025.xml` | Interactive Brokers | XML (Flex Query) | The same 2025 cycle settled by IBKR auto-conversions (AFx): «Tradicional con divisa» equals monodivisa, 240.38 / 0.00 |
+| `ibkr-471-blocked-eur-2025.xml` | Interactive Brokers | XML (Flex Query) | 2025 EUR: ACME bought, sold at −1.000 and bought back 15 days later (loss fully blocked), GLOBEX sold at +500: strip Total +500, cuota 95 (issue #471) |
+| `ibkr-471-blocked-usd-2025.xml` | Interactive Brokers | XML (Flex Query) | The same trades in USD, for the three FX methods (issue #471) |
+| `ibkr-471-release-eur-2025.xml` | Interactive Brokers | XML (Flex Query) | 2024 loss of 1.000 € blocked by a buy-back, released in 2025 by selling the repurchased shares at +500: strip Total −500 (issue #471) |
+| `ibkr-471-same-year-eur-2025.xml` | Interactive Brokers | XML (Flex Query) | 2025 EUR: a 1.000 € loss blocked by a buy-back and released the same year by selling the repurchased shares at +300: deferral 0, strip Total −700 (issue #471) |
 | `modelo720-2023-sample.txt` | DeclaRenta output | Modelo 720 (fixed width, ISO-8859-15) | 2023 filing declaring GLOBEX (held in `ibkr-sample.xml`) and INITECH (not held): last year's 720 for the web upload |
 | `degiro-transactions-sample.csv` | Degiro | CSV (19-col Spanish) | 13 rows: USD+EUR buys/sells, FX rates, zero-price rights row |
 | `degiro-account-sample.csv` | Degiro | CSV (12-col Spanish) | Dividends, withholdings, STT, cash sweep |

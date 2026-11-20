@@ -605,16 +605,18 @@ describe("Modelo 720 Generator", () => {
       expect(valuationField("60000.1")).toBe("00010");
     });
 
-    it("should throw rather than silently widen the record when the integer part overflows its field", () => {
-      // Valoración int field is 12 digits. A 14-digit integer part cannot fit and
-      // must fail fast instead of shifting every following byte in the 500-byte record.
+    it("never widens the record when the integer part overflows its field: the holding is «sin valorar» (#470)", () => {
+      // Valoración int field is 12 digits. A 14-digit integer part cannot fit:
+      // it would shift every following byte in the 500-byte record, so the
+      // holding is unvalued, as one with no price, and no record is written.
       const positions = [makePosition({
         currency: "EUR",
         positionValue: "12345678901234.56",
         costBasisMoney: "12345678901234.56",
         assetCategory: "STK",
       })];
-      expect(() => generateModelo720(positions, rateMap, baseConfig)).toThrow(/excede el campo/);
+      expect(generateModelo720(positions, rateMap, baseConfig)).toBe("");
+      expect(checkModelo720Thresholds(positions, rateMap, 2025).values.unvalued).toBe(1);
     });
   });
 
@@ -1371,6 +1373,18 @@ describe("Acquisition dates and extinctions from the FIFO run", () => {
     ]);
     expect(records).toEqual([["        ", "20250303", "00000000600000"]]);
     expect(undated).toEqual([{ isin: "IE00BK5BQT80", missing: "acquisitionDate" }]);
+  });
+
+  it("names both fields to complete when a sale with no history also has a value too big for valoración 1", () => {
+    // CodeRabbit on 45c5712: 100 x 1e11 € = 1e13 € does not fit 12 integer
+    // digits, so the record writes 0 there. Only the missing acquisition date
+    // was named, and the 0 had no explanation.
+    const { records, undated } = extinctions([sell("2025-03-03", "100", "1e11")]);
+    expect(records).toEqual([["        ", "20250303", "00000000000000"]]);
+    expect(undated).toEqual([
+      { isin: "IE00BK5BQT80", missing: "acquisitionDate" },
+      { isin: "IE00BK5BQT80", missing: "value" },
+    ]);
   });
 
   it("writes one extinction record per acquisition date sold, when last year's file has one record per date", () => {

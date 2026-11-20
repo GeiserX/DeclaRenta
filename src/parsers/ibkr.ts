@@ -21,7 +21,8 @@ import type {
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { TaxMessage } from "../types/tax.js";
 import { ISIN_SHAPE } from "../engine/antichurning-window.js";
-import { tradeQuantityUnknownMessages } from "./csv-utils.js";
+import { cashEndingOf, hasSignConflict, heldCashBalances, readPositionNumber } from "../engine/ecb.js";
+import { tradeQuantityUnknownMessages, markUndatedTrades, dropUndatedCash } from "./csv-utils.js";
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -88,6 +89,11 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   const cashTransactions: ReturnType<typeof mapCashTransaction>[] = [];
   const corporateActions: ReturnType<typeof mapCorporateAction>[] = [];
   const openPositions: ReturnType<typeof mapOpenPosition>[] = [];
+  // Rows whose quantity is unknown because an explicit 0 sits next to a value
+  // that is not 0, or next to no readable value at all (each gets its own
+  // warning, #470).
+  const zeroWithValue = new Set<OpenPosition>();
+  const zeroUnconfirmed = new Set<OpenPosition>();
   const securitiesInfo: ReturnType<typeof mapSecurityInfo>[] = [];
   const cashBalances: ReturnType<typeof mapCashBalance>[] = [];
   const optionExercises: OptionExercise[] = [];
@@ -131,7 +137,12 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     cashTransactions.push(...detailCash.map(mapCashTransaction));
     corporateActions.push(...ensureArray(stmt.CorporateActions?.CorporateAction).map(mapCorporateAction));
     const rawPositions = (ensureArray(stmt.OpenPositions?.OpenPosition) as Record<string, string>[]).map(withAccount);
-    openPositions.push(...dropLotRowsWithSummary(rawPositions).map(mapOpenPosition));
+    for (const raw of dropLotRowsWithSummary(rawPositions)) {
+      const position = mapOpenPosition(raw);
+      openPositions.push(position);
+      if (isZeroWithValue(raw)) zeroWithValue.add(position);
+      if (isUnconfirmedZero(raw)) zeroUnconfirmed.add(position);
+    }
     securitiesInfo.push(...(ensureArray(stmt.SecuritiesInfo?.SecurityInfo) as Record<string, string>[]).map((raw) => mapSecurityInfo(raw, stmt.toDate as string | undefined)));
     const period = { fromDate: stmt.fromDate as string | undefined, toDate: stmt.toDate as string | undefined };
     // An empty <Trades /> still says "no trades in this period", and an empty
@@ -148,6 +159,11 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   }
 
   assertFlexDateFormat(trades.map((t) => t.tradeDate), cashTransactions.map((c) => c.dateTime));
+  // In a file of the right format, a trade whose date is no real day ("",
+  // "20251345") is kept as a row that books nothing, and such a cash row is
+  // taken out; each is named below (#467).
+  markUndatedTrades(trades, "tradeDate");
+  const undatedCashMessages = dropUndatedCash("IBKR", cashTransactions, "dateTime");
 
   // Detect important sections present in XML but not parsed
   const parserWarnings: string[] = [];
@@ -233,25 +249,115 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     });
   }
 
-  // An unreadable Open Positions quantity reads "0" (so nothing crashes), and
-  // the D-6 and the 720 then show a holding whose value is known with 0
-  // shares, or leave it out: say which holdings to check by hand.
-  const unreadablePositions = openPositions.filter((p) => p.quantityUnknown);
-  if (unreadablePositions.length > 0) {
-    const count = String(unreadablePositions.length);
-    const holdings = unreadablePositions.map((p) => (p.isin ? `${p.symbol} (${p.isin})` : p.symbol)).join(", ");
+  // An unreadable Open Positions quantity reads "0" (so nothing crashes) with
+  // `quantityUnknown`: the 720, the D-6 and the 721 show its units as unknown
+  // and ask for them, never 0 (#470). Say which holdings to check by hand, one
+  // warning for securities (720, D-6) and one for crypto (721). An explicit 0
+  // next to a value that is not 0 is unknown too, but the file does give a
+  // number: it gets its own wording, so the warning never says it is unreadable.
+  // An explicit 0 with no readable value next to it (unreadable text, or no
+  // positionValue column) is unknown too: nothing confirms it, so it gets a
+  // third wording, which says no cancellation is written for it.
+  // Only rows a form reads are named (`isFormHolding`): the warnings say what
+  // the 720, the D-6 or the 721 do with them, which is false for an option.
+  for (const crypto of [false, true]) {
+    const flagged = openPositions.filter((p) => p.quantityUnknown && isFormHolding(p) && (p.assetCategory === "CRYPTO") === crypto);
+    const holdingsOf = (rows: OpenPosition[]): string => rows.map((p) => (p.isin ? `${p.symbol} (${p.isin})` : p.symbol)).join(", ");
+    const zeros = flagged.filter((p) => zeroWithValue.has(p));
+    if (zeros.length > 0) {
+      const count = String(zeros.length);
+      const holdings = holdingsOf(zeros);
+      parserMessages.push(crypto
+        ? {
+            id: "parser.crypto_position_zero_with_value",
+            severity: "warning",
+            message: `IBKR da 0 unidades para ${count} posición(es) de criptomonedas que sí tienen un valor distinto de 0: ${holdings}.`,
+            hint: "Un 0 junto a un valor no es un número de unidades, así que se trata como desconocido, nunca como 0. Con un valor positivo, el Modelo 721 muestra sus unidades como desconocidas y su valor cuenta para el umbral. Con un valor negativo es una posición corta (criptomonedas que debes, no que tienes), y el 721 no la incluye. Toma las unidades del extracto de fin de año de IBKR.",
+            context: { count, holdings },
+          }
+        : {
+            id: "parser.open_position_zero_with_value",
+            severity: "warning",
+            message: `IBKR da 0 acciones para ${count} posición(es) abierta(s) que sí tienen un valor distinto de 0: ${holdings}.`,
+            hint: "Un 0 junto a un valor no es un número de acciones, así que se trata como desconocido, nunca como 0. Con un valor positivo, el Modelo 720 y el D-6 muestran la posición sin número de valores y te piden que lo escribas a mano, y su valor cuenta para el umbral del 720. Con un valor negativo es una posición corta (acciones que debes, no que tienes), y el 720 y el D-6 no la incluyen. Toma el número del extracto de fin de año de IBKR.",
+            context: { count, holdings },
+          });
+    }
+    const unconfirmed = flagged.filter((p) => zeroUnconfirmed.has(p));
+    if (unconfirmed.length > 0) {
+      const count = String(unconfirmed.length);
+      const holdings = holdingsOf(unconfirmed);
+      parserMessages.push(crypto
+        ? {
+            id: "parser.crypto_position_zero_unconfirmed",
+            severity: "warning",
+            message: `IBKR da 0 unidades para ${count} posición(es) de criptomonedas sin un valor legible que lo confirme: ${holdings}.`,
+            hint: "Un 0 sin un valor de 0 al lado puede ser un error de la exportación, así que DeclaRenta no da la posición por cerrada: el Modelo 721 la muestra con unidades desconocidas y sin valorar, y no puede concluir que no debas presentarlo. Comprueba en el extracto de fin de año de IBKR si aún la tienes: si es así, toma sus unidades y su valor; si no, no la declares.",
+            context: { count, holdings },
+          }
+        : {
+            id: "parser.open_position_zero_unconfirmed",
+            severity: "warning",
+            message: `IBKR da 0 acciones para ${count} posición(es) abierta(s) sin un valor legible que lo confirme: ${holdings}.`,
+            hint: "Un 0 sin un valor de 0 al lado puede ser un error de la exportación, así que DeclaRenta no da la posición por cerrada: el Modelo 720 no escribe su registro de baja (C) y el D-6 no la cancela, y ambos la muestran sin número de valores y sin valorar. Comprueba en el extracto de fin de año de IBKR si aún la tienes: si es así, toma el número de acciones y su valor; si la vendiste, declara su baja a mano.",
+            context: { count, holdings },
+          });
+    }
+    const unreadable = flagged.filter((p) => !zeroWithValue.has(p) && !zeroUnconfirmed.has(p));
+    if (unreadable.length === 0) continue;
+    const count = String(unreadable.length);
+    const holdings = holdingsOf(unreadable);
+    parserMessages.push(crypto
+      ? {
+          id: "parser.crypto_position_quantity_unknown",
+          severity: "warning",
+          message: `IBKR no da un número de unidades legible para ${count} posición(es) de criptomonedas: ${holdings}.`,
+          hint: "DeclaRenta no inventa sus unidades: el Modelo 721 las muestra como desconocidas, y si tampoco viene su valor las cuenta como sin valorar, así que no puede concluir que no debas presentarlo. Toma las unidades del extracto de fin de año de IBKR, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
+          context: { count, holdings },
+        }
+      : {
+          id: "parser.open_position_quantity_unknown",
+          severity: "warning",
+          message: `IBKR no da un número de acciones legible para ${count} posición(es) abierta(s): ${holdings}.`,
+          hint: "DeclaRenta no inventa su número de acciones: el Modelo 720 y el D-6 las muestran sin número de valores y te piden que lo escribas a mano, y si tampoco viene su valor las cuentan como sin valorar. Toma el número del extracto de fin de año de IBKR, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
+          context: { count, holdings },
+        });
+  }
+
+  // A quantity and a value of opposite signs contradict each other: the 720
+  // and the D-6 (securities) or the 721 (crypto) count the holding as held and
+  // unvalued (#470). An option or a future is in no form, so it is not named.
+  const conflicting = openPositions.filter((p) => isFormHolding(p) && hasSignConflict(p));
+  if (conflicting.length > 0) {
+    const count = String(conflicting.length);
+    const holdings = conflicting.map((p) => (p.isin ? `${p.symbol} (${p.isin})` : p.symbol)).join(", ");
     parserMessages.push({
-      id: "parser.open_position_quantity_unknown",
+      id: "parser.open_position_sign_conflict",
       severity: "warning",
-      message: `IBKR no da un número de acciones legible para ${count} posición(es) abierta(s): ${holdings}.`,
-      hint: "DeclaRenta las cuenta con 0 acciones: el Modelo 720 las incluye con su valor, pero con 0 en «Número de valores», y el D-6 no las incluye. Revisa a mano esas posiciones en el 720 y el D-6, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
+      message: `IBKR da un número de acciones o unidades y un valor de signo contrario para ${count} posición(es) abierta(s): ${holdings}.`,
+      hint: "Una cantidad positiva con un valor negativo, o al revés, se contradice: DeclaRenta no sabe si es una posición larga o corta, así que no la valora. El Modelo 720 y el D-6 (acciones, fondos y bonos) o el Modelo 721 (criptomonedas) la cuentan como sin valorar y no pueden concluir que no debas presentarlos. Toma la cantidad y el valor del extracto de fin de año de IBKR.",
       context: { count, holdings },
+    });
+  }
+
+  // A cash balance with no number ("", "N/A", no endingCash column) is unknown,
+  // never 0 €: the 720 accounts category counts it unvalued (#470).
+  const unreadableCash = heldCashBalances(cashBalances).filter((cb) => cashEndingOf(cb) === null);
+  if (unreadableCash.length > 0) {
+    const count = String(unreadableCash.length);
+    const accounts = unreadableCash.map((cb) => `${cb.accountId} (${cb.currency})`).join(", ");
+    parserMessages.push({
+      id: "parser.cash_balance_unreadable",
+      severity: "warning",
+      message: `IBKR no da un saldo final legible para ${count} saldo(s) en efectivo: ${accounts}.`,
+      hint: "DeclaRenta no lo cuenta como 0 €: el Modelo 720 lo muestra como sin valorar y no puede concluir que no debas declarar tus cuentas. Toma el saldo del extracto de fin de año de IBKR, o comprueba que la sección Cash Report de la Flex Query incluye el saldo final (Ending Cash) y vuelve a exportarla.",
+      context: { count, accounts },
     });
   }
 
   // An unreadable trade quantity reads "0" too (FIFO books no shares for it):
   // say which trades to check.
-  parserMessages.push(...tradeQuantityUnknownMessages("IBKR", trades));
+  parserMessages.push(...tradeQuantityUnknownMessages("IBKR", trades), ...undatedCashMessages);
 
   // Use first statement's metadata, combine accountIds for multi-account
   const first = statements[0]!;
@@ -288,7 +394,10 @@ const FLEX_DATE_PREFIX = /^(?:19|20)\d\d(-?)(?:0[1-9]|1[0-2])\1(?:0[1-9]|[12]\d|
  * The Flex Query "Date Format" setting also offers MM/dd/yyyy, dd/MM/yyyy,
  * dd-MMM-yy and more. Those dates never match the declaration year, so the
  * report would come out empty with no message. Refuse the file instead and say
- * which setting to change.
+ * which setting to change. A Flex export writes every date in that one
+ * setting, so a date of another shape means the setting, not a damaged row. A
+ * date of the right shape that is no real day ("20240231"), or an empty one,
+ * is a damaged row: kept and named, never a reason to refuse the file (#467).
  */
 function assertFlexDateFormat(tradeDates: string[], cashDateTimes: string[]): void {
   for (const raw of [...tradeDates, ...cashDateTimes]) {
@@ -376,7 +485,7 @@ function mapTrade(raw: Record<string, string>): Trade {
     // Canonical "BUY"/"SELL" after trimming and upper-casing. Cancel rows
     // ("SELL (Ca.)") never get here; any other value passes through and
     // FifoEngine skips it with a warning instead of treating it as a sale.
-    buySell: (raw.buySell ?? "BUY").trim().toUpperCase() as Trade["buySell"],
+    buySell: tradeSide(raw.buySell, quantity),
     openCloseIndicator: (raw.openCloseIndicator ?? "O") as Trade["openCloseIndicator"],
     exchange: raw.exchange ?? "",
     // The listing market, not the venue: it decides the anti-churning window (#452).
@@ -393,6 +502,21 @@ function mapTrade(raw: Record<string, string>): Trade {
     underlyingIsin: underlyingIsinOf(raw) || undefined,
     ibOrderID: raw.ibOrderID || undefined,
   };
+}
+
+/**
+ * A trade's side: its `buySell` when the row gives one, else the sign of its
+ * quantity (#468). A missing `buySell` is no "BUY": a sale read as a buy
+ * vanished, or covered a short that never existed. With neither a side nor a
+ * signed quantity it is "", which FifoEngine skips and names
+ * (`fifo.unknown_direction`); a row of unknown quantity books nothing anyway.
+ */
+function tradeSide(buySell: string | undefined, quantity: string | undefined): Trade["buySell"] {
+  const side = (buySell ?? "").trim().toUpperCase();
+  if (side) return side as Trade["buySell"];
+  const qty = quantity === undefined ? new Decimal(0) : new Decimal(quantity);
+  if (qty.isZero()) return "" as Trade["buySell"];
+  return qty.isNegative() ? "SELL" : "BUY";
 }
 
 /** IBKR notes code for a cancelled execution. */
@@ -716,6 +840,20 @@ function isCashSummaryRow(raw: Record<string, string>): boolean {
   return (raw.transactionID ?? "") === "" && (raw.accountId ?? "") === SUMMARY_ACCOUNT_PLACEHOLDER;
 }
 
+/**
+ * A Flex dateTime with ";" between the date and the time. The Flex Query
+ * "Date/Time Separator" setting also offers ",", a space and none, and the
+ * time may be HHmmss or HH:mm:ss: "20240615,103000", "2024-06-15 10:30:00",
+ * "20240615103000". The engine and the date check read only ";", so every
+ * such dividend or withholding was dropped as undated, or crashed the report.
+ * The date keeps its own shape (yyyyMMdd or yyyy-MM-dd); a value that is
+ * already in this form, a date alone, or no date is left as it is.
+ */
+function flexDateTime(raw: string): string {
+  const m = /^((?:19|20)\d\d(-?)\d{2}\2\d{2})(?:[, ]|(?=\d))(.+)$/.exec(raw.trim());
+  return m ? `${m[1]};${m[3]}` : raw;
+}
+
 function mapCashTransaction(raw: Record<string, string>): CashTransaction {
   return {
     transactionID: raw.transactionID ?? "",
@@ -724,7 +862,7 @@ function mapCashTransaction(raw: Record<string, string>): CashTransaction {
     description: raw.description ?? "",
     isin: raw.isin ?? "",
     currency: raw.currency ?? "",
-    dateTime: raw.dateTime ?? "",
+    dateTime: flexDateTime(raw.dateTime ?? ""),
     settleDate: raw.settleDate ?? "",
     amount: raw.amount ?? "0",
     fxRateToBase: raw.fxRateToBase ?? "1",
@@ -772,14 +910,56 @@ function dropLotRowsWithSummary(rows: Record<string, string>[]): Record<string, 
   return rows.filter((raw) => !(level(raw) === "LOT" && summarized.has(id(raw))));
 }
 
+/**
+ * An open position one of the holdings forms reads: a stock, fund or bond (the
+ * 720 and the D-6) or a coin (the 721). Options, futures, cash and warrant rows
+ * are in none of them, so the holdings warnings never name them.
+ */
+function isFormHolding(p: OpenPosition): boolean {
+  return p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND" || p.assetCategory === "CRYPTO";
+}
+
+/**
+ * An Open Positions row whose quantity is an explicit 0 while its value is a
+ * number other than 0: the 0 contradicts the value, so it is no share count
+ * (#470). The parser flags it `quantityUnknown` and warns with its own wording.
+ * Both fields are read with the generators' own reader (`readPositionNumber`),
+ * so "1e5" is a value here as it is in the 720, and "NaN" is none.
+ */
+function isZeroWithValue(raw: Record<string, string>): boolean {
+  const value = readPositionNumber(raw.positionValue);
+  return readPositionNumber(raw.position ?? raw.quantity)?.isZero() === true
+    && value !== null && !value.isZero();
+}
+
+/**
+ * An Open Positions row whose quantity is an explicit 0 while no readable value
+ * sits next to it: text that is no number ("N/A", "NaN", "60,000", "") or no
+ * positionValue column at all. A written 0 is trusted only when a value of 0
+ * confirms it; otherwise it may be an export error and the holding may still be
+ * there, so the 0 is no share count: the parser flags it `quantityUnknown`, and
+ * the 720 writes no cancellation (C) for it, the D-6 does not cancel it and the
+ * 721 keeps the coin, each «sin valorar» (#470). The missing column counts as
+ * unconfirmed too: the parser's "0" for it is no value the broker gave.
+ */
+function isUnconfirmedZero(raw: Record<string, string>): boolean {
+  return readPositionNumber(raw.position ?? raw.quantity)?.isZero() === true
+    && readPositionNumber(raw.positionValue) === null;
+}
+
 function mapOpenPosition(raw: Record<string, string>): OpenPosition {
   // IBKR writes the held quantity as `position`; `quantity` is the older
   // hand-written form some files use. Keep a missing or unreadable quantity
   // apart from an explicit zero: the "0" default would prove "no shares held"
   // to the one-purchase exception (#453). An unreadable one still reads "0"
   // for the D-6 and the 720 (new Decimal("") throws), flagged unknown.
+  // An explicit 0 next to a value that is not 0 contradicts itself: the 0 is
+  // no share count, so it is unknown too, never 0 units in the 720/721 (#470).
+  // So is a 0 that no readable value confirms (`isUnconfirmedZero`).
+  // A quantity is a number by the generators' own rule (`readPositionNumber`):
+  // "7e2" is 700 shares, "NaN" or "N/A" is unknown.
   const rawQuantity = raw.position ?? raw.quantity;
-  const quantityUnknown = !/^\s*[-+]?(\d+\.?\d*|\.\d+)\s*$/.test(rawQuantity ?? "");
+  const quantityUnknown = readPositionNumber(rawQuantity) === null || isZeroWithValue(raw) || isUnconfirmedZero(raw);
   return {
     accountId: raw.accountId ?? "",
     symbol: raw.symbol ?? "",
@@ -787,7 +967,7 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
     isin: raw.isin ?? "",
     currency: raw.currency ?? "",
     assetCategory: (raw.assetCategory ?? "STK") as OpenPosition["assetCategory"],
-    quantity: quantityUnknown || rawQuantity === undefined ? "0" : rawQuantity,
+    quantity: quantityUnknown || rawQuantity === undefined ? "0" : rawQuantity.trim(),
     costBasisMoney: raw.costBasisMoney ?? "0",
     costBasisPrice: raw.costBasisPrice ?? "0",
     markPrice: raw.markPrice ?? "0",

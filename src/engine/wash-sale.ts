@@ -42,7 +42,9 @@ import type { Trade, CorporateAction } from "../types/ibkr.js";
 import Decimal from "decimal.js";
 import { normalizeDate, parseDate } from "./dates.js";
 import { compareFifoTradeOrder } from "./fifo.js";
-import { resolveIsinWindow, type IsinWindow } from "./antichurning-window.js";
+import { canonicalIsin, resolveIsinWindow, type IsinWindow } from "./antichurning-window.js";
+import { hasSignConflict, readPositionNumber } from "./ecb.js";
+import { finiteDisposalAmounts } from "../generators/casillas.js";
 
 /** Asset categories exempt from anti-churning (not "valores homogéneos" per Art. 33.5.f/g) */
 const WASH_SALE_EXEMPT: ReadonlySet<string> = new Set(["OPT", "FUT", "FOP", "FSFOP", "CFD", "CASH"]);
@@ -172,6 +174,8 @@ export interface AccountStatement {
     symbol: string;
     assetCategory: string;
     quantity: string;
+    /** The row's value, read only for its sign (`hasSignConflict`). */
+    positionValue?: string;
     fromTrades?: boolean;
     quantityUnknown?: boolean;
   }[];
@@ -588,7 +592,23 @@ export function detectWashSales(
     group.idxs.push(idx);
   }
 
-  const isLossAt = (idx: number): boolean => result[idx]!.gainLossEur.lessThan(0);
+  // Only the loss the report counts can be blocked, and exactly that loss:
+  // the result of `finiteDisposalAmounts`, the one the boxes add. A sale with
+  // non-finite proceeds or cost (a corrupt rate), or one past 12 integer
+  // digits of euros (`isCountableAmount`), loses that amount there: with no
+  // proceeds it counts nothing, with no cost it counts its proceeds. Blocking
+  // its raw "Infinity" would zero the year's blocked total in
+  // guardNonFiniteTotals and drop every valid blocked loss from the base
+  // (#469); blocking 1e2000 would put a 2000-digit figure in the blocked line
+  // (#470). A trap: the test asked for both amounts to count, so a sale whose
+  // cost is left out and whose proceeds are below 0 (a commission above the
+  // gross) subtracted its loss from the boxes and a repurchase blocked none
+  // of it (CodeRabbit on 10e1918).
+  const countedLossAt = (idx: number): Decimal => {
+    const gainLoss = finiteDisposalAmounts(result[idx]!).gainLoss;
+    return gainLoss.lessThan(0) ? gainLoss.negated() : new Decimal(0);
+  };
+  const isLossAt = (idx: number): boolean => countedLossAt(idx).greaterThan(0);
   // A short cover buys back shares sold short; it transmits no held shares, so
   // it is never a «transmisión definitiva»: it runs no definitive test, releases
   // no pending loss and cannot empty the position. Its own loss still blocks.
@@ -944,7 +964,7 @@ export function detectWashSales(
       const absorbed = absorbedOf.get(idx);
       if (!isLossAt(idx) || !absorbed || absorbed.lessThanOrEqualTo(0)) continue;
       const qty = disposal.quantity.abs();
-      const lossAbs = disposal.gainLossEur.abs();
+      const lossAbs = countedLossAt(idx);
       const blocked = absorbed.greaterThanOrEqualTo(qty) ? lossAbs : lossAbs.mul(absorbed).div(qty);
       disposal.blockedLossEur = blocked;
       disposal.washSaleBlocked = blocked.greaterThan(0);
@@ -1154,7 +1174,9 @@ export function salesWithWindowPastData(
     if (WASH_SALE_EXEMPT.has(d.assetCategory) || d.quantity.isZero()) continue;
     const key = homogeneousKey(d.isin, d.symbol, d.assetCategory);
     if (!key) continue;
-    const openLoss = d.gainLossEur.lessThan(0) && d.blockedLossEur.lessThan(d.gainLossEur.abs());
+    // The loss the detector can block: the one the boxes count (`isLossAt`).
+    const counted = finiteDisposalAmounts(d).gainLoss;
+    const openLoss = counted.lessThan(0) && d.blockedLossEur.lessThan(counted.abs());
     const undoableRelease = d.reintegratedLossEur.greaterThan(0) && d.assetCategory !== "CRYPTO";
     if (!openLoss && !undoableRelease) continue;
     const sellDate = parseDate(d.sellDate);
@@ -1464,7 +1486,11 @@ function buildEvidenceCheck(
         listedBy.set(key, ids);
       }
       ids.add(id);
-      const qty = pos.quantityUnknown ? null : readQuantity(pos.quantity);
+      // A quantity and a value of opposite signs contradict each other: the
+      // row says neither "held" nor "short", so it is unreadable, never the 0
+      // a clamp of its quantity would give (#470, the rule of the forms).
+      const conflict = hasSignConflict({ quantity: pos.quantity, positionValue: pos.positionValue ?? "", quantityUnknown: pos.quantityUnknown === true });
+      const qty = pos.quantityUnknown || conflict ? null : readQuantity(pos.quantity);
       const prev = list.get(key);
       list.set(key, prev === null || qty === null ? null : (prev ?? new Decimal(0)).plus(qty));
     }
@@ -1531,14 +1557,12 @@ function coversDaysOnce(periods: readonly [number, number][], start: number, end
   return reach >= end;
 }
 
-/** A holdings quantity, or null when it is missing or unreadable. */
+/**
+ * A holdings quantity, or null when it is missing or unreadable: the one rule
+ * every reader of an open position's fields uses (`readPositionNumber`, #470).
+ */
 function readQuantity(quantity: string): Decimal | null {
-  try {
-    const qty = new Decimal(quantity.trim());
-    return qty.isFinite() ? qty : null;
-  } catch {
-    return null;
-  }
+  return readPositionNumber(quantity);
 }
 
 /**
@@ -1723,7 +1747,8 @@ function buyQtyConversionToSellUnits(
  */
 function windowMonths(assetCategory: string, isin: string, windows: ReadonlyMap<string, IsinWindow>, sellDay: string): number {
   if (assetCategory === "CRYPTO") return 12;
-  const resolved = isin ? resolveIsinWindow(windows.get(isin), sellDay) : undefined;
+  // The map is keyed by `canonicalIsin`: a lower-case ISIN still finds the user's value.
+  const resolved = isin ? resolveIsinWindow(windows.get(canonicalIsin(isin)), sellDay) : undefined;
   if (resolved) return resolved.months;
   if (isin && LISTED_CATEGORIES.has(assetCategory)) return 2;
   // No ISIN (and not a recognized listed category) → assume unlisted.

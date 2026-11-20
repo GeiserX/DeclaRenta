@@ -641,6 +641,8 @@ describe("trading212Parser", () => {
       ].join("\n");
       const trade = trading212Parser.parse(csv).trades[0]!;
       expect(trade.cost).toBe("-601.8");
+      // FIFO reads tradePrice, never cost: the Total reaches it as Total ÷ shares (#467).
+      expect(trade.tradePrice).toBe("60.18");
       expect(trade.taxes).toBe("0");
       expect(trade.commission).toBe("0");
     });

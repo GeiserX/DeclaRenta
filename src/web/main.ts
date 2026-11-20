@@ -57,12 +57,24 @@ import {
   getManualOpeningLots,
   renderManualOpeningLotsPanel,
   bindManualOpeningLotsPanel,
+  openingLotsRowsKey,
+  readOpeningLotsDraft,
+  applyOpeningLotsDraft,
+  type OpeningLotsDraft,
 } from "./manual-rates.js";
 import { initSection720, renderSection720, rerenderSection720 } from "./section-720.js";
 import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
 import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.js";
 import { findMissingHoldings, type MissingHoldings, type ParsedExport } from "./missing-holdings.js";
-import { bindAntichurningWindowPanel, getWindowOverrides, renderAntichurningWindowPanel } from "./antichurning-window.js";
+import {
+  antichurningRowsKey,
+  applyAntichurningDraft,
+  bindAntichurningWindowPanel,
+  getWindowOverrides,
+  readAntichurningDraft,
+  renderAntichurningWindowPanel,
+  type AntichurningDraft,
+} from "./antichurning-window.js";
 import { initSectionGuide, rerenderSectionGuide } from "./section-guide.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import { validateStatement, renderValidationIssues } from "./validation.js";
@@ -72,6 +84,8 @@ import { washSaleRowAttr, renderWashSaleDetailRow } from "./wash-sale-row.js";
 import { symbolCell } from "./symbol-cell.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement, yearEndHoldings } from "../parsers/merge.js";
 import { fmtEur, fmtQty, formatDate } from "./format.js";
+import { amountCell, costCell, countedResult } from "./disposal-cells.js";
+import { finiteDisposalAmounts } from "../generators/casillas.js";
 import Decimal from "decimal.js";
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -197,6 +211,10 @@ function rerunWithOverlay(): void {
 document.addEventListener("localechange", () => {
   updateStaticText();
   renderFileList();
+  // A Save rerun still waiting shows no «Guardado» after this redraw (#472),
+  // nor does a later run after a failed one: a Save whose rerun failed leaves
+  // its panel in the set while no report is on screen (#472 review).
+  savedPanels.clear();
   if (currentReport) renderResults(currentReport);
   rerenderSection720();
   rerenderSection721();
@@ -506,6 +524,7 @@ function resetDownstream(): void {
   lastRunContext = null;
   activeYear = null;
   shownResultsYear = null;
+  savedPanels.clear();
   detectedYears = [];
   activityYears = [];
   // Drop any processFiles run still in flight: it was built from the old list.
@@ -951,7 +970,64 @@ function renderSectionSafely(containerId: string, render: () => void): void {
  */
 let processRunToken = 0;
 
+/** The three results panels with a Save button (#472). */
+type SavedPanel = "antichurning" | "crypto" | "openingLots";
+
+/**
+ * The panels saved since the last results render (#472). A Save reruns the
+ * report, and the run redraws every panel, so the redrawn panel of each Save
+ * must show «Guardado». A set, not the one panel of the latest run: a Save in
+ * another panel before the first run lands drops that run, and the newer run
+ * must label both, also when the newer run comes from a Clear in another
+ * panel (#472 review). An edit, a refused Save or a Clear in a panel takes it
+ * out; a locale change, a year change and a new upload empty the set. The run
+ * that renders consumes it.
+ *
+ * Each panel maps to the year of the results the saved panel showed. The old
+ * year's panels stay on screen while a year change waits, and a Save there
+ * reruns for the new year: that run labels only the panels saved in its own
+ * year, so the other year's panel never says «Guardado» for it (#472 review).
+ */
+const savedPanels = new Map<SavedPanel, number>();
+
+/**
+ * When each drawn results panel was last touched (#472 review): every edit and
+ * every button click in the panel (a Save, a refused Save, a Clear) stamps the
+ * panel element with the next `panelTouchSeq`, before the panel's own handlers
+ * run. A run notes `panelTouchSeq` when it starts. A panel on screen stamped
+ * since then holds the user's newer state (typed values, an error), so that run
+ * leaves it there instead of redrawing it. The stamp is on the element: a
+ * redraw in between (a locale change) draws an unstamped panel from the old
+ * report, and the run replaces it, so it never stays stale.
+ */
+const panelTouched = new WeakMap<Element, number>();
+let panelTouchSeq = 0;
+
+/**
+ * The drawn results panels that hold something the user did not save (#472
+ * review of 6fb63b2): an edit (typing, a select, an added or removed row) or a
+ * Save or Clear the panel refused (its error is on screen). The stamp above
+ * only covers what happened after a run started; a Save in another panel
+ * starts a newer run after the edit, and that run would redraw the panel from
+ * storage and drop the typed value. Every run keeps these panels, unless it
+ * shows another year. Only the panel's own good Save or Clear takes it out, so
+ * the run it starts redraws it. A Save that changes nothing adds nothing.
+ */
+const panelUnsaved = new WeakSet<Element>();
+
+/**
+ * The rows each drawn anti-churning and opening-lots panel shows
+ * (`antichurningRowsKey` or `openingLotsRowsKey` of the report it was drawn
+ * from). A run keeps an edited panel only while its report lists the same
+ * rows; otherwise it draws the panel from the new report and puts back what
+ * the user had not saved: the window choices by ISIN, the typed lots by group
+ * (#472 review of 99f969f and of e4e439e).
+ */
+const panelRows = new WeakMap<Element, string>();
+
 async function processFiles(): Promise<void> {
+  // Noted before any await: a Save calls this from its click handler.
+  const touchSeqAtStart = panelTouchSeq;
   if (!mergedStatement) {
     await parseFiles();
   }
@@ -1026,7 +1102,13 @@ async function processFiles(): Promise<void> {
 
     unlockStep(3);
     clearWizardError();
-    renderResults(report);
+    // Panels touched while this run waited stay as the user left them, unless
+    // the run shows another year (they belong to the year on screen).
+    const keep = (el: Element) =>
+      report.year === shownResultsYear && (panelUnsaved.has(el) || (panelTouched.get(el) ?? 0) > touchSeqAtStart);
+    const labelled = new Set([...savedPanels].filter(([, savedYear]) => savedYear === report.year).map(([p]) => p));
+    savedPanels.clear();
+    renderResults(report, labelled, keep);
     shownResultsYear = report.year;
 
     // Render 720, 721 and D-6 sections with processed data. Each is wrapped so a
@@ -1201,7 +1283,7 @@ opsFilter.addEventListener("change", () => renderOperationsTable());
 // Render results (Step 3)
 // ---------------------------------------------------------------------------
 
-function renderResults(report: TaxSummary) {
+function renderResults(report: TaxSummary, labelled: ReadonlySet<SavedPanel> = new Set(), keep: (panel: Element) => boolean = () => false) {
   // The method chip, the «Cómo se ha calculado» text and the comparison apply
   // only to an upload with foreign currency.
   const method: FxMethod | null = uploadCurrencies.length > 0
@@ -1251,6 +1333,8 @@ function renderResults(report: TaxSummary) {
       const newYear = parseInt((e.target as HTMLSelectElement).value);
       if (!isNaN(newYear)) {
         activeYear = newYear;
+        // The panels of another year show no «Guardado» from a Save made before (#472).
+        savedPanels.clear();
         // Sync profile so 720/721/D-6 use the same year
         const profile = getProfile();
         profile.year = newYear;
@@ -1266,49 +1350,124 @@ function renderResults(report: TaxSummary) {
   // collapsed list of saved prices once every swap is valued. Re-rendered
   // here each time results render, so it stays in sync on locale change too.
   const resultsSectionEl = document.getElementById("wizard-step-3")!;
-  resultsSectionEl.querySelectorAll(".crypto-rates-panel").forEach((el) => el.remove());
-  resultsSectionEl.querySelectorAll(".manual-opening-lots-panel").forEach((el) => el.remove());
-  resultsSectionEl.querySelectorAll(".antichurning-window-panel").forEach((el) => el.remove());
-
-  const panelHtml = renderManualOpeningLotsPanel(report.messages);
-  if (panelHtml) {
-    casillasDiv.insertAdjacentHTML("beforebegin", panelHtml);
-    const panel = resultsSectionEl.querySelector<HTMLElement>(".manual-opening-lots-panel");
-    if (panel) {
-      bindManualOpeningLotsPanel(panel, () => {
-        void processFiles();
-      });
-    }
+  // The panels in screen order, just above the casillas. The opening-lots and
+  // anti-churning panels also carry .crypto-rates-panel (shared styling), so
+  // the crypto selector excludes them.
+  const panelOrder: SavedPanel[] = ["openingLots", "crypto", "antichurning"];
+  const panelSelector: Record<SavedPanel, string> = {
+    openingLots: ".manual-opening-lots-panel",
+    crypto: ".crypto-rates-panel:not(.manual-opening-lots-panel):not(.antichurning-window-panel)",
+    antichurning: ".antichurning-window-panel",
+  };
+  const kept = new Map<SavedPanel, HTMLElement>();
+  for (const p of panelOrder) {
+    const el = resultsSectionEl.querySelector<HTMLElement>(panelSelector[p]);
+    if (el && keep(el)) kept.set(p, el);
   }
-
-  const cryptoPanelHtml = renderManualRatesPanel(report.unresolvedCryptoValuations ?? []);
-  if (cryptoPanelHtml) {
-    casillasDiv.insertAdjacentHTML("beforebegin", cryptoPanelHtml);
-    // The opening-lots panel also carries .crypto-rates-panel (shared styling)
-    // and sits earlier in the DOM, so exclude it or the Save button stays unbound.
-    const panel = resultsSectionEl.querySelector<HTMLElement>(".crypto-rates-panel:not(.manual-opening-lots-panel):not(.antichurning-window-panel)");
-    if (panel) {
-      bindManualRatesPanel(panel, () => {
-        // Re-run the full pipeline so the newly-entered manual rates take
-        // effect — no re-upload needed (statement is cached in mergedStatement).
-        void processFiles();
-      });
-    }
+  // A kept anti-churning panel whose rows the report changed (an opening lot
+  // or a crypto price saved in another panel turned a sale into a loss or a
+  // gain) would hide a new row from the user. Draw it again from the report
+  // instead, with what the user had not saved: the choices by ISIN, the error,
+  // and the marks that keep it through the next run (#472 review of 99f969f).
+  const windowRows = antichurningRowsKey(report.capitalGains.antichurningSecurities);
+  const staleWindow = kept.get("antichurning");
+  let windowDraft: { from: Element; draft: AntichurningDraft } | null = null;
+  if (staleWindow && panelRows.get(staleWindow) !== windowRows) {
+    windowDraft = { from: staleWindow, draft: readAntichurningDraft(staleWindow) };
+    kept.delete("antichurning");
   }
+  // The same for a kept opening-lots panel: a crypto price saved or cleared in
+  // another panel puts a swap into the calculations or leaves it out, which
+  // drops a sale's missing lot or adds one. A kept panel would hide the new
+  // row, or offer a row whose lot would enter FIFO for a sale that has its
+  // purchase already (#472 review of e4e439e).
+  const lotsRows = openingLotsRowsKey(report.messages);
+  const staleLots = kept.get("openingLots");
+  let lotsDraft: { from: Element; draft: OpeningLotsDraft } | null = null;
+  if (staleLots && panelRows.get(staleLots) !== lotsRows) {
+    lotsDraft = { from: staleLots, draft: readOpeningLotsDraft(staleLots) };
+    kept.delete("openingLots");
+  }
+  const keptEls = new Set<Element>(kept.values());
+  resultsSectionEl.querySelectorAll(".crypto-rates-panel, .manual-opening-lots-panel, .antichurning-window-panel").forEach((el) => {
+    if (!keptEls.has(el)) el.remove();
+  });
+
+  // A Save reruns the report and redraws its panel: the new panel shows
+  // «Guardado» (#472), when the run shows the year this panel shows. A Clear
+  // reruns without it. Either one stored what the
+  // panel shows, so the panel holds nothing unsaved any more.
+  const rerunAfter = (panel: SavedPanel, el: HTMLElement) => (action: "save" | "clear") => {
+    panelUnsaved.delete(el);
+    if (action === "save") savedPanels.set(panel, report.year);
+    void processFiles();
+  };
+
+  // Draw a panel, unless it is kept: then the user's panel stays where it is,
+  // and a new one goes before the next kept panel so the order holds. Every
+  // edit or button click in a drawn panel stamps it, in the capture phase so it
+  // counts before a Save handler starts a run. The same touch hides «Guardado»:
+  // after an edit the panel shows values nobody saved, and a good Save shows the
+  // label again from its own handler, which runs after this one.
+  // A panel drawn again with a draft keeps the marks that keep it through the next run.
+  const carryUnsaved = (from: Element, to: Element) => {
+    if (panelUnsaved.has(from)) panelUnsaved.add(to);
+    const stamp = panelTouched.get(from);
+    if (stamp !== undefined) panelTouched.set(to, stamp);
+  };
+
+  const placePanel = (p: SavedPanel, html: string, bind: (el: HTMLElement) => void) => {
+    if (kept.has(p) || !html) return;
+    const anchor = panelOrder.slice(panelOrder.indexOf(p) + 1).map((q) => kept.get(q)).find((el) => el !== undefined) ?? casillasDiv;
+    anchor.insertAdjacentHTML("beforebegin", html);
+    const panel = resultsSectionEl.querySelector<HTMLElement>(panelSelector[p]);
+    if (!panel) return;
+    const touch = (e: Event) => {
+      if (e.type === "click" && !(e.target instanceof Element && e.target.closest("button"))) return;
+      panelTouched.set(panel, ++panelTouchSeq);
+      savedPanels.delete(p);
+      panel.querySelectorAll<HTMLElement>(".crypto-rates-saved-msg").forEach((label) => {
+        label.hidden = true;
+      });
+    };
+    for (const type of ["input", "change", "click"]) panel.addEventListener(type, touch, true);
+    // What the panel holds that nobody saved. An edit, or a button outside the
+    // Save/Clear bar (add or remove a row), counts at once; a Save or Clear
+    // counts after its handler ran, when it left an error on screen.
+    const actionBar = ".crypto-rates-actions, .manual-opening-lots-actions";
+    for (const type of ["input", "change"]) panel.addEventListener(type, () => panelUnsaved.add(panel), true);
+    panel.addEventListener("click", (e) => {
+      const button = e.target instanceof Element ? e.target.closest("button") : null;
+      if (!button) return;
+      if (!button.closest(actionBar) || panel.querySelector("[role='alert']:not([hidden])")) panelUnsaved.add(panel);
+    });
+    bind(panel);
+  };
+
+  placePanel("openingLots", renderManualOpeningLotsPanel(report.messages, { saved: labelled.has("openingLots") }), (panel) => {
+    bindManualOpeningLotsPanel(panel, rerunAfter("openingLots", panel));
+    panelRows.set(panel, lotsRows);
+    if (!lotsDraft) return;
+    applyOpeningLotsDraft(panel, lotsDraft.draft);
+    carryUnsaved(lotsDraft.from, panel);
+  });
+
+  // Re-run the full pipeline so the newly-entered manual rates take
+  // effect — no re-upload needed (statement is cached in mergedStatement).
+  placePanel("crypto", renderManualRatesPanel(report.unresolvedCryptoValuations ?? [], { saved: labelled.has("crypto") }), (panel) => {
+    bindManualRatesPanel(panel, rerunAfter("crypto", panel));
+  });
 
   // The anti-churning window per security (#452): 2 months or 1 year, set by
   // hand when IBKR's listing exchange is wrong or missing. Saving reruns the
   // whole pipeline, so the method comparison below picks it up too.
-  const windowPanelHtml = renderAntichurningWindowPanel(report.capitalGains.antichurningSecurities);
-  if (windowPanelHtml) {
-    casillasDiv.insertAdjacentHTML("beforebegin", windowPanelHtml);
-    const panel = resultsSectionEl.querySelector<HTMLElement>(".antichurning-window-panel");
-    if (panel) {
-      bindAntichurningWindowPanel(panel, () => {
-        void processFiles();
-      });
-    }
-  }
+  placePanel("antichurning", renderAntichurningWindowPanel(report.capitalGains.antichurningSecurities, { saved: labelled.has("antichurning") }), (panel) => {
+    bindAntichurningWindowPanel(panel, rerunAfter("antichurning", panel));
+    panelRows.set(panel, windowRows);
+    if (!windowDraft) return;
+    applyAntichurningDraft(panel, windowDraft.draft);
+    carryUnsaved(windowDraft.from, panel);
+  });
 
   // «Acciones / Divisa / Total», then the closed comparison with the other methods.
   resultsSummaryDiv.innerHTML = renderResultsSplit(report, method) + (method ? renderMethodCompare() : "");
@@ -1379,6 +1538,11 @@ function sortableTh(label: string, col: string, state: SortState): string {
   return `<th class="sortable${sortIndicator(col, state)}" data-col="${col}"${ariaSort}><button type="button" class="sort-btn">${label}</button></th>`;
 }
 
+/** The result cell of a sale: what the boxes add for it, «—» when they add nothing (#470). */
+function resultCell(result: Decimal | null): string {
+  return `<td class="${result !== null && result.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${result === null ? "—" : fmtEur(result)}</td>`;
+}
+
 function renderOperationsTable() {
   if (!currentReport) return;
   const search = opsSearch.value.toLowerCase();
@@ -1407,10 +1571,12 @@ function renderOperationsTable() {
         (brokers && (matches(d.acquireBrokerSource) || matches(d.brokerSource))),
     );
   }
+  // Gain or loss as the boxes split it (`finiteDisposalAmounts`): a NaN
+  // result failed both tests, so its sale showed under neither (#469, #470).
   if (filter === "gain") {
-    disposals = disposals.filter((d) => d.gainLossEur.greaterThanOrEqualTo(0));
+    disposals = disposals.filter((d) => finiteDisposalAmounts(d).gainLoss.greaterThanOrEqualTo(0));
   } else if (filter === "loss") {
-    disposals = disposals.filter((d) => d.gainLossEur.lessThan(0));
+    disposals = disposals.filter((d) => finiteDisposalAmounts(d).gainLoss.lessThan(0));
   }
 
   // Apply sort
@@ -1426,9 +1592,11 @@ function renderOperationsTable() {
       else if (col === "buyBroker") cmp = (a.acquireBrokerSource ?? "").localeCompare(b.acquireBrokerSource ?? "");
       else if (col === "sellBroker") cmp = (a.brokerSource ?? "").localeCompare(b.brokerSource ?? "");
       else if (col === "qty") cmp = a.quantity.minus(b.quantity).toNumber();
-      else if (col === "cost") cmp = a.costBasisEur.minus(b.costBasisEur).toNumber();
-      else if (col === "proceeds") cmp = a.proceedsEur.minus(b.proceedsEur).toNumber();
-      else if (col === "gl") cmp = a.gainLossEur.minus(b.gainLossEur).toNumber();
+      // The amounts the boxes count: a NaN difference made the comparison
+      // say «equal» to every row and scrambled the order (#469, #470).
+      else if (col === "cost") cmp = finiteDisposalAmounts(a).cost.comparedTo(finiteDisposalAmounts(b).cost);
+      else if (col === "proceeds") cmp = finiteDisposalAmounts(a).proceeds.comparedTo(finiteDisposalAmounts(b).proceeds);
+      else if (col === "gl") cmp = finiteDisposalAmounts(a).gainLoss.comparedTo(finiteDisposalAmounts(b).gainLoss);
       else if (col === "days") cmp = a.holdingPeriodDays - b.holdingPeriodDays;
       return cmp * dir;
     });
@@ -1464,9 +1632,9 @@ function renderOperationsTable() {
             <td class="cell-broker">${esc(d.acquireBrokerSource ?? "—")}</td>
             <td class="cell-broker">${esc(d.brokerSource ?? "—")}</td>` : ""}
             <td>${fmtQty(d.quantity)}</td>
-            <td>${fmtEur(d.costBasisEur)}</td>
-            <td>${fmtEur(d.proceedsEur)}</td>
-            <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${fmtEur(d.gainLossEur)}</td>
+            <td>${costCell(d)}</td>
+            <td>${amountCell(d.proceedsEur)}</td>
+            ${resultCell(countedResult(d))}
             <td>${d.holdingPeriodDays}</td>
           </tr>${renderWashSaleDetailRow(d, brokers ? 11 : 9)}
         `,

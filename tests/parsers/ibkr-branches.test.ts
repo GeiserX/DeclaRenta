@@ -109,14 +109,14 @@ describe("parseIbkrFlexXml - trade attribute defaults", () => {
         <FlexStatement fromDate="20250101" toDate="20251231">
           <Trades>
             <Trade tradeID="" symbol="XYZ" isin="" assetCategory="" currency=""
-                   tradeDate="" quantity="" tradePrice="" tradeMoney="" proceeds=""
+                   tradeDate="20250115" quantity="" tradePrice="" tradeMoney="" proceeds=""
                    cost="" fifoPnlRealized="" fxRateToBase="" buySell="" openCloseIndicator=""
                    exchange="" commissionCurrency="" commission="" taxes=""
                    multiplier="" strike="" expiry="" underlyingSymbol="" underlyingIsin="" />
           </Trades>
           <CashTransactions>
             <CashTransaction transactionID="" symbol="" isin="" currency=""
-                             dateTime="" settleDate="" amount="" fxRateToBase="" type="" />
+                             dateTime="20250115" settleDate="" amount="" fxRateToBase="" type="" />
           </CashTransactions>
           <CorporateActions>
             <CorporateAction transactionID="" symbol="" isin="" currency=""
@@ -130,7 +130,8 @@ describe("parseIbkrFlexXml - trade attribute defaults", () => {
     const result = parseIbkrFlexXml(xml);
 
     // Trade defaults — when XML attributes are explicitly empty strings,
-    // ?? keeps them as "" (since "" is not null/undefined)
+    // ?? keeps them as "" (since "" is not null/undefined). The dates are
+    // real: a trade or cash row with no date is kept or named instead (#467).
     const trade = result.trades[0]!;
     expect(trade.tradeID).toBe("");
     expect(trade.description).toBe("");

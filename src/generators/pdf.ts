@@ -11,7 +11,7 @@ import PDFDocument from "pdfkit";
 import Decimal from "decimal.js";
 import { fxMethodOf, type FxMethod, type TaxSummary } from "../types/tax.js";
 import { localizeHint, localizeMessage, t } from "../i18n/index.js";
-import { combinedNetGainLoss, computeCasillaBlocksWithFx, groupDividendsByIssuer } from "./casillas.js";
+import { combinedNetGainLoss, computeCasillaBlocksWithFx, countedDisposalAmounts, groupDividendsByIssuer } from "./casillas.js";
 import { pdfSafeText } from "./pdf-text.js";
 import { showBrokerColumns } from "./broker-columns.js";
 
@@ -205,8 +205,12 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
           const d = report.capitalGains.disposals[i]!;
           const rowY = doc.y;
 
-          const gainLoss = d.gainLossEur;
-          const glColor = gainLoss.greaterThanOrEqualTo(0) ? COLORS.success : COLORS.accent;
+          // Each amount as the boxes count it: «—» where they add nothing
+          // (`countedDisposalAmounts`), never "NaN" or a 2000-digit figure (#469, #470).
+          const amounts = countedDisposalAmounts(d);
+          const counted = (amount: Decimal | null): string => (amount === null ? "—" : amount.toFixed(2));
+          const gainLoss = amounts.gainLoss;
+          const glColor = gainLoss === null ? COLORS.muted : gainLoss.greaterThanOrEqualTo(0) ? COLORS.success : COLORS.accent;
 
           const scenarioTag = d.optionScenario === "expiration" ? "EXP" : d.optionScenario === "exercise" ? "EJ" : "CL";
           const symbolLabel = d.optionScenario
@@ -218,9 +222,9 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
             ["buyDate", formatDate(d.acquireDate), COLORS.text],
             ["sellDate", formatDate(d.sellDate), COLORS.text],
             ["units", d.quantity.toString(), COLORS.text],
-            ["cost", d.costBasisEur.toFixed(2), COLORS.text],
-            ["proceeds", d.proceedsEur.toFixed(2), COLORS.text],
-            ["gainLoss", gainLoss.toFixed(2), glColor],
+            ["cost", counted(amounts.cost), COLORS.text],
+            ["proceeds", counted(amounts.proceeds), COLORS.text],
+            ["gainLoss", counted(gainLoss), glColor],
             ["ecb", d.sellEcbRate.toFixed(4), COLORS.muted],
           ];
 

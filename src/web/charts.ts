@@ -10,6 +10,7 @@ import { t } from "../i18n/index.js";
 import { getSavingsBands } from "../engine/tax-brackets.js";
 import { fmtEur } from "./format.js";
 import { assetLabel } from "./asset-labels.js";
+import { finiteDisposalAmounts } from "../generators/casillas.js";
 
 // ---------------------------------------------------------------------------
 // Shared
@@ -195,10 +196,16 @@ export interface ChartData {
 }
 
 export function extractChartData(report: {
-  capitalGains: { disposals: { assetCategory: string; currency: string; sellDate: string; gainLossEur: Decimal; proceedsEur: Decimal }[] };
+  capitalGains: { disposals: { assetCategory: string; currency: string; sellDate: string; gainLossEur: Decimal; proceedsEur: Decimal; costBasisEur: Decimal }[] };
   dividends: { entries: { withholdingCountry: string; withholdingTaxEur: Decimal }[] };
 }): ChartData {
-  const disposals = report.capitalGains.disposals;
+  // Each sale as the boxes count it (`finiteDisposalAmounts`): a NaN result
+  // blanked the whole monthly chart, and proceeds of 1.1e13 € that the boxes
+  // leave out were drawn as a 10-trillion-euro gain (#469, #470).
+  const disposals = report.capitalGains.disposals.map((d) => {
+    const { proceeds, gainLoss } = finiteDisposalAmounts(d);
+    return { ...d, proceedsEur: proceeds, gainLossEur: gainLoss };
+  });
 
   // Asset distribution by category
   const byAsset = new Map<string, number>();

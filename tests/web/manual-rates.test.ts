@@ -8,6 +8,8 @@ import {
   getManualOpeningLots,
   renderManualOpeningLotsPanel,
   setManualOpeningLots,
+  saveManualRates,
+  saveManualOpeningLotGroups,
 } from "../../src/web/manual-rates.js";
 import { lookupRateInMap } from "../../src/engine/ecb.js";
 import type { UnresolvedValuation } from "../../src/types/tax.js";
@@ -354,5 +356,67 @@ describe("setManualOpeningLots / getManualOpeningLots", () => {
     ]);
 
     expect(html).toContain(`type="date" max="${today}"`);
+  });
+});
+
+describe("a write the browser refuses is not counted as saved (#472)", () => {
+  const refuse = () => {
+    globalThis.localStorage.setItem = () => {
+      throw new DOMException("full", "QuotaExceededError");
+    };
+  };
+  const lot = (quantity: string, isin = "US0378331005") => ({
+    symbol: "AAPL",
+    description: "APPLE INC",
+    isin,
+    assetCategory: "STK",
+    currency: "USD",
+    acquireDate: "2024-01-10",
+    quantity,
+    pricePerShare: "100",
+  });
+
+  it("setManualRate and saveManualRates", () => {
+    refuse();
+    expect(setManualRate("SOL", "2025-04-10", "40")).toBe(false);
+    expect(saveManualRates([{ currency: "SOL", date: "2025-04-10", eurPerUnit: "40" }])).toEqual({ saved: 0, written: false });
+    expect(store[KEY]).toBeUndefined();
+  });
+
+  it("an invalid quote alone needs no write and is no failure", () => {
+    refuse();
+    expect(saveManualRates([{ currency: "SOL", date: "2025-04-10", eurPerUnit: "abc" }])).toEqual({ saved: 0, written: true });
+  });
+
+  it("saveManualRates stores several quotes in one write", () => {
+    let writes = 0;
+    globalThis.localStorage.setItem = (k: string, v: string) => {
+      writes++;
+      store[k] = v;
+    };
+    expect(saveManualRates([
+      { currency: "SOL", date: "2025-04-10", eurPerUnit: "40" },
+      { currency: "ETH", date: "2025-05-01", eurPerUnit: "3000" },
+      { currency: "ETH", date: "2025-05-02", eurPerUnit: "0" },
+    ])).toEqual({ saved: 2, written: true });
+    expect(writes).toBe(1);
+    expect(JSON.parse(store[KEY]!)).toHaveLength(2);
+  });
+
+  it("setManualOpeningLots and saveManualOpeningLotGroups", () => {
+    refuse();
+    expect(setManualOpeningLots("US0378331005", [lot("14")])).toBe(0);
+    expect(saveManualOpeningLotGroups([{ groupKey: "US0378331005", lots: [lot("14")] }])).toEqual({ saved: 0, written: false });
+    expect(store[OPENING_LOTS_KEY]).toBeUndefined();
+  });
+
+  it("saveManualOpeningLotGroups writes every group at once and keeps the per-group counting", () => {
+    setManualOpeningLots("US0378331005", [lot("14")]);
+    const result = saveManualOpeningLotGroups([
+      { groupKey: "US0378331005", lots: [lot("", "US0378331005")] }, // emptied: counts 1
+      { groupKey: "US5949181045", lots: [lot("3", "US5949181045"), lot("4", "US5949181045")] },
+    ]);
+    expect(result).toEqual({ saved: 3, written: true });
+    expect(getManualOpeningLots().map((l) => l.quantity)).toEqual(["3", "4"]);
   });
 });

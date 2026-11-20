@@ -52,7 +52,7 @@ export { fxMethodOf } from "./types/tax.js";
 export type { FxMethod } from "./types/tax.js";
 export { computeCasillaBlocksWithFx } from "./generators/casillas.js";
 export { generateModelo720, checkModelo720Thresholds } from "./generators/modelo720.js";
-export { generateModelo721 } from "./generators/modelo721.js";
+export { generateModelo721, findModelo721Omissions } from "./generators/modelo721.js";
 export { generateD6Report } from "./generators/d6.js";
 export { generatePdfReport } from "./generators/pdf.js";
 export { formatCsv, escapeCsv } from "./generators/csv.js";

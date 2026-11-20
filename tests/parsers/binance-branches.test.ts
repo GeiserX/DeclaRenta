@@ -161,13 +161,14 @@ describe("binanceParser - Trade History format", () => {
       .toMatchObject({ count: "1", pairs: "X" });
   });
 
-  it("should skip rows with non buy/sell side", () => {
+  it("keeps a row with a non buy/sell side as a row that books nothing, and names it (#467)", () => {
     const input = [
       "Date(UTC),Pair,Side,Price,Executed,Amount,Fee",
       "2025-01-15 10:30:00,BTCEUR,CONVERT,40000,0.01,400,0",
     ].join("\n");
     const result = binanceParser.parse(input);
-    expect(result.trades).toHaveLength(0);
+    expect(result.trades.map((t) => [t.symbol, t.quantity, t.quantityUnknown])).toEqual([["BTC", "0", true]]);
+    expect(result.parserMessages?.find((m) => m.id === "parser.trade_row_unreadable")?.context?.rows).toBe('BTC 20250115 [Side: "CONVERT"]');
   });
 });
 

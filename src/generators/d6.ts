@@ -19,7 +19,8 @@
 import Decimal from "decimal.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
+import { hasNoMarketValue, isD6Holding, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
+import { d6ShareCount, fitsModelo720Amount } from "./modelo720.js";
 
 /** A single position row for the D-6 report */
 export interface D6Position {
@@ -38,6 +39,12 @@ export interface D6Cancellation {
   reason: string;
 }
 
+/** A held position the guide cannot list as an entry (no value or no valid share count): declare it by hand. */
+export interface D6Unvalued {
+  isin: string;
+  description: string;
+}
+
 /** Complete D-6 report data */
 export interface D6Report {
   year: number;
@@ -47,8 +54,10 @@ export interface D6Report {
   cancelled: D6Cancellation[];
   totalPositions: number;
   totalValueEur: string;
-  /** Held foreign positions left out because they have no year-end rate or no market value: declare them by hand. */
+  /** Held foreign positions left out because they have no year-end rate, no market value, no valid share count or a value too big for the 720's valoración (#470): declare them by hand. */
   unvaluedCount: number;
+  /** Those positions, as the guide names them. Present only when there is one. */
+  unvalued?: D6Unvalued[];
   guide: string[];
 }
 
@@ -75,15 +84,6 @@ function exchangeFromIsin(isin: string, assetCategory?: string): string {
   return map[country] ?? "XXXX";
 }
 
-/** Whether a position value is a negative number (a short); an unreadable one is not. */
-function negativeValue(value: string): boolean {
-  try {
-    return new Decimal(value).isNegative();
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Generate a D-6 report from open positions at year end.
  *
@@ -105,7 +105,7 @@ export function generateD6Report(
 ): D6Report {
   const yearEnd = `${year}-12-31`;
 
-  let unvaluedCount = 0;
+  const unvalued: D6Unvalued[] = [];
   const d6Positions: D6Position[] = positions
     .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
     .filter((p) => {
@@ -113,23 +113,35 @@ export function generateD6Report(
       const country = p.isin.slice(0, 2).toUpperCase();
       return country !== "ES";
     })
-    .filter((p) => new Decimal(p.quantity).greaterThan(0)) // Exclude short positions
+    // Exclude short positions and rows that hold nothing (isD6Holding).
+    .filter(isD6Holding)
     .flatMap((p) => {
       const ecbRate = lookupPositionRate(rateMap, yearEnd, p.currency);
       // No resolvable year-end rate, or no market value in the export → can't
-      // value in EUR; skip it (never as 0 €) and count it for the caller.
-      if (ecbRate === null || hasNoMarketValue(p)) {
-        unvaluedCount++;
+      // value in EUR; skip it (never as 0 €) and count it for the caller. With
+      // no share count the entry would say 0 shares: skip and count it too
+      // (tested first: its value may be unreadable text).
+      const value = positionValueOf(p);
+      const valueEur = ecbRate === null || value === null ? null : value.mul(ecbRate);
+      const shares = d6ShareCount(p);
+      // A value too big for the 720's valoración (12 integer digits in euros)
+      // is «sin valorar» there; the D-6 follows the same rule, so the two forms
+      // never disagree on a holding and no total runs to hundreds of digits.
+      // The share count follows the 720's «Número de valores» (`d6ShareCount`).
+      if (valueEur === null || shares === null || hasNoMarketValue(p) || !fitsModelo720Amount(valueEur)) {
+        unvalued.push({ isin: p.isin, description: p.description });
         return [];
       }
-      const valueEur = new Decimal(p.positionValue).mul(ecbRate);
 
       return [{
         isin: p.isin,
         description: p.description,
         countryCode: p.isin.slice(0, 2).toUpperCase(),
         exchangeCode: exchangeFromIsin(p.isin, p.assetCategory),
-        sharesAtYearEnd: new Decimal(p.quantity).toString(),
+        // toFixed, never toString: decimal.js writes 1e21 and above, and below
+        // 1e-7, in exponent form ("5e-8"). `d6ShareCount` keeps the count to 10
+        // integer digits and 20 decimals, so the string stays short.
+        sharesAtYearEnd: shares.toFixed(),
         marketValueEur: valueEur.toFixed(2),
         currency: p.currency,
       }];
@@ -148,10 +160,7 @@ export function generateD6Report(
     positions
       .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
       .filter((p) => p.isin.slice(0, 2).toUpperCase() !== "ES")
-      .filter((p) =>
-        p.quantityUnknown === true
-          ? !negativeValue(p.positionValue)
-          : new Decimal(p.quantity).greaterThan(0))
+      .filter(isD6Holding)
       .map((p) => p.isin),
   );
   const previousIsins = new Set(previousYearIsins ?? []);
@@ -200,6 +209,17 @@ export function generateD6Report(
     guide.push(``);
   }
 
+  // A held holding with no value or no share count has no entry above: name
+  // it, so the guide never drops a holding without a word (#470).
+  if (unvalued.length > 0) {
+    guide.push(`SIN VALORAR O SIN Nº DE TÍTULOS (añádelas a mano en AFORIX con su valor en euros y su número de títulos)`);
+    guide.push(``);
+    for (const u of unvalued) {
+      guide.push(`  ${u.isin}  ${u.description}`);
+    }
+    guide.push(``);
+  }
+
   if (cancelled.length > 0) {
     guide.push(`CANCELACIONES (posiciones declaradas el año anterior ya no mantenidas)`);
     guide.push(``);
@@ -215,6 +235,7 @@ export function generateD6Report(
   guide.push(`PASO 4: Revisar, firmar y presentar`);
   guide.push(`  Total posiciones activas:  ${d6Positions.length}`);
   guide.push(`  Total cancelaciones:       ${cancelled.length}`);
+  if (unvalued.length > 0) guide.push(`  Sin valorar (a mano):      ${unvalued.length}`);
   guide.push(`  Valor total:               ${totalValue.toFixed(2)} EUR`);
   guide.push(`  → Firmar electrónicamente la declaración en AFORIX`);
   guide.push(`  → Subir el fichero firmado (.aforixd) en eAFORIX:`);
@@ -232,7 +253,8 @@ export function generateD6Report(
     cancelled,
     totalPositions: d6Positions.length,
     totalValueEur: totalValue.toFixed(2),
-    unvaluedCount,
+    unvaluedCount: unvalued.length,
+    ...(unvalued.length > 0 ? { unvalued } : {}),
     guide,
   };
 }

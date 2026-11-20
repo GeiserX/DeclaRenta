@@ -41,10 +41,12 @@ describe("fixture file integration", () => {
       expect(degiroParser.detect(csv)).toBe(true);
     });
 
-    it("should parse all trades (skipping zero-price rights)", () => {
+    it("should parse all trades (the zero-price rights row books nothing)", () => {
       const r = degiroParser.parse(csv);
-      // 13 data rows minus 1 zero-price rights = 12 trades
-      expect(r.trades).toHaveLength(12);
+      // 13 data rows: 12 trades, plus the zero-price rights row kept as a
+      // row that books nothing and named as not applied (#467)
+      expect(r.trades).toHaveLength(13);
+      expect(r.trades.filter((t) => t.corporateActionRow !== undefined).map((t) => [t.symbol, t.quantity])).toEqual([["ZETA ENERGY SA-RTS", "0"]]);
       expect(r.trades.every((t) => t.isin.startsWith("XX"))).toBe(true);
     });
   });
@@ -395,17 +397,26 @@ describe("fixture file integration", () => {
 
     it("should parse all trades (BUY + SELL, stocks + crypto + fund)", () => {
       const r = tradeRepublicParser.parse(csv);
-      expect(r.trades).toHaveLength(10);
-      const buys = r.trades.filter((t) => t.buySell === "BUY");
-      const sells = r.trades.filter((t) => t.buySell === "SELL");
+      // Plus the 2 merger rows and the free-share delivery, kept as rows that
+      // book nothing (evidence of a holding, #467).
+      expect(r.trades).toHaveLength(13);
+      const kept = r.trades.filter((t) => t.corporateActionRow !== undefined);
+      expect(kept.map((t) => [t.isin, t.quantity, t.quantityUnknown, t.tradeMoney])).toEqual([
+        ["LU0000000001", "0", true, "0"], ["IE0000000001", "0", true, "0"], ["DE0000004001", "0", true, "0"],
+      ]);
+      const trades = r.trades.filter((t) => t.corporateActionRow === undefined);
+      expect(trades).toHaveLength(10);
+      const buys = trades.filter((t) => t.buySell === "BUY");
+      const sells = trades.filter((t) => t.buySell === "SELL");
       expect(buys).toHaveLength(5);
       expect(sells).toHaveLength(5);
     });
 
     it("should map asset categories correctly", () => {
       const r = tradeRepublicParser.parse(csv);
-      const crypto = r.trades.filter((t) => t.assetCategory === "CRYPTO");
-      const fund = r.trades.filter((t) => t.assetCategory === "FUND");
+      const trades = r.trades.filter((t) => t.corporateActionRow === undefined);
+      const crypto = trades.filter((t) => t.assetCategory === "CRYPTO");
+      const fund = trades.filter((t) => t.assetCategory === "FUND");
       expect(crypto).toHaveLength(2);
       expect(fund).toHaveLength(1);
     });

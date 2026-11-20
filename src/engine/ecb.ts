@@ -10,7 +10,7 @@
 
 import Decimal from "decimal.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import type { OpenPosition } from "../types/ibkr.js";
+import type { CashBalance, OpenPosition } from "../types/ibkr.js";
 
 const ECB_SDMX_URL = "https://data-api.ecb.europa.eu/service/data/EXR";
 const MAX_RETRIES = 3;
@@ -277,10 +277,168 @@ export function lookupPositionRate(rateMap: EcbRateMap, date: string, currency: 
  * no year-end price (Revolut's transaction log, or an IBKR position without a
  * positionValue). Its EUR value is unknown, not 0 €, so the Modelo 720/721/D-6
  * callers treat it like a position with no rate: left out of the EUR totals
- * and surfaced for manual valuation.
+ * and surfaced for manual valuation. A holding whose quantity the file does not
+ * give (`quantityUnknown`, quantity "0") counts as held: with no value either it
+ * is unvalued too, never a 0 € holding dropped from the totals (#470).
  */
-export function hasNoMarketValue(p: Pick<OpenPosition, "quantity" | "positionValue">): boolean {
-  return new Decimal(p.quantity).greaterThan(0) && new Decimal(p.positionValue).isZero();
+export function hasNoMarketValue(p: Pick<OpenPosition, "quantity" | "positionValue" | "quantityUnknown">): boolean {
+  // A quantity and a value of opposite signs contradict each other: the
+  // holding is held, but its value is unknown (`hasSignConflict`).
+  if (hasSignConflict(p)) return true;
+  if (p.quantityUnknown !== true && !(readPositionNumber(p.quantity)?.greaterThan(0) ?? false)) return false;
+  // A value the export writes as text that is no number ("", "N/A", "NaN") is
+  // no value either: unvalued, never a crash (an IBKR row with both blank).
+  const value = positionValueOf(p);
+  return value === null || value.isZero();
+}
+
+/**
+ * Whether a quantity of units (shares, coins) has at most 20 integer digits
+ * and at most 20 decimals. No broker writes a count past that, and `toFixed()`
+ * writes one character per digit: a readable "1e-1000000000" would become a
+ * string of a billion characters and exhaust the memory of the page or the
+ * report (CodeRabbit on #470). A count that fails this has no valid count
+ * (`d6ShareCount`). This reads the broker's own text: a count the engine
+ * computes (a split, a merger) may carry more decimals and is shown in full
+ * (`fmtQty` bounds only the printed length).
+ */
+export function hasPrintableDigits(quantity: Decimal): boolean {
+  return quantity.decimalPlaces() <= 20 && quantity.abs().lessThan("1e20");
+}
+
+/**
+ * The one shape of a number in a broker export's holding fields: an optional
+ * sign, digits with an optional decimal point, and an optional exponent
+ * (`700`, `-12.5`, `.5`, `1e5`). Surrounding spaces are ignored.
+ */
+const EXPORT_NUMBER = /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i;
+
+/**
+ * A holding field (an open position's quantity or value, a cash balance) read
+ * as a number, or null when its text is no number. One rule for every reader
+ * of these fields, the IBKR parser included: a finite decimal, exponent forms
+ * too. "", "N/A", "NaN", "Infinity", hex ("0x10"), "1_000" and "1,000" are no
+ * number (decimal.js alone reads some of them, and NaN or Infinity would turn a
+ * 720 total into NaN, which passes no threshold, #470). A null is «sin valorar»
+ * for the caller, never 0.
+ */
+export function readPositionNumber(text: string | undefined): Decimal | null {
+  const trimmed = (text ?? "").trim();
+  if (!EXPORT_NUMBER.test(trimmed)) return null;
+  const d = new Decimal(trimmed);
+  return d.isFinite() ? d : null;
+}
+
+/**
+ * The position's value as the export writes it, or null when that text is no
+ * number (IBKR can write `positionValue=""`, "N/A" or "NaN"). Read every value
+ * through this, never `new Decimal(p.positionValue)`, which throws on some
+ * such text and gives NaN on others (#470). A held row with no readable value
+ * is unvalued (`hasNoMarketValue`), never 0 €.
+ */
+export function positionValueOf(p: Pick<OpenPosition, "positionValue">): Decimal | null {
+  return readPositionNumber(p.positionValue);
+}
+
+/**
+ * A quantity and a value of opposite signs (700 units worth -5000, or -700
+ * units worth 5000). The row contradicts itself: it proves neither a long
+ * holding worth the value's size nor a short. The conservative reading, the
+ * same in the 720, the 721 and the D-6, is a held holding whose value is
+ * unknown: counted unvalued («sin valorar»), never left out as a short and
+ * never valued (#470). A quantity the export does not give has no sign.
+ */
+export function hasSignConflict(p: Pick<OpenPosition, "quantity" | "positionValue" | "quantityUnknown">): boolean {
+  if (p.quantityUnknown === true) return false;
+  const quantity = readPositionNumber(p.quantity);
+  const value = positionValueOf(p);
+  return quantity !== null && value !== null && !quantity.isZero() && !value.isZero()
+    && quantity.isNegative() !== value.isNegative();
+}
+
+/**
+ * A short (stock owed, not owned). The sign comes from the value when it is a
+ * number other than 0; when the value cannot tell (0, or no number), from a
+ * readable quantity, as the D-6 does. A row with neither proves no short, and
+ * neither does a row whose quantity and value disagree (`hasSignConflict`).
+ */
+export function isShortPosition(p: Pick<OpenPosition, "quantity" | "positionValue" | "quantityUnknown">): boolean {
+  if (hasSignConflict(p)) return false;
+  const value = positionValueOf(p);
+  if (value !== null && !value.isZero()) return value.isNegative();
+  return p.quantityUnknown !== true && readPositionNumber(p.quantity)?.isNegative() === true;
+}
+
+/**
+ * A row the D-6 counts as held: a positive share count; a share count the file
+ * does not give, unless the row is a short (`isShortPosition`, the 720's own
+ * sign rule: a negative value other than 0; "-0" has no sign); or a quantity
+ * and a value of opposite signs, which is held with an unknown value, never
+ * left out as a short (`hasSignConflict`, #470). The D-6 generator and the web
+ * D-6 table share it, so they cannot drift apart.
+ */
+export function isD6Holding(p: Pick<OpenPosition, "quantity" | "positionValue" | "quantityUnknown">): boolean {
+  if (p.quantityUnknown === true) return !isShortPosition(p);
+  if (hasSignConflict(p)) return true;
+  return readPositionNumber(p.quantity)?.greaterThan(0) ?? false;
+}
+
+/**
+ * IBKR's CashReport writes one row per currency and a `BASE_SUMMARY` row with
+ * their sum in the base currency: no balance of its own.
+ */
+const CASH_SUMMARY_CURRENCY = "BASE_SUMMARY";
+
+/**
+ * A cash row's balance at 31 December, or null when the export gives no number
+ * for it: text that is no number ("", "N/A", "NaN"), or no `endingCash` column
+ * at all (the parser's "0" for it is no balance the broker gave). Read every
+ * balance through this, never `new Decimal(cb.endingCash || 0)`: the balance is
+ * unknown, never 0 € and never a crash (#470).
+ */
+export function cashEndingOf(cb: Pick<CashBalance, "endingCash" | "endingCashMissing">): Decimal | null {
+  return cb.endingCashMissing === true ? null : readPositionNumber(cb.endingCash);
+}
+
+/** A cash row's Q4 average balance, or null when the export gives none or no number. */
+export function cashAverageOf(cb: Pick<CashBalance, "averageQ4Cash">): Decimal | null {
+  return readPositionNumber(cb.averageQ4Cash);
+}
+
+/**
+ * The cash balances the Modelo 720 accounts category holds. A balance is held
+ * when it is positive, or when it is unknown (`cashEndingOf` null): it may be
+ * positive, so it is held and «sin valorar», never dropped. A balance of 0 or
+ * below holds nothing.
+ *
+ * IBKR's BASE_SUMMARY row is the sum of an account's currency rows in its base
+ * currency, no balance of its own, so it is skipped when the account has
+ * currency rows. With none (a Flex Query exporting only the base summary) it
+ * is the only balance the file gives for that account, so it is kept: with no
+ * exchange rate for "BASE_SUMMARY" the 720 counts it «sin valorar», never 0 €
+ * (#470).
+ */
+export function heldCashBalances(cashBalances: readonly CashBalance[] | undefined): CashBalance[] {
+  const all = cashBalances ?? [];
+  const withCurrencyRows = new Set(all.filter((cb) => cb.currency !== CASH_SUMMARY_CURRENCY).map((cb) => cb.accountId));
+  return all.filter((cb) => {
+    if (cb.currency === CASH_SUMMARY_CURRENCY && withCurrencyRows.has(cb.accountId)) return false;
+    const ending = cashEndingOf(cb);
+    return ending === null || ending.greaterThan(0);
+  });
+}
+
+/**
+ * A row that holds nothing: the export gives 0 units and a value that is 0 or
+ * no number (nothing contradicts the 0). It is no holding, so the 720 writes no
+ * record for it (that record would say 0 in «Número de valores» and 0 €, #470),
+ * as the D-6 and the 721 leave it out. A 0 with a value that is not 0 is no
+ * such row: the IBKR parser flags that 0 as `quantityUnknown`.
+ */
+export function holdsNothing(p: Pick<OpenPosition, "quantity" | "positionValue" | "quantityUnknown">): boolean {
+  return p.quantityUnknown !== true
+    && readPositionNumber(p.quantity)?.isZero() === true
+    && positionValueOf(p)?.isZero() !== false;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import Decimal from "decimal.js";
 import { generateTaxReport, guardNonFiniteTotals } from "../../src/generators/report.js";
 import type { FlexStatement, Trade, CashTransaction } from "../../src/types/ibkr.js";
@@ -14,6 +14,22 @@ import type { EcbRateMap } from "../../src/types/ecb.js";
 //   2. `generateTaxReport` end-to-end on a finite report — proving the guard is a
 //      strict no-op (no `report.non_finite_total` message, every casilla finite)
 //      for the normal case.
+
+// Since #470 no cash row with a value in euros that is no number reaches a
+// total (report.cash_amount_too_large drops it first), so the end-to-end test
+// of the guard below poisons the dividend engine's output instead: a switch,
+// off by default, makes calculateDividends return a gross amount of Infinity.
+const poison = vi.hoisted(() => ({ dividends: false }));
+vi.mock("../../src/engine/dividends.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../src/engine/dividends.js")>();
+  return {
+    ...original,
+    calculateDividends: (...args: Parameters<typeof original.calculateDividends>) => {
+      const entries = original.calculateDividends(...args);
+      return poison.dividends ? entries.map((e) => ({ ...e, grossAmountEur: new Decimal(Infinity) })) : entries;
+    },
+  };
+});
 
 function makeRateMap(rates: Record<string, string>): EcbRateMap {
   const map: EcbRateMap = new Map();
@@ -152,29 +168,58 @@ describe("generateTaxReport · report.non_finite_total boundary guard", () => {
     expect(report.fxGains.netGainLoss.isFinite()).toBe(true);
   });
 
-  it("emits the error AND zeroes the casilla when a non-finite total reaches assembly", () => {
-    // Real end-to-end injection through the PUBLIC generateTaxReport, with no edit
-    // to any other file. The caller-supplied rateMap is the lowest-friction seam:
-    // lookupRateInMap (engine/ecb.ts) returns `new Decimal(rate)` for ANY string in
-    // the map WITHOUT a finiteness check, and report.ts's own valueIncomeEur then
-    // does `amount.mul(rate)`. A rate of "Infinity" therefore makes interestEarned
-    // non-finite — exactly the kind of poison the boundary guard exists to stop.
-    const poisonedRates: EcbRateMap = new Map([
+  it("a cash row whose value in euros is no number is left out alone and named; the other rows still count (#470)", () => {
+    // The same poisoned rate as below, next to a sound row on another day.
+    // Since #470 a cash row whose value fails the counted bound is dropped
+    // before any total (report.cash_amount_too_large), so the box keeps the
+    // sound row's 50 dollars × 0.9 and only the poisoned row is named. Before,
+    // the guard zeroed the whole box and named only the field.
+    const rates: EcbRateMap = new Map([
       ["2025-06-01", new Map([["USD", "Infinity"]])],
+      ["2025-07-01", new Map([["USD", "0.9"]])],
     ]);
     const statement = makeStatement({
       cashTransactions: [
+        makeCashTx({ transactionID: "int-1", currency: "USD", dateTime: "20250601", amount: "100", type: "Broker Interest Received" }),
+        makeCashTx({ transactionID: "int-2", currency: "USD", dateTime: "20250701", amount: "50", type: "Broker Interest Received" }),
+      ],
+    });
+    const report = generateTaxReport(statement, rates, 2025);
+    expect(report.interest.earned.toFixed(2)).toBe("45.00");
+    expect(report.messages.filter((m) => m.id === "report.non_finite_total")).toEqual([]);
+    const named = report.messages.filter((m) => m.id === "report.cash_amount_too_large");
+    expect(named).toHaveLength(1);
+    expect(named[0]!.severity).toBe("error");
+    expect(named[0]!.context).toMatchObject({ count: "1" });
+    expect(named[0]!.context?.rows).toContain("(01/06/2025)");
+  });
+
+  afterEach(() => {
+    poison.dividends = false;
+  });
+
+  it("emits the error AND zeroes the casilla when a non-finite total reaches assembly", () => {
+    // The dividend engine's output is poisoned (see the mock at the top): a
+    // gross amount of Infinity is exactly the kind of value the boundary guard
+    // exists to stop, whatever produced it.
+    poison.dividends = true;
+    const rates: EcbRateMap = new Map([["2025-06-01", new Map([["USD", "0.9"]])]]);
+    const statement = makeStatement({
+      cashTransactions: [
         makeCashTx({
-          transactionID: "int-1",
+          transactionID: "div-1",
+          symbol: "AAPL",
+          isin: "US0378331005",
+          description: "AAPL(US0378331005) Cash Dividend USD 0.25 per Share",
           currency: "USD",
           dateTime: "20250601",
           amount: "100",
-          type: "Broker Interest Received",
+          type: "Dividends",
         }),
       ],
     });
 
-    const report = generateTaxReport(statement, poisonedRates, 2025);
+    const report = generateTaxReport(statement, rates, 2025);
 
     // The guard fires exactly ONE error naming the offending field.
     const errs = report.messages.filter((m) => m.id === "report.non_finite_total");
@@ -185,10 +230,10 @@ describe("generateTaxReport · report.non_finite_total boundary guard", () => {
     expect(err.message).toContain("Infinito");
     expect(err.message).toContain("detectó");
     expect(err.hint).toContain("formato numérico");
-    expect(err.context?.field).toBe("interestEarned");
+    expect(err.context?.field).toBe("grossDividends");
 
     // The poisoned casilla renders 0, never "Infinity" — the whole point.
-    expect(report.interest.earned.isFinite()).toBe(true);
-    expect(report.interest.earned.toFixed(2)).toBe("0.00");
+    expect(report.dividends.grossIncome.isFinite()).toBe(true);
+    expect(report.dividends.grossIncome.toFixed(2)).toBe("0.00");
   });
 });

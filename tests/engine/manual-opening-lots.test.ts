@@ -64,6 +64,22 @@ describe("manual-opening-lots", () => {
     expect(normalized).toBeNull();
   });
 
+  it("rejects a quantity, price or cost no broker writes (#470)", () => {
+    const lot = (quantity: string, pricePerShare: string) => normalizeManualOpeningLot({
+      symbol: "AAPL", description: "APPLE INC", isin: "US0378331005", assetCategory: "STK",
+      currency: "USD", acquireDate: "2024-01-10", quantity, pricePerShare,
+    });
+    // decimal.js reads "1e1000000000" as finite; the lot's cost reached FIFO.
+    expect(lot("1e1000000000", "100")).toBeNull();
+    expect(lot("10", "1e2000")).toBeNull();
+    expect(lot("1e-25", "100")).toBeNull();
+    expect(lot("1e15", "1e6")).toBeNull(); // a cost of 1e21
+    // Ordinary lots, and the edge of the range, stay.
+    expect(lot("10", "100")?.quantity).toBe("10");
+    expect(lot("99999999999999999999", "1")?.quantity).toBe("99999999999999999999");
+    expect(lot("0.00000001", "50000")?.quantity).toBe("1e-8");
+  });
+
   it("coerces malformed arrays without throwing", () => {
     const lots = coerceManualOpeningLots([
       {

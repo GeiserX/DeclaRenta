@@ -49,6 +49,8 @@ node dist/cli.js d6 --input flex_query.xml --year 2025 --nif 12345678A --name "A
 
 El broker se auto-detecta a partir del contenido del fichero. Se puede forzar con `--broker <nombre>`.
 
+Los comandos `modelo720` y `d6` muestran en la salida de errores los avisos del fichero sobre las posiciones (un número de acciones que falta, un 0 que su valor no confirma o contradice, una cantidad y un valor de signo contrario y, en el 720, un saldo en efectivo sin número). También nombran cada posición sin valorar, con el motivo. Decláralas a mano con los datos del extracto de fin de año del bróker. La CLI no genera el Modelo 721: revísalo en la web.
+
 Opciones adicionales del comando `convert`:
 
 - `--output fichero.json` — Guardar resultado en un fichero en vez de stdout.

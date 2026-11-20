@@ -50,6 +50,16 @@ export function isValidIsin(isin: string): boolean {
   return sum % 10 === 0;
 }
 
+/**
+ * The one form of an ISIN this module keys on: trimmed and upper-cased. The
+ * user's values are stored that way, so a file that writes the ISIN in lower
+ * case must reach the same key, or the security gets two rows and the engine
+ * ignores the user's window (#472 review).
+ */
+export function canonicalIsin(isin: string | undefined): string {
+  return (isin ?? "").trim().toUpperCase();
+}
+
 /** Window length in calendar months: 2 (letter f) or 12 (letter g). */
 export type WindowMonths = 2 | 12;
 
@@ -156,7 +166,7 @@ export function coerceWindowOverrides(raw: unknown): Map<string, WindowMonths> {
   const out = new Map<string, WindowMonths>();
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return out;
   for (const key of Object.keys(raw)) {
-    const isin = key.trim().toUpperCase();
+    const isin = canonicalIsin(key);
     const value = (raw as Record<string, unknown>)[key];
     if (!ISIN_SHAPE.test(isin) || (value !== 2 && value !== 12)) continue;
     out.set(isin, value);
@@ -167,9 +177,10 @@ export function coerceWindowOverrides(raw: unknown): Map<string, WindowMonths> {
 /**
  * The window data of every ISIN: IBKR's listing codes from the trades and the
  * Financial Instrument Information rows, each with its contract (conid) and
- * date, and the user's values. Rows without an ISIN, without a code, or of a
- * category with no anti-churning rule (and crypto) give no code. A merged
- * order whose fills named different codes votes for each (`listingExchanges`).
+ * date, and the user's values, keyed by `canonicalIsin`. Rows without an
+ * ISIN, without a code, or of a category with no anti-churning rule (and
+ * crypto) give no code. A merged order whose fills named different codes votes
+ * for each (`listingExchanges`).
  */
 export function collectIsinWindows(
   trades: readonly Trade[],
@@ -177,7 +188,8 @@ export function collectIsinWindows(
   overrides?: unknown,
 ): Map<string, IsinWindow> {
   const votes = new Map<string, Map<string, ListingVote>>();
-  const vote = (isin: string, assetCategory: string, code: string | undefined, conid: string | undefined, date: string | undefined): void => {
+  const vote = (rawIsin: string, assetCategory: string, code: string | undefined, conid: string | undefined, date: string | undefined): void => {
+    const isin = canonicalIsin(rawIsin);
     if (!isin || !code || NO_LISTING_VOTE.has(assetCategory)) return;
     const day = date ? normalizeDate(date.trim()).slice(0, 10) : undefined;
     let byKey = votes.get(isin);
@@ -283,6 +295,8 @@ export function resolveIsinWindow(w: IsinWindow | undefined, day: string): Resol
  * and `openListingExchanges` names the codes of those days when they differ
  * from `listingExchanges`.
  *
+ * Rows are keyed by `canonicalIsin`, the key of `windows`.
+ *
  * @param yearDisposals - The tax year's disposals, after anti-churning
  * @param windows - The same map `detectWashSales` used
  * @param names - Symbol and description per ISIN, for rows with no sale
@@ -296,11 +310,12 @@ export function listAntichurningSecurities(
   // Per ISIN: every sale day, and whether that day has a loss sale or a release.
   const sold = new Map<string, { symbol: string; description: string; days: Map<string, boolean>; relevant: boolean }>();
   for (const d of yearDisposals) {
-    if (!d.isin || NO_LISTING_VOTE.has(d.assetCategory) || d.quantity.isZero()) continue;
+    const key = canonicalIsin(d.isin);
+    if (!key || NO_LISTING_VOTE.has(d.assetCategory) || d.quantity.isZero()) continue;
     const day = normalizeDate(d.sellDate.trim()).slice(0, 10);
     const relevant = d.gainLossEur.isNegative() || d.reintegratedLossEur.greaterThan(0);
-    const prev = sold.get(d.isin);
-    if (!prev) sold.set(d.isin, { symbol: d.symbol, description: d.description, days: new Map([[day, relevant]]), relevant });
+    const prev = sold.get(key);
+    if (!prev) sold.set(key, { symbol: d.symbol, description: d.description, days: new Map([[day, relevant]]), relevant });
     else {
       prev.days.set(day, (prev.days.get(day) ?? false) || relevant);
       prev.relevant ||= relevant;
@@ -308,6 +323,8 @@ export function listAntichurningSecurities(
   }
   const isins = new Set(sold.keys());
   for (const [isin, w] of windows) if (w.user !== undefined) isins.add(isin);
+  const nameOf = new Map<string, { symbol: string; description: string }>();
+  for (const [isin, name] of names) if (!nameOf.has(canonicalIsin(isin))) nameOf.set(canonicalIsin(isin), name);
 
   const rows: AntichurningSecurity[] = [];
   for (const isin of isins) {
@@ -335,7 +352,7 @@ export function listAntichurningSecurities(
       for (const code of listingsOn(ibkr, d)) openCodes.add(code);
     }
     const openListingExchanges = [...openCodes].sort();
-    const name = sale ?? names.get(isin);
+    const name = sale ?? nameOf.get(isin);
     rows.push({
       isin,
       symbol: name?.symbol ?? "",

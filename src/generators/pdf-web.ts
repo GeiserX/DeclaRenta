@@ -3,7 +3,8 @@ import type Decimal from "decimal.js";
 import type { CellHookData } from "jspdf-autotable";
 import type { TranslationKey } from "../i18n/index.js";
 import { localizeMessage, localizeHint } from "../i18n/index.js";
-import { combinedNetGainLoss, computeCasillaBlocksWithFx, groupDividendsByIssuer } from "./casillas.js";
+import { combinedNetGainLoss, computeCasillaBlocksWithFx, countedDisposalAmounts, groupDividendsByIssuer } from "./casillas.js";
+import { plainOrExponent } from "../engine/amount-range.js";
 import { formatReportSettings } from "./report-settings.js";
 import { pdfSafeText } from "./pdf-text.js";
 import { showBrokerColumns } from "./broker-columns.js";
@@ -203,15 +204,20 @@ export async function generatePdfWebReport(
     doc.setTextColor(C.header);
     doc.text(t("pdf.section_operations"), MARGIN, y2);
 
-    const opsColors: [number, number, number][] = report.capitalGains.disposals.map((d) =>
-      d.gainLossEur.greaterThanOrEqualTo(0) ? C.successRgb : C.dangerRgb,
+    // Each amount as the boxes count it: «—» where they add nothing
+    // (`countedDisposalAmounts`), never "NaN" or a 2000-digit figure (#469, #470).
+    const opsAmounts = report.capitalGains.disposals.map((d) => countedDisposalAmounts(d));
+    const opsColors: [number, number, number][] = opsAmounts.map(({ gainLoss }) =>
+      gainLoss === null ? C.mutedRgb : gainLoss.greaterThanOrEqualTo(0) ? C.successRgb : C.dangerRgb,
     );
+    const counted = (amount: Decimal | null): string => (amount === null ? "—" : amount.toFixed(2));
 
     // Purchase and sale broker after the dates, only when the sales name more
     // than one broker. The other columns narrow so the table keeps the page width.
     const brokers = showBrokerColumns(report.capitalGains.disposals);
 
-    const opsBody = report.capitalGains.disposals.map((d) => {
+    const opsBody = report.capitalGains.disposals.map((d, i) => {
+      const amounts = opsAmounts[i]!;
       const scenarioTag =
         d.optionScenario === "expiration" ? "EXP"
         : d.optionScenario === "exercise" ? "EJ"
@@ -220,17 +226,17 @@ export async function generatePdfWebReport(
       const symbol = scenarioTag
         ? `${(d.underlyingSymbol ?? d.symbol).slice(0, 6)}${d.putCall ?? ""} [${scenarioTag}]`
         : d.symbol.slice(0, 12);
-      const sign = d.gainLossEur.greaterThanOrEqualTo(0) ? "+" : "";
+      const sign = amounts.gainLoss?.greaterThanOrEqualTo(0) === true ? "+" : "";
       return [
         d.isin,
         symbol,
         formatDate(d.acquireDate),
         formatDate(d.sellDate),
         ...(brokers ? [pdfSafeText(d.acquireBrokerSource ?? "—"), pdfSafeText(d.brokerSource ?? "—")] : []),
-        d.quantity.toFixed(4),
-        d.costBasisEur.toFixed(2),
-        d.proceedsEur.toFixed(2),
-        sign + d.gainLossEur.toFixed(2),
+        plainOrExponent(d.quantity, 4),
+        counted(amounts.cost),
+        counted(amounts.proceeds),
+        sign + counted(amounts.gainLoss),
         d.sellEcbRate.toFixed(4),
       ];
     });

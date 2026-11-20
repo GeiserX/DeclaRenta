@@ -5,7 +5,13 @@
  */
 
 import type { TaxSummary } from "../types/tax.js";
-import { computeCasillaBlocksWithFx } from "../generators/casillas.js";
+import type Decimal from "decimal.js";
+import { computeCasillaBlocksWithFx, countedDisposalAmounts } from "../generators/casillas.js";
+
+/** An amount the boxes count, with 2 decimals; null where they add nothing (`countedDisposalAmounts`). */
+function counted(amount: Decimal | null): string | null {
+  return amount === null ? null : amount.toFixed(2);
+}
 
 export function formatReport(report: TaxSummary) {
   const blocks = computeCasillaBlocksWithFx(report);
@@ -43,39 +49,47 @@ export function formatReport(report: TaxSummary) {
         },
       ]),
     ),
-    operaciones: report.capitalGains.disposals.map((d) => ({
-      isin: d.isin,
-      simbolo: d.symbol,
-      fecha_venta: d.sellDate,
-      fecha_compra: d.acquireDate,
-      cantidad: d.quantity.toString(),
-      importe_venta_eur: d.proceedsEur.toFixed(2),
-      coste_eur: d.costBasisEur.toFixed(2),
-      ganancia_eur: d.gainLossEur.toFixed(2),
-      dias_tenencia: d.holdingPeriodDays,
-      divisa: d.currency,
-      tipo_ecb_compra: d.acquireEcbRate.toFixed(6),
-      tipo_ecb_venta: d.sellEcbRate.toFixed(6),
-      bloqueada_antichurning: d.washSaleBlocked,
-      perdida_bloqueada_eur: d.blockedLossEur.toFixed(2),
-      perdida_reintegrada_eur: d.reintegratedLossEur.toFixed(2),
-      broker_venta: d.brokerSource,
-      broker_compra: d.acquireBrokerSource,
-    })),
-    operaciones_fx: report.fxGains.disposals.map((d) => ({
-      divisa: d.currency,
-      fecha_venta: d.disposeDate,
-      fecha_compra: d.acquireDate,
-      cantidad: d.quantity.toString(),
-      importe_venta_eur: d.proceedsEur.toFixed(2),
-      coste_eur: d.costBasisEur.toFixed(2),
-      ganancia_eur: d.gainLossEur.toFixed(2),
-      dias_tenencia: d.holdingPeriodDays,
-      origen: d.trigger,
-      lote_fifo: d.lotId,
-      broker_venta: d.brokerSource,
-      broker_compra: d.acquireBrokerSource,
-    })),
+    // Each amount as the boxes count it: null where they add nothing, never
+    // "NaN" or a 2000-digit figure (#469, #470).
+    operaciones: report.capitalGains.disposals.map((d) => {
+      const amounts = countedDisposalAmounts(d);
+      return {
+        isin: d.isin,
+        simbolo: d.symbol,
+        fecha_venta: d.sellDate,
+        fecha_compra: d.acquireDate,
+        cantidad: d.quantity.toString(),
+        importe_venta_eur: counted(amounts.proceeds),
+        coste_eur: counted(amounts.cost),
+        ganancia_eur: counted(amounts.gainLoss),
+        dias_tenencia: d.holdingPeriodDays,
+        divisa: d.currency,
+        tipo_ecb_compra: d.acquireEcbRate.toFixed(6),
+        tipo_ecb_venta: d.sellEcbRate.toFixed(6),
+        bloqueada_antichurning: d.washSaleBlocked,
+        perdida_bloqueada_eur: d.blockedLossEur.toFixed(2),
+        perdida_reintegrada_eur: d.reintegratedLossEur.toFixed(2),
+        broker_venta: d.brokerSource,
+        broker_compra: d.acquireBrokerSource,
+      };
+    }),
+    operaciones_fx: report.fxGains.disposals.map((d) => {
+      const amounts = countedDisposalAmounts(d);
+      return {
+        divisa: d.currency,
+        fecha_venta: d.disposeDate,
+        fecha_compra: d.acquireDate,
+        cantidad: d.quantity.toString(),
+        importe_venta_eur: counted(amounts.proceeds),
+        coste_eur: counted(amounts.cost),
+        ganancia_eur: counted(amounts.gainLoss),
+        dias_tenencia: d.holdingPeriodDays,
+        origen: d.trigger,
+        lote_fifo: d.lotId,
+        broker_venta: d.brokerSource,
+        broker_compra: d.acquireBrokerSource,
+      };
+    }),
     dividendos: report.dividends.entries.map((d) => ({
       isin: d.isin,
       simbolo: d.symbol,

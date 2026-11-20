@@ -11,8 +11,10 @@
  *   the file split into columns with numbers Excel can sum.
  */
 
+import type Decimal from "decimal.js";
 import { fxMethodOf, type FxMethod, type TaxSummary } from "../types/tax.js";
-import { computeCasillaBlocksWithFx, groupDividendsByIssuer } from "./casillas.js";
+import { computeCasillaBlocksWithFx, countedDisposalAmounts, groupDividendsByIssuer } from "./casillas.js";
+import { plainOrExponent } from "../engine/amount-range.js";
 
 export type CsvDialect = "standard" | "excel-es";
 
@@ -45,6 +47,10 @@ export function formatCsv(report: TaxSummary, dialect: CsvDialect = "standard"):
   const row = (cells: string[]): string => cells.join(sep);
   // Header lines are written with ',' for readability; no header name contains one.
   const header = (cols: string): string => cols.split(",").join(sep);
+  // An amount as the boxes count it: an empty cell where they add nothing
+  // (`countedDisposalAmounts`), never "NaN" or a 2000-digit figure, so each
+  // column of the operations still adds up to its box (#469, #470).
+  const counted = (amount: Decimal | null): string => (amount === null ? "" : num(amount.toFixed(2)));
 
   const lines: string[] = [];
 
@@ -66,11 +72,12 @@ export function formatCsv(report: TaxSummary, dialect: CsvDialect = "standard"):
   lines.push("# GANANCIAS PATRIMONIALES");
   lines.push(header("ISIN,Simbolo,Descripcion,Categoria,Fecha_Compra,Fecha_Venta,Cantidad,Coste_EUR,Venta_EUR,Ganancia_EUR,Dias,Divisa,Tipo_ECB_Compra,Tipo_ECB_Venta,Bloqueada_Antichurning,Opcion_Escenario,Put_Call,Strike,Vencimiento,Subyacente,Perdida_Bloqueada_EUR,Broker_Venta,Broker_Compra,Perdida_Reintegrada_EUR"));
   for (const d of report.capitalGains.disposals) {
+    const amounts = countedDisposalAmounts(d);
     lines.push(row([
       tx(d.isin), tx(d.symbol), tx(d.description),
       tx(d.assetCategory), tx(d.acquireDate), tx(d.sellDate),
-      num(d.quantity.toString()), num(d.costBasisEur.toFixed(2)), num(d.proceedsEur.toFixed(2)),
-      num(d.gainLossEur.toFixed(2)), d.holdingPeriodDays.toString(),
+      num(d.quantity.toString()), counted(amounts.cost), counted(amounts.proceeds),
+      counted(amounts.gainLoss), d.holdingPeriodDays.toString(),
       tx(d.currency), num(d.acquireEcbRate.toFixed(6)), num(d.sellEcbRate.toFixed(6)),
       d.washSaleBlocked ? "SI" : "NO",
       tx(d.optionScenario ?? ""),
@@ -126,10 +133,11 @@ export function formatCsv(report: TaxSummary, dialect: CsvDialect = "standard"):
     lines.push("# GANANCIAS FX (Art. 33.1 LIRPF)");
     lines.push(header("Divisa,Fecha_Compra,Fecha_Venta,Cantidad,Coste_EUR,Venta_EUR,Ganancia_EUR,Dias,Origen,Lote_FIFO"));
     for (const d of report.fxGains.disposals) {
+      const amounts = countedDisposalAmounts(d);
       lines.push(row([
         tx(d.currency), tx(d.acquireDate), tx(d.disposeDate),
-        num(d.quantity.toFixed(2)), num(d.costBasisEur.toFixed(2)), num(d.proceedsEur.toFixed(2)),
-        num(d.gainLossEur.toFixed(2)), d.holdingPeriodDays.toString(),
+        num(plainOrExponent(d.quantity, 2)), counted(amounts.cost), counted(amounts.proceeds),
+        counted(amounts.gainLoss), d.holdingPeriodDays.toString(),
         tx(d.trigger), tx(d.lotId),
       ]));
     }

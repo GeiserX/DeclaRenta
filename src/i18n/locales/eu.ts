@@ -292,8 +292,11 @@ const eu: TranslationKeys = {
   "results.split_fx": "Dibisa",
   "results.split_fx_sub": "1633 eta 1637 laukietan sartuta",
   "results.split_fx_off": "ez da kalkulatzen metodo honekin",
+  "results.split_deferred": "Galera atzeratuak (anti-churning)",
+  "results.split_deferred_sub": "aurten blokeatutakoak, ken aurten integratutakoak",
   "results.split_total": "Guztira",
   "results.split_total_sub": "aurrezki-oinarrira · kuota estimatua {{tax}} €",
+  "results.split_unreadable_sub": "ezin da kalkulatu: zenbateko bat ezin izan da irakurri; ikusi erroreak",
   "results.compare_title": "Beste metodoekin alderatu (beste tresna batekin bat etortzeko)",
   "results.compare_in_use": "Erabiltzen",
   "results.compare_tax": "Kuota estimatua",
@@ -431,21 +434,26 @@ const eu: TranslationKeys = {
   "m720.category_exceeded": "50.000 € gainditzen du — aitorpena derrigorrezkoa",
   "m720.category_not_exceeded": "Atalasearen azpitik",
   "m720.category_undetermined": "Ezin da zehaztu: {{count}} posizio baloratu gabe",
+  "m720.category_undetermined_cash": "Ezin da zehaztu: {{count}} eskudiru saldo baloratu gabe",
   "m720.no_positions": "Igo posizio irekiak dituen txostena 100 Ereduan 720 Eredua aztertzeko.",
   "m720.brokers_without_holdings": "Igo dituzun {{brokers}}(r)en datuek ez dituzte abenduaren 31ko posizioak eta saldoak jasotzen, eta, beraz, ez dira hemen batzen. Egiaztatu {{brokers}}(r)en urte amaierako laburpenean atzerriko kontuen saldoak edo atzerriko akzio eta funtsen balioak 50.000 € gainditzen dituen.",
   "m720.positions_title": "Aitortu beharreko posizioak",
   "m720.positions_unvalued":
-    "{{count}} posizio ezin izan dira eurotan baloratu (ez dago merkatu-preziorik edo kanbio-tasarik haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
+    "{{count}} posizio ezin izan dira eurotan baloratu eta totaletik kanpo utzi dira. Arrazoia hauetako bat izan daiteke: ez dago merkatu-preziorik edo haien monetaren kanbio-tasarik ekitaldi-amaieran; balioa ez da zenbaki bat edo 12 zifra oso baino gehiago ditu eurotan; kantitateak eta balioak zeinu kontrakoak dituzte; edo fitxategiak ez du ez kantitaterik ez baliorik ematen (edo inongo balioak berresten ez duen 0 bat ematen du). Kalkulatu haien euro-balioa brokerraren urte amaierako laburpenarekin eta sartu eskuz.",
   "m720.cash_title": "Eskudiruzko saldoak (Kontuak)",
   "m720.q4_average": "Q4 batez bestekoa",
   "m720.cash_missing_average":
     "Saldo batzuek ez dute 720 Ereduko kontuetarako beharrezkoa den laugarren hiruhilekoko batez bestekoa. Abenduaren 31ko saldoa 50.000 €-ko atalaserako kontatzen da, baina kontu horiek ez dira sortutako fitxategian sartzen: gehitu itzazu eskuz, laugarren hiruhilekoko batez besteko saldoarekin, aurkeztu aurretik.",
+  "m720.cash_unvalued": "Ezin dira eurotan baloratu {{count}} eskudiru saldo: {{accounts}}. Fitxategiak ez du azken saldo irakurgarririk, edo ez dago EBZren kanbio-tasarik haien dibisarako. Ez dira 0 €-tzat hartzen: hartu saldoa eurotan brokerraren urte amaierako laburpenetik. Bitartean ezin da jakin zure kontuek 50.000 € gainditzen dituzten, eta kontu horiek ez dira sortutako fitxategian sartzen: aitortu itzazu eskuz.",
   "m720.omitted_title":
     "Ondasun hauek ez dira fitxategian sartzen, eta eskuz aitortu behar dituzu 720 Ereduaren inprimakian:",
   "m720.omitted_no_isin":
     "ez du ISINik; inprimakian «Z» eta jaulkitzailearen herrialde-kodea erabiliz identifikatzen da",
   "m720.omitted_no_country":
     "gordailuan edo kokatuta dagoen herrialdea falta da",
+  "m720.omitted_quantity_unknown": "fitxategiak ez du balore kopuru baliodunik (falta da, ezin da irakurri edo balio baten ondoko 0 bat da); hartu brokerraren urte amaierako laburpenetik",
+  "m720.omitted_quantity_below_hundredth": "balore kopurua 0,01 baino txikiagoa da, eta fitxategiak bi hamartar baino ez ditu onartzen, beraz 0 idatziko luke; hartu brokerraren urte amaierako laburpenetik",
+  "m720.omitted_quantity_too_large": "balore kopurua ez da sartzen fitxategiaren eremuan (10 zifra oso baino gehiago), beraz ez da idazten; egiaztatu brokerraren urte amaierako laburpenean",
   "m720.omitted_no_account":
     "kontu-zenbakia falta da",
   "m720.omitted_invalid_code":
@@ -472,6 +480,7 @@ const eu: TranslationKeys = {
   "m720.sold_help": "Fitxategiak C jatorriarekin jasotzen ditu, azken salmentaren data eta zenbatekoarekin.",
   "m720.sold_no_date": "{{year}} ekitaldian ez dago aitortutako akzioen salmentarik: baja iraungitze-datarik gabe eta 0 balorazioarekin ateratzen da; osatu aurkeztu aurretik",
   "m720.sold_no_acquisition": "datuek ez dute erosketa jasotzen: baja eskuratze-datarik gabe ateratzen da; osatu aurkeztu aurretik",
+  "m720.sold_value_too_large": "iraungitze-datako balorazioa ez da sartzen fitxategiaren eremuan (12 zifra oso baino gehiago): baja 0 balorazioarekin ateratzen da; osatu aurkeztu aurretik",
   "m720.generate_btn": "720 Ereduaren fitxategia sortu",
   "m720.deadline": "Epea: urtarrilaren 1etik martxoaren 31ra hurrengo urtean",
   "m720.total_value": "Balio osoa: {{amount}} €",
@@ -491,7 +500,8 @@ const eu: TranslationKeys = {
   "d6.brokers_without_holdings": "Igo dituzun {{brokers}}(r)en datuek ez dituzte abenduaren 31ko baloreak jasotzen, eta, beraz, ez dira hemen agertzen. Kontsultatu {{brokers}}(r)en urte amaierako laburpenean.",
   "d6.positions_title": "Aitortu beharreko posizioak",
   "d6.positions_unvalued":
-    "{{count}} posizio ezin izan dira eurotan baloratu (ez dago merkatu-preziorik edo kanbio-tasarik haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
+    "{{count}} posizio ezin izan dira eurotan baloratu edo ez dute titulu kopuru baliodunik, eta totaletik kanpo utzi dira. Arrazoia hauetako bat izan daiteke: ez dago merkatu-preziorik edo haien monetaren kanbio-tasarik ekitaldi-amaieran; titulu kopurua falta da, haren balioak berresten ez duen edo kontraesaten duen 0 bat da, edo 10 zifra oso baino gehiago edo 20 hamartar baino gehiago ditu; balioa ez da zenbaki bat edo 12 zifra oso baino gehiago ditu eurotan; edo kantitateak eta balioak zeinu kontrakoak dituzte. Sartu eskuz, haien euro-balioarekin eta titulu kopuruarekin.",
+  "d6.quantity_unknown": "Fitxategiak ez du titulu kopuru baliodunik {{count}} posiziotarako (falta da, ezin da irakurri edo bere balioak berresten ez duen 0 bat da): {{holdings}}. Ez dira 0tzat hartzen: hartu kopurua brokerraren urte amaierako laburpenetik eta idatzi eskuz D-6an.",
   "d6.cancellations_title": "Baliogabetzeak",
   "d6.generate_btn": "D-6 gida sortu",
   "d6.deadline": "Epea: urtarrilaren 1etik 31ra hurrengo urtean",
@@ -529,7 +539,8 @@ const eu: TranslationKeys = {
   "m721.format_notice":
     "AEATen formatu ofiziala XML da (HFP/886/2023 Agindua). DeclaRentak berrikuspen orientagarria bakarrik erakusten du: sorrera ofiziala desgaituta dago balioztatutako XMLa inplementatu arte.",
   "m721.positions_unvalued":
-    "{{count}} posizio ezin izan dira eurotan baloratu (ez dago merkatu-preziorik edo kanbio-tasarik haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
+    "{{count}} posizio ezin izan dira eurotan baloratu eta totaletik kanpo utzi dira. Arrazoia hauetako bat izan daiteke: ez dago merkatu-preziorik edo haien monetaren kanbio-tasarik ekitaldi-amaieran; balioa ez da zenbaki bat edo 12 zifra oso baino gehiago ditu eurotan; kantitateak eta balioak zeinu kontrakoak dituzte; edo fitxategiak ez du ez kantitaterik ez baliorik ematen (edo inongo balioak berresten ez duen 0 bat ematen du). Kalkulatu haien euro-balioa exchangearen edo brokerraren urte amaierako laburpenarekin eta sartu eskuz.",
+  "m721.quantity_unknown": "Fitxategiak ez du unitate kopuru baliodunik {{count}} kriptomonetatarako (falta da, ezin da irakurri edo bere balioak berresten ez duen 0 bat da): {{coins}}. Ez dira 0tzat hartzen: hartu unitateak exchangearen edo brokerraren urte amaierako laburpenetik eta idatzi eskuz 721 ereduan.",
   "m721.empty_title": "Ez dago kriptomoneda posiziorik kargatuta",
   "m721.empty_description":
     "721 Eredua aitorpen informatibo nahitaezkoa da atzerriko exchange-etan 50.000 € baino gehiagoko kriptomonedak badituzu. Igo zure brokerraren txostena 100 Ereduaren atalean, DeclaRentak automatikoki kalkulatu dezan atalasea gainditzen duzun. Epea: urtarrilaren 1etik martxoaren 31ra.",
@@ -597,6 +608,7 @@ const eu: TranslationKeys = {
   "annex.title": "Eragiketen eranskina (Anexo C1)",
   "annex.subtitle": "Eragiketen banakako xehetasuna aktibo motaren arabera taldekatuta.",
   "annex.operations": "eragiketa",
+  "annex.not_counted": "ez da batzen",
   "annex.wash_blocked": "Berrerosketagatik blokeatutako galera: {{amount}} EUR (LIRPF 33.5 art.)",
   "annex.wash_dates": "Galera blokeatzen duten balio bereko erosketak: {{dates}}",
   "annex.wash_hint":
@@ -730,6 +742,12 @@ const eu: TranslationKeys = {
   "crypto_rates.placeholder": "adib. 142,50",
   "crypto_rates.save_btn": "Gorde eta birkalkulatu",
   "crypto_rates.saved": "Gordeta",
+  "crypto_rates.save_error":
+    "Nabigatzaileak ez du utzi prezioak gordetzen: haren biltegia beteta edo blokeatuta egon daiteke. Txostena ez da aldatu.",
+  "crypto_rates.clear_error":
+    "Nabigatzaileak ez du utzi gordetako prezioak ezabatzen: haren biltegia blokeatuta egon daiteke. Txostena ez da aldatu.",
+  "crypto_rates.row_invalid":
+    "Berrikusi markatutako prezioak: idatzi zero baino handiagoa den prezio bat (adib. 1.234,56). Gordetako prezioak kentzeko, erabili «Ezabatu gordetako prezioak». Ez da ezer gorde.",
   "crypto_rates.recalculate_hint": "Balioak zure nabigatzailean gordetzen dira eta txostena birkalkulatzen da.",
   "crypto_rates.stored_title": "Gordetako eskuzko prezioak",
   "crypto_rates.stored_description":
@@ -759,6 +777,10 @@ const eu: TranslationKeys = {
   "opening_lots.save_btn": "Gorde loteak eta birkalkulatu",
   "opening_lots.clear_btn": "Ezabatu gordetako loteak",
   "opening_lots.saved": "Gordeta",
+  "opening_lots.save_error":
+    "Nabigatzaileak ez du utzi loteak gordetzen: haren biltegia beteta edo blokeatuta egon daiteke. Txostena ez da aldatu.",
+  "opening_lots.clear_error":
+    "Nabigatzaileak ez du utzi gordetako loteak ezabatzen: haren biltegia blokeatuta egon daiteke. Txostena ez da aldatu.",
   "opening_lots.row_invalid":
     "Berrikusi markatutako errenkadak: adierazi erosketa-data eta zero baino handiagoak diren kantitatea eta prezioa (adib. 1.234,56). Ez da ezer gorde.",
   "opening_lots.recalculate_hint": "Eskuzko loteak zure nabigatzailean gordetzen dira eta txostena birkalkulatzen da.",
@@ -783,6 +805,10 @@ const eu: TranslationKeys = {
     "Roll eragiketa zuzen prozesatu da, aurreko posizioaren itxiera eta berriaren irekiera gisa.",
   "fifo.unknown_direction": '⚠ Norabide ezezaguneko eragiketa ("{{buySell}}"): {{symbol}} {{date}} egunean. Ez da prozesatu.',
   "fifo.unknown_direction.hint": "Erosketak (BUY) eta salmentak (SELL) bakarrik prozesatzen dira. Berrikusi errenkada hau brokerraren fitxategian eta, benetako eragiketa bada, zuzendu haren norabidea.",
+  "fifo.zero_quantity_buy": "⚠ 0 kopuruko erosketa: {{symbol}}{{isinSuffix}} {{date}} egunean. Ez da prozesatu.",
+  "fifo.zero_quantity_buy.hint": "Fitxategiko errenkadak ez du unitaterik erosten; beraz, ez du loterik sortzen eta haren komisioa ez da kontatzen. Benetan erosi bazenuen, berrikusi errenkada honen kopurua brokerraren fitxategian.",
+  "fifo.zero_quantity_sell": "⚠ 0 kopuruko salmenta: {{symbol}}{{isinSuffix}} {{date}} egunean. Ez da prozesatu.",
+  "fifo.zero_quantity_sell.hint": "Fitxategiko errenkadak ez du unitaterik saltzen; beraz, ez du loterik kontsumitzen eta haren komisioa ez da kontatzen. Benetan saldu bazenuen, berrikusi errenkada honen kopurua brokerraren fitxategian.",
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplikatua ({{date}})",
   "fifo.split_applied.hint":
     "Split-a lote guztiei aplikatu zaie. Kostu osoa mantentzen da — akzio kopurua bakarrik aldatzen da.",
@@ -1011,6 +1037,26 @@ const eu: TranslationKeys = {
     "Balio ez-finitu bat (NaN/Infinitua) detektatu da kalkulatutako total batean; berrikusi inportatutako fitxategiak.",
   "report.non_finite_total.hint":
     "Litekeena da broker baten fitxategi batek zenbateko hondatu bat edo ustekabeko zenbaki-formatu bat izatea. Berrikusi jatorrizko eragiketak.",
+  "report.trade_out_of_range":
+    "Fitxategiko {{count}} eragiketak inongo brokerrek idazten ez duen kantitate, prezio, komisio edo zenbateko bat du (20 zifra oso baino gehiago, edo komaren ondoren 20 zero edo gehiago): {{rows}}. Haien zenbatekoak ez dira laukietan batzen.",
+  "report.trade_out_of_range.hint":
+    "Kantitatea irakur badaiteke, erosketak kosturik gabeko lotea sortzen du: hura erabiltzen duen salmentak bere eskualdatze-balioa batzen du, eta ez eskuratze-balioa; beraz, gehiago ordain dezakezu, inoiz ez gutxiago. Horrelako salmenta batek ez du bere emaitza batzen, eta horrelako dibidendu, interes edo atxikipen batek ez du bere zenbatekoa batzen. Berrikusi errenkada horiek brokerraren fitxategian eta adierazi haien emaitza eskuz.",
+  "report.cash_amount_too_large":
+    "Fitxategiko {{count}} kobrantza edo karguren euroko balioa ez da zenbaki bat, edo bilioi bat eurora iristen da: {{rows}}. Haien zenbatekoak ez dira laukietan batzen.",
+  "report.cash_amount_too_large.hint":
+    "Normalean fitxategiaren edo kanbio-tasaren akatsa da: benetako dibidendu, interes edo atxikipen batek ere ez du bilioi bat euro lortzen. Berrikusi errenkada horiek brokerraren fitxategian eta kanbio-tasetan, eta adierazi haien zenbatekoa eskuz.",
+  "report.withholding_of_excluded_dividend":
+    "Fitxategiko {{count}} atxikipen batzen ez den balore bereko dibidendu batetik 7 egun edo gutxiagora daude: {{rows}}. Dibidendu horrenak izan daitezke; beraz, haiek ere ez dira batzen. Horrela, beste dibidendu batek ez ditu kentzen.",
+  "report.withholding_of_excluded_dividend.hint":
+    "Dibidendu hori eskuz adierazten duzunean, adierazi harena den atxikipena ere. Horietako bat beste dibidendu batena bada, adierazi beste dibidendu horrekin.",
+  "report.withholding_refund_unjoined":
+    "Fitxategiko {{count}} atxikipen-itzulketak ez du inongo dibidenduren atxikipena jaisten: {{rows}}. Datuetan ez dago balore, broker eta urte bereko dibidendurik, zuzen dezaketen atxikipenarekin. 0588 laukia edo 0597 laukia altuegia atera daiteke.",
+  "report.withholding_refund_unjoined.hint":
+    "Itzulketa batek bere dibidenduaren atxikipena zuzentzen du. Dibidendu hori beste fitxategi batean badago, igo honekin batera. Dagoeneko aurkeztu zenuen urte batekoa bada, zuzendu urte hori. Bestela, kendu eskuz bere dibidenduaren atxikipenari benetan itzuli zizutena: brokerrak beste zenbateko bat atxiki bazuen berriro, aldea bakarrik. Egin 0588 laukian atxikipena atzerrikoa bada, eta 0597 laukian Espainiakoa bada.",
+  "report.non_finite_disposal":
+    "{{count}} salmentak zenbaki ez den zenbateko bat du (NaN edo infinitua) edo eurotan 12 zifra oso baino gehiago dituena: {{rows}}. Zenbateko hori ez da laukietan batzen. Urteko gainerako eragiketak bai.",
+  "report.non_finite_disposal.hint":
+    "Salmenta baten eskualdaketa-balioa falta bada, DeclaRentak ez du haren eskuratze-balioa ere batzen, ezerk justifikatzen ez duen galerarik ez sortzeko. Eskuratze-balioa falta bada, eskualdaketa-balioa batzen du. Berrikusi eragiketa horiek brokerraren fitxategian eta kanbio-tasetan, eta aitortu haien emaitza eskuz.",
   "flatex.lagerstellenwechsel.unmatched":
     "Kustodia-transferentzia (Lagerstellenwechsel) kontrapartidarik gabe {{isin}} baliorako: {{netQuantity}} titulu.",
   "flatex.lagerstellenwechsel.unmatched.hint":
@@ -1023,10 +1069,46 @@ const eu: TranslationKeys = {
     "Komisio kalkulaturik gabeko Flatex eragiketak: {{trades}}. Kutxa-idazpena eragiketarena ez den beste txanpon batean dago.",
   "flatex.commission.cross_currency.hint":
     "Eragiketa horien komisioa 0an utzi da. Kontsultatu haren zenbatekoa Flatex-eko aginduaren likidazioan eta kontuan hartu aitorpena berrikustean: erosketetan eskuratze-balioari gehitzen zaio eta salmentetan transmisio-baliotik kentzen da.",
+  "kraken.ledger_trade_not_booked":
+    "Kraken: liburu nagusiko (Ledgers) {{count}} salerosketa ez daude igotako eragiketa-fitxategi batean ere (Trades), eta ez dira kalkulatzen: {{rows}}.",
+  "kraken.ledger_trade_not_booked.hint":
+    "DeclaRentak Krakeneko erosketak eta salmentak eragiketa-fitxategitik (Trades) bakarrik irakurtzen ditu. Errenkada bakoitzak eragiketaren refid-a eta data ditu. Kortxete artean daude liburu nagusian mugitzen dituen monetak eta zenbatekoak. Deskargatu Krakenetik data horietako Trades fitxategia (History → Export → Trades), eta igo ezazu liburu nagusiarekin batera. Hura gabe, salmenta bat falta daiteke zure aitorpenean, edo erosketa baten kostua. Berehalako erosketak eta salmentak (spend eta receive motak), bihurketak (conversion) eta salmentak (sale) baliteke Trades fitxategian ez egotea. Ez badaude, gehitu eskuz Renta Web-en salmenta bakoitza eta kriptomoneta bat beste batengatik egindako aldaketa bakoitza, eta erabili erosketa bakoitza kostu gisa moneta hori saltzen duzunean. margin eta settled motako errenkadak marjina duen posizio baten emaitza dira. adjustment motako errenkada bat doikuntza bat da, adibidez Krakenek eskaintzeari uzten dion moneta baten aldaketa. nfttrade motako errenkada bat NFT baten salmenta da. Trades fitxategian ez badaude eta dirua edo monetak ematen badizkizute, ondare-irabazi bat izan daitezke: aitortu itzazu eskuz Renta Web-en.",
+  "kraken.fiat_conversion_not_booked":
+    "Kraken: {{count}} eragiketak moneta ofizial bat beste batengatik aldatzen dute (adibidez, euroak dolarrengatik), eta ez dira kalkulatzen: {{rows}}.",
+  "kraken.fiat_conversion_not_booked.hint":
+    "Errenkada bakoitzak bikotea, mota (buy edo sell), kantitatea (vol), zenbatekoa (cost) eta data ditu. DeclaRentak ez du kalkulatzen Krakeneko aldaketa horien truke-tasagatiko irabazia edo galera. Dibisa bat euroengatik edo beste dibisa batengatik aldatzeak irabazi edo galera bat eman dezake. Aldatzean eurotan duen balioaren eta eurotan kostatu zitzaizunaren arteko aldea da. Kalkulatu eta gehitu eskuz Renta Web-en.",
+  "kraken.income_negative":
+    "Kraken: staking edo Earn {{count}} sari negatiboak dira, eta ez dira kalkulatzen: {{rows}}.",
+  "kraken.income_negative.hint":
+    "Sari negatibo bat Krakenek kendu dizun sari bat izan ohi da. Komisioa (fee) zenbatekoa (amount) baino handiagoa denean ere negatiboa da. DeclaRentak ez daki zein sari baliogabetzen duen, beraz, ez du zenbatekorik aldatzen. Beste sariak diru-sarreratzat hartzen jarraitzen du, eta haien monetak egun horretako balioan erositakotzat. Errenkadak aitortzen duzun urteko diru-sarrera bat baliogabetzen badu, kendu eskuz Renta Web-en. Gero kriptomoneta hori saldu bazenuen, salmentaren kostua handiegia izan daiteke. Berrikusi Renta Web-en salmenta horien kostua.",
+  "kraken.ledger_rows_ignored":
+    "Krakeneko liburu nagusiko {{count}} mugimendu ez dira kontuan hartu, prozesatzen ez diren motakoak direlako: {{types}}.",
+  "kraken.ledger_rows_ignored.hint":
+    "DeclaRentak liburu nagusitik staking eta Earn sariak eta airdrop-ak bakarrik irakurtzen ditu. Salerosketak eragiketen CSVtik (Trades) irakurtzen ditu. Zure kontuen artean monetak mugitzen ez dituen transferentzia (transfer) bat diru-sarrera bat izan daiteke, adibidez bifurkazio bat (fork). Hala bada, aitortu eskuz Renta Web-en.",
+  "kraken.ledger_income_not_booked":
+    "Kraken: liburu nagusiko {{count}} mugimendu diru-sarrerak izan daitezke, eta ez dira kalkulatzen: {{rows}}.",
+  "kraken.ledger_income_not_booked.hint":
+    "Monetak edo dirua ematen dizkizuten reward, dividend, credit, nftrebate edo nftcreatorfee motako errenkadak dira. DeclaRentak ez daki zer diru-sarrera den, beraz, ez ditu batzen. Sari bat edo bonu bat ondare-irabazi bat izan daiteke (oinarri orokorra). Dibidendu bat kapital higigarriaren etekin bat izan daiteke (aurrezkiaren oinarria). Aitortzen duzun urteko diru-sarrera bada, aitortu eskuz Renta Web-en, egun horretan eurotan zuen balioarekin.",
+  "flatex.commission.not_recovered":
+    "Flatex: {{count}} eragiketak ez dute komisio kalkulaturik, haien kutxa-idazpenak eragiketarekin bat ez datozelako: {{rows}}.",
+  "flatex.commission.not_recovered.hint":
+    "Errenkada bakoitzak aginduaren zenbakia, balorea eta data ditu. Kortxete artean daude eragiketaren zenbatekoa eta haren kutxa-idazpenen batura. Zenbateko bat irakurri ezin bada, haren gelaxka dago. Baliteke kutxa-idazpen bat falta izatea edo bat soberan egotea. Baliteke idazpen baten zenbatekoa edo data irakurri ezin izatea, edo haren data eragiketarena ez izatea. Baliteke, halaber, aginduaren exekuzio bat irakurri ezin izatea edo haren Nominal-a 0 izatea. 50 € gehi zenbatekoaren % 2 edo handiagoa den komisioa ere ez da kalkulatzen: idazpenak fitxategian ez dagoen beste exekuzio bat ere ordain dezake. DeclaRentak 0an uzten du komisio hori. Ez dio erosketen kostuari gehitzen, eta ez dio salmenten balioari kentzen. Kontsultatu komisioa Flatex-eko aginduaren likidazioan. Kendu nahi baduzu, gehitu eskuz Renta Web-en.",
+  "flatex.order_leg_without_fill":
+    "Flatex: {{count}} erosketa- edo salmenta-agindu Kontoumsätze CSVan daude, baina ez igotako Depotumsätze CSV batean ere, eta ez dira kalkulatzen: {{rows}}.",
+  "flatex.order_leg_without_fill.hint":
+    "DeclaRentak Flatexeko erosketak eta salmentak Depotumsätze CSVtik bakarrik irakurtzen ditu. Kontoumsätze CSVak agindu bakoitzaren dirua bakarrik dakar. Errenkada bakoitzak aginduaren zenbakia, balorea eta data ditu. Kortxete artean dago erosketa (Kauf) edo salmenta (Verkauf) den, eta haren kutxa-idazpenen batura. Zenbateko bat irakurri ezin bada, haren gelaxka dago. Deskargatu Flatexetik data horietako Depotumsätze CSVa, eta igo ezazu Kontoumsätze CSVarekin batera. Hura gabe, salmenta bat falta daiteke zure aitorpenean, edo erosketa baten kostua.",
+  "flatex.depot.storno_cancelled":
+    "Flatex: Storno batekin baliogabetutako {{count}} exekuzio ez dira kalkulatzen: {{rows}}.",
+  "flatex.depot.storno_cancelled.hint":
+    "Flatexek exekuzio bat zuzentzen du hura baliogabetzen duen Storno batekin, eta batzuetan agindu bereko exekuzio berri batekin. DeclaRentak baliogabetutako exekuzio bakoitza eta haren Stornoa kalkulutik kentzen ditu, eta exekuzio berria kalkulatzen du fitxategian badago. Errenkada bakoitzak aginduaren zenbakia, balorea eta baliogabetutako exekuzioaren data ditu. Kortxete artean daude haren tituluak eta prezioa. Amaieran dago Stornoaren data.",
   "flatex.commission.multi_fill_prorated":
     "Hainbat zatitan exekutatutako Flatex aginduak: {{orders}}. Haien komisioa exekuzioen artean banatu da, bakoitzaren zenbatekoaren arabera.",
   "flatex.commission.multi_fill_prorated.hint":
-    "Flatex-ek agindu horiek exekuzio kopuruaren desberdina den kutxa-idazpen kopuru batekin likidatu zituen, beraz ezin da jakin zein komisio dagokion bakoitzari. Agindu bakoitzaren komisioen guztizkoa zehatza da; exekuzioen arteko banaketa soilik da gutxi gorabeherakoa.",
+    "Flatex-ek agindu horiek exekuzio kopuruaren desberdina den kutxa-idazpen kopuru batekin likidatu zituen, beraz ezin da jakin zein komisio dagokion bakoitzari. Guztizkoa kutxa-idazpenetatik dator, eta exekuzioen arteko banaketa gutxi gorabeherakoa da. Idazpen batek Depotumsätze CSVan ez dagoen exekuzio bat ere ordaintzen badu, komisioa handiegia ateratzen da: egiaztatu Flatex-eko aginduaren likidazioan.",
+  "flatex.commission.above_usual":
+    "Flatex: {{count}} agindu Flatex-en ohiko komisioa baino komisio handiagoa dute, eta DeclaRentak ez du kentzen: {{rows}}.",
+  "flatex.commission.above_usual.hint":
+    "Errenkada bakoitzak agindu-zenbakia, balorea eta data ditu. Kortxete artean eragiketaren zenbatekoa eta bere kutxa-idazpenen batura daude. Aldea komisioa litzateke. Flatex-en ohiko komisioa 5,90 € da agindu bakoitzeko, gehi burtsaren gastu batzuk euro gutxi batzuetan eta, herrialde batzuetan, zenbatekoaren % 1 arteko zerga bat. Hau handiagoa da. Benetakoa izan daiteke, baina kutxa-idazpenak Depotumsätze CSVan ez dagoen beste exekuzio bat ere ordain dezake. Bi CSVek ez dute hori bereizten uzten. Horregatik DeclaRentak komisioa 0n uzten du. Ez dio erosketaren kostuari gehitzen, ezta salmentaren balioari kentzen ere. Begiratu komisioa Flatex-eko aginduaren likidazioan (Abrechnung). Benetakoa bada eta kendu nahi baduzu, gehitu eskuz Renta Web-en. Exekuzio bat falta bada, igo hura dakarren Depotumsätze CSVa.",
   "flatex.depot.repeated_fills":
     "Errepikatutako Flatex eragiketak, behin bakarrik zenbatuak: {{fills}}. Kargatuta zegoen beste baten agindu-zenbaki eta idazpen-zenbaki (TA-Nr.) bera zuten.",
   "flatex.depot.repeated_fills.hint":
@@ -1045,26 +1127,85 @@ const eu: TranslationKeys = {
   "degiro.transaction_tax": "Finantza-transakzioen gaineko zerga ordaindua {{product}} baloreagatik ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degirok zerga hau kobratzen du Espainiako, Frantziako edo Italiako akzioak erostean, eta Kontuaren CSVan bakarrik erakusten du. Eskuratze-balioaren parte da (PFEZL 35.1.b art.): gehitu balore horren erosketen kostuari, DeclaRentak ez baitu automatikoki gehitzen.",
+  "degiro.cash_row_undescribed": "DEGIRO: Kontuaren CSVko {{count}} errenkadak ez dute esaten zer mugimendu diren, eta ez dira kalkulatzen: {{rows}}.",
+  "degiro.cash_row_undescribed.hint":
+    "Kortxete artean dago deskribapenaren gelaxka, fitxategian dagoen bezala. Hura gabe, DeclaRentak ez daki errenkada dibidendu bat, atxikipen bat, interes bat edo beste mugimendu bat den. Horregatik, ez du batzen eta ez du motarik asmatzen. Aitortzen duzun urteko diru-sarrera bada, aitortu egin behar duzu hala ere. Deskargatu berriro DEGIROren Kontuaren jatorrizko CSVa, eta igo editatu gabe. Errenkadak deskribapenik gabe jarraitzen badu, kopiatu datua DEGIROren laburpenetik, eta igo berriro fitxategia. Zenbatekoa eskuz ere gehi dezakezu Renta Web-en.",
   "binance.unparseable_timestamp":
-    "Binance-ren CSVaren {{count}} errenkada baztertu dira data/ordu (UTC_Time) ezezagun bat izateagatik.",
+    "Binance: {{count}} errenkadak ez dute data eta ordu (UTC_Time) irakurgarririk, eta ez dira kalkulatzen: {{rows}}.",
   "binance.unparseable_timestamp.hint":
-    "Normalean eskuz aldatutako edo modu osatugabean esportatutako fitxategi bati zor zaio. Deskargatu berriro jatorrizko txostena Binance-tik editatu gabe eragiketa horiek sar daitezen.",
+    "Kortxete artean dago dataren gelaxka. Hura gabe, DeclaRentak ez daki mugimendu bakoitza beste zein errenkadarekin doan. Beraz, ez du unitaterik edo dirurik gehitzen edo kentzen errenkada horiengatik. Kriptomoneta horien irabaziak, galerak eta diru-sarrerak ez dira fidagarriak. Errenkada bat galerak izan zituen salmenta baten hurrengo urtean egindako berrerosketa bada, galera horrek zain geratu beharko du agian (LIRPF 33.5.e art.). DeclaRentak ez du blokeatzen. Deskargatu berriro Binance-ren jatorrizko txostena, eta igo editatu gabe. Errenkadak jatorrizkoan ere gaizki jarraitzen badu, kopiatu falta den datua zure Binance historiatik, eta igo berriro fitxategia.",
+  "binance.unparseable_amount":
+    "Binance: {{count}} errenkadak ez dute zenbateko (Change) irakurgarririk, eta ez dira kalkulatzen: {{rows}}.",
+  "binance.unparseable_amount.hint":
+    "Kortxete artean dago zenbatekoaren gelaxka. DeclaRentak ez du unitaterik edo dirurik gehitzen edo kentzen errenkada horiengatik. Beraz, kriptomoneta horien irabaziak, galerak eta diru-sarrerak ez dira fidagarriak. Errenkada bat galerak izan zituen salmenta baten hurrengo urtean egindako berrerosketa bada, galera horrek zain geratu beharko du agian (LIRPF 33.5.e art.). DeclaRentak ez du blokeatzen. Deskargatu berriro Binance-ren jatorrizko txostena, eta igo editatu gabe. Errenkadak jatorrizkoan ere gaizki jarraitzen badu, kopiatu falta den datua zure Binance historiatik, eta igo berriro fitxategia.",
+  "binance.unparseable_coin":
+    "Binance: {{count}} errenkadak ez dute esaten zein txanponena diren (Coin), eta ez dira kalkulatzen: {{rows}}.",
+  "binance.unparseable_coin.hint":
+    "Kortxete artean dago txanponaren gelaxka. Hura gabe, DeclaRentak ez daki zein kriptomoneta sartzen edo ateratzen den. Beraz, ez du unitaterik edo dirurik gehitzen edo kentzen errenkada horiengatik. Zure kriptomoneten irabaziak, galerak eta diru-sarrerak ez dira fidagarriak. Errenkada bat galerak izan zituen salmenta baten hurrengo urtean egindako berrerosketa bada, galera horrek zain geratu beharko du agian (LIRPF 33.5.e art.). DeclaRentak ez du blokeatzen. Deskargatu berriro Binance-ren jatorrizko txostena, eta igo editatu gabe. Errenkadak jatorrizkoan ere gaizki jarraitzen badu, kopiatu falta den datua zure Binance historiatik, eta igo berriro fitxategia.",
+  "freedom24.row_skipped_malformed":
+    "Freedom24: ekintza korporatiboen {{count}} errenkadak ez dute mota irakurgarririk (type_id), eta ez dira kalkulatzen.",
+  "freedom24.row_skipped_malformed.hint":
+    "Errenkada horien \"type_id\" eremua hutsik dago edo ez da testua. Beraz, DeclaRentak ez daki dibidendu, kupoi edo beste eragiketa bat diren. Ez du haiengatik zenbatekorik batzen. Akzioak mugi ditzakete. Horregatik, aplikatu gabeko eragiketa korporatiboen abisuak ere aipatzen ditu. Beraz, 2 hilabeteko arauaren erosketa bakarraren egiaztapenak huts egin dezake. DeclaRentak ez dio salbuespen hori haien baloreari aplikatzen. Errenkadak balorerik aipatzen ez badu, ez dio inongo baloreri aplikatzen. Dibidendu edo kupoi bat falta bazaizu, deskargatu berriro Freedom24-ren JSON txosten osoa eta igo berriro.",
+  "freedom24.dividend_amount_unreadable":
+    "Freedom24: {{count}} dibidendu edo kupoik ez dute zenbateko (amount) irakurgarririk, eta ez dira kalkulatzen: {{rows}}.",
+  "freedom24.dividend_amount_unreadable.hint":
+    "Kortxete artean dago zenbatekoaren gelaxka (amount). Hura gabe, DeclaRentak ez daki zenbat kobratu zenuen. Beraz, ez du diru-sarrera hori batzen, ezta bere atxikipena ere, eta ez du zenbatekorik asmatzen. Aitortzen duzun urteko diru-sarrera bada, deskargatu berriro Freedom24-ren JSON txosten osoa eta igo berriro. Zenbatekoa eta atxikipena eskuz ere gehi ditzakezu Renta Web-en.",
+  "freedom24.tax_amount_unreadable":
+    "Freedom24: {{count}} dibidendu edo kupoik ez dute atxikipen (tax_amount) erabilgarririk, eta atxikipenik gabe kalkulatzen dira: {{rows}}.",
+  "freedom24.tax_amount_unreadable.hint":
+    "Kortxete artean dago atxikipenaren gelaxka (tax_amount). Ez da zenbaki bat, edo dibidenduaren zenbatekoa (amount) baino handiagoa da. DeclaRentak diru-sarrera osoa batzen du, baina ez daki zenbat atxiki zizuten. Horrela ez duzu gutxiago ordaintzen, baina atxikipen horren kenkaria galtzen duzu (0588 laukia, edo 0597 balorea espainiarra bada). Hartu atxikipena Freedom24-ren txosten fiskaletik eta gehitu eskuz Renta Web-en.",
+  "freedom24.cash_flow_not_read":
+    "Freedom24: cash_flows ataleko {{count}} diru-mugimendu ez dira kalkulatzen: {{rows}}.",
+  "freedom24.cash_flow_not_read.hint":
+    "DeclaRentak txostenaren eragiketak (trades) eta dibidenduak eta kupoiak (corporate_actions) bakarrik kalkulatzen ditu. Ez ditu cash_flows ataleko errenkadak kalkulatzen. Ez dizu zure kontuko diru-sarrera eta diru-ateratzeen berri ematen, ez baitute zergarik ordaintzen. Abisu honetako errenkada bakoitza interes bat, dibidendu bat, kupoi bat, atxikipen bat edo komisio bat izan daiteke. Interes edo dibidendu bat corporate_actions atalean ez badago, aitortu behar duzun diru-sarrera da. Gehitu eskuz Renta Web-en. Errenkadak corporate_actions ataleko dibidendu bat errepikatzen badu, kalkulatuta dago jada. Falta den komisio batek gehiago ordainarazi diezazuke bakarrik.",
   "binance.unhandled_operation":
     "Binance-ren CSVko {{count}} mugimendu baztertu dira, eragiketa ezezagunak dituztelako: {{operations}}.",
   "binance.unhandled_operation.hint":
     "Mugimendu horiek ez dira kalkuluan sartu. Erosketak, salmentak edo diru-sarrerak badira (adib. futuroak, Binance Card bidezko ordainketak, Auto-Invest edo cashback), gehitu eskuz zure aitorpenean eta jakinarazi eragiketaren izena, sar dadin.",
+  "binance.unpaired_leg":
+    "Binance: erosketa, salmenta edo bihurketa mugimenduen {{count}} errenkadak ez dute eragiketaren beste aldea, eta ez dira kalkulatzen: {{rows}}.",
+  "binance.unpaired_leg.hint":
+    "Binance-ko erosketa edo salmenta bakoitza ordu bereko bi errenkada dira: sartzen den moneta eta ateratzen dena. DeclaRentak ez du aurkitu mugimendu horien beste errenkada. Beraz, ez du unitaterik edo dirurik gehitzen edo kentzen haiengatik. Kriptomoneta horien irabaziak eta galerak ez dira fidagarriak. Errenkada bat galerak izan zituen salmenta baten hurrengo urtean egindako berrerosketa bada, galera horrek zain geratu beharko du agian (LIRPF 33.5.e art.). DeclaRentak ez du blokeatzen. Alderatu errenkada horiek zure Binance historiarekin, eta gehitu eskuz Renta Web-en falta diren eragiketak.",
+  "binance.spot_cost_split":
+    "Binance: aldi berean kriptomoneta batzuekin egindako eragiketen {{count}} errenkadek ez dute esaten zein ordainketa edo kobrantza doan bakoitzarekin. DeclaRentak zenbatekoak haien artean banatu ditu: {{rows}}.",
+  "binance.spot_cost_split.hint":
+    "Binance-k hainbat eragiketa idazten ditu segundo berean. Ez du ordainketa edo kobrantza bakoitza bere erosketaren edo salmentaren ondoan jartzen. Beraz, DeclaRentak ez daki zein zenbateko doan kriptomoneta bakoitzarekin. Zenbatekoak haien artean banatu ditu, ordenaren arabera edo zati berdinetan. Guztizkoa zuzena da, baina kriptomoneta bakoitzaren kostua edo salmenta-zenbatekoa ez da fidagarria. Beraz, kriptomoneta horien irabaziak eta galerak ez dira fidagarriak. Horietako bat galerak izan zituen salmenta baten hurrengo urtean egindako berrerosketa bada, LIRPF 33.5.e artikuluaren egiaztapena ere ez da fidagarria. Bilatu agindu horiek zure Binance historian, eta zuzendu eskuz Renta Web-en kriptomoneta bakoitzaren kostua edo salmenta-zenbatekoa.",
+  "binance.fee_unassigned":
+    "Binance: {{count}} komisiok ez dute esaten segundo bereko zein eragiketarenak diren, eta DeclaRentak ez ditu kentzen: {{rows}}.",
+  "binance.fee_unassigned.hint":
+    "Binance-k hainbat eragiketa idazten ditu segundo berean. Komisio horiek moneta bereko bi eragiketaren artean daude. Beraz, DeclaRentak ez daki zeinenak diren. Ez ditu kostuari gehitzen, ezta salmenta-zenbatekotik kentzen ere, eta horrela ez duzu gutxiago ordaintzen. Komisio bakoitza zein erosketa edo salmentarena den badakizu, zuzendu eskuz Renta Web-en haren kostua edo salmenta-zenbatekoa.",
+  "binance.income_negative":
+    "Binance: diru-sarreren {{count}} errenkada negatiboak dira, eta ez dira kalkulatzen: {{rows}}.",
+  "binance.income_negative.hint":
+    "Diru-sarreren errenkada negatibo bat Binance-k kendu dizun sari bat izan ohi da. DeclaRentak ez daki zein sari baliogabetzen duen, beraz, ez du zenbatekorik aldatzen. Sari hori diru-sarreratzat hartzen jarraitzen du, eta haren monetak egun horretako balioan erositakotzat. Aitortzen duzun urteko diru-sarrera bat baliogabetzen badu, kendu eskuz Renta Web-en. Gero kriptomoneta hori saldu bazenuen, salmentaren kostua handiegia izan daiteke. Berrikusi Renta Web-en salmenta horien kostua.",
+  "binance.fiat_conversion_not_booked":
+    "Binance: {{count}} errenkadak moneta ofizial bat beste batengatik aldatzen dute (adibidez, euroak dolarrengatik), eta ez dira kalkulatzen: {{rows}}.",
+  "binance.fiat_conversion_not_booked.hint":
+    "DeclaRentak ez du kalkulatzen Binance-ko aldaketa horien truke-tasagatiko irabazia edo galera. Dibisa bat euroengatik edo beste dibisa batengatik aldatzeak irabazi edo galera bat eman dezake. Aldatzean eurotan duen balioaren eta eurotan kostatu zitzaizunaren arteko aldea da. Kalkulatu eta gehitu eskuz Renta Web-en.",
   "binance.unsupported_pair":
-    "Binance-ren CSVko {{count}} eragiketa baztertu dira, pare ezezagun bat dutelako: {{pairs}}.",
+    "DeclaRentak Binance-ren CSVko {{count}} eragiketa baztertu ditu, pare ezezagun bat dutelako: {{rows}}.",
   "binance.unsupported_pair.hint":
-    "Eragiketa horiek ez dira kalkuluan sartu. Gehitu eskuz zure aitorpenean eta jakinarazi parea, sar dadin.",
+    "Kortxete artean dago parearen gelaxka. DeclaRentak ez ditu eragiketa horiek kalkuluan sartu. Gehitu eskuz zure aitorpenean, eta jakinarazi parea, DeclaRentak sar dezan.",
   "etoro.closed_types_skipped":
     "eToro-ren {{count}} posizio itxi baztertu dira, onartzen ez den mota batekoak direlako: {{types}}.",
   "etoro.closed_types_skipped.hint":
     "DeclaRentak oraindik ez ditu eToro-ren posizio mota horiek inportatzen (adib. kriptomonetak). Haien irabazia edo galera ez dago kalkuluan sartuta: gehitu eskuz zure aitorpenean, eToro-k erakusten dituen inbertitutako zenbatekoarekin eta irabaziarekin.",
+  "etoro.columns_not_detected":
+    "eToro: DeclaRentak ez ditu ezagutzen «{{sheet}}» orriko {{columns}} zutabeak. Ez du orri horretako errenkadarik inportatu.",
+  "etoro.columns_not_detected.hint":
+    "eTorok batzuetan zutabeen izenak aldatzen ditu. DeclaRentak ezagutzen ez baditu, ezin ditu orri horretako errenkadak irakurri, eta ez du bat ere batzen. Deskargatu berriro kontuaren XLSX txosten osoa eta igo berriro. Abisuak jarraitzen badu, gehitu eskuz Renta Web-en orri horretako eragiketak, dibidenduak edo interesak.",
+  "etoro.staking_not_imported":
+    "eToro: staking-eko {{count}} sari ez dira kalkulatzen: {{rows}}.",
+  "etoro.staking_not_imported.hint":
+    "DeclaRentak oraindik ez ditu eToro-ren kriptomonetak inportatzen. Horregatik, ez ditu sari horiek batzen. Aitortzen duzun urteko diru-sarrerak badira, aitortu egin behar dituzu hala ere. Gehitu eskuz Renta Web-en haien balioa eurotan, jaso zenituen egunekoa. Balio hori da haien kostua ere, saltzen dituzunean.",
   "lightyear.unknown_types":
     "Lightyear-en CSVko {{count}} errenkada baztertu dira, mugimendu mota ezezaguna dutelako: {{types}}.",
   "lightyear.unknown_types.hint":
     "Mugimendu horiek ez dira kalkuluan sartu. Akzio-zatiketak (splits), akzio-transferentziak edo beste eragiketa korporatibo batzuk badira, berrikusi eskuz: geroko salmenten akzio kopurua edo eskuratze-kostua alda dezakete.",
+  "lightyear.income_shares_booked":
+    "Lightyear: diru-sarrerako {{count}} errenkadak akzioak dakartzate. DeclaRentak egun horretan erositakotzat hartzen ditu: {{rows}}.",
+  "lightyear.income_shares_booked.hint":
+    "Akzio kopuru bat dakarten dibidendu, banaketa, interes edo sari errenkadak dira. DeclaRentak haien zenbatekoa diru-sarrera gisa batzen du, beste errenkadetan bezala. Gainera, akzio horiek egun horretan erositakotzat hartzen ditu, zenbateko berberarekin. Horrela, haien geroko salmentak kostua du. Balio hori galerekin saldu bazenuen 2 hilabete lehenago edo geroago, erosketa horrek galera blokea dezake (2 hilabeteko araua). Egiaztatu Lightyear-en laburpenarekin. Errenkadak akzio berririk eman ez bazizun, erosketa hori ez dago. Orduan, zure salmenten kostua eta balio horren galera blokeatuak baliteke zuzenak ez izatea.",
   "coinbase.rewards_income_classification":
     'Coinbase-ren "Rewards Income" motako {{count}} diru-sarrera kapital higigarriaren etekin gisa sailkatu dira (aurrezki-oinarria).',
   "coinbase.rewards_income_classification.hint":
@@ -1077,18 +1218,42 @@ const eu: TranslationKeys = {
     "Coinbase-ren Advanced Trade-ko {{count}} eragiketa balorazio-monetaz bestelako moneta batean ordaindu edo kobratu d(ir)a ({{pairs}}); erositako edo saldutako kriptomoneta soilik erregistratu da, ez kontrapartidako moneta.",
   "coinbase.advanced_trade_quote_leg_missing.hint":
     "Bikote horietan kotizazio-moneta ere eskualdatzen duzu (erostean) edo eskuratzen duzu (saltzean), beste kriptomoneta bat edo dibisa bat izan, eta eragiketa horrek ere tributatzen du. Gehitu eskuz moneta horren salmenta edo erosketa, eragiketaren euro-balio berberarekin, haren irabazia eta eskuratze-kostua bat etor daitezen.",
-  "trade_republic.trade_skipped_no_amount":
-    "Trade Republic-en erosketa-salmentako {{count}} eragiketa baztertu d(ir)a zenbateko erabilgarririk gabe.",
-  "trade_republic.trade_skipped_no_amount.hint":
-    'Normalean esportazioan errenkada osatugabeei zor zaie ("amount" zutabea hutsik edo zenbakizkoa ez dena). Eragiketak falta badira, deskargatu berriro transakzioen CSV osoa Trade Republic-etik.',
+  "coinbase.income_negative":
+    "Coinbase: kriptomonetetako {{count}} diru-sarrera negatiboak dira, eta ez dira kalkulatzen: {{rows}}.",
+  "coinbase.income_negative.hint":
+    "Diru-sarrera negatibo bat Coinbase-k kendu dizun sari bat izan ohi da. DeclaRentak ez daki zein sari baliogabetzen duen, beraz, ez du zenbatekorik aldatzen. Beste sariak diru-sarreratzat hartzen jarraitzen du, eta haien monetak egun horretako balioan erositakotzat. Errenkadak aitortzen duzun urteko diru-sarrera bat baliogabetzen badu, kendu eskuz Renta Web-en. Gero kriptomoneta hori saldu bazenuen, salmentaren kostua handiegia izan daiteke. Berrikusi Renta Web-en salmenta horien kostua.",
   "trade_republic.corporate_action_not_applied":
-    "Trade Republic: ez dira aplikatu {{isins}} baloreen ekintza korporatiboko {{count}} mugimendu (fusioa, trukea, split-a).",
+    "Trade Republic: DeclaRentak ez ditu aplikatu {{isins}} baloreen ekintza korporatiboko {{count}} mugimendu (fusioa, trukea, split-a).",
   "trade_republic.corporate_action_not_applied.hint":
-    "Titulu zaharren kostua ez da berrietara pasatzen, beraz balore berriaren ondorengo salmenta batek loterik gabe eta 0 kostuarekin atera daiteke. Fusioa edo trukea izan bazen, gehitu jatorrizko eskuratze-kostua «Eskuzko loteak transferitutako posizioentzat» atalean.",
+    "DeclaRentak ez du titulu zaharren kostua berrietara pasatzen. Horregatik, balore berriaren ondorengo salmenta batek loterik gabe eta 0 kostuarekin atera daiteke. Fusioa edo trukea izan bazen, gehitu jatorrizko eskuratze-kostua «Eskuzko loteak transferitutako posizioentzat» atalean.",
   "trade_republic.delivery_not_applied":
     "Trade Republic: ez dira inportatu {{isins}} baloreen salerosketarik gabeko {{count}} titulu-entrega (doako akzioak, lekualdaketak).",
   "trade_republic.delivery_not_applied.hint":
     "Promozio bateko doako akzioak zerga-oinarri orokorreko ondare-irabazia dira, entrega-eguneko merkatu-balioaren arabera: aitortu itzazu bereiz eta gehitu balio hori kostu gisa «Eskuzko loteak transferitutako posizioentzat» atalean. Beste broker batetik egindako lekualdaketa bada, gehitu bertan jatorrizko erosketa-kostua.",
+  "trade_republic.tax_unreadable":
+    "Trade Republic: {{count}} dibidenduk ez dute atxikipen (tax) irakurgarririk, eta atxikipenik gabe kalkulatzen dira: {{rows}}.",
+  "trade_republic.tax_unreadable.hint":
+    "Kortxete artean dago atxikipenaren gelaxka (tax). Ez da zenbaki bat. DeclaRentak dibidendu osoa batzen du, baina ez daki zenbat atxiki zizuten. Horrela ez duzu gutxiago ordaintzen, baina atxikipen horren kenkaria galtzen duzu (0588 laukia, edo 0597 balorea espainiarra bada). Errenkadak dibidendu bat baliogabetzen badu (zenbateko negatiboa), DeclaRentak ez du kentzen, eta baliogabetutako dibidendua batuta geratzen da. Hartu atxikipena Trade Republic-en txosten fiskaletik eta gehitu eskuz Renta Web-en.",
+  "trade_republic.dividend_tax_refund":
+    "Trade Republic: {{count}} dibidendu-errenkadak 0 zenbatekoa eta atxikipen-itzulketa bat (tax positiboa) dakarte: {{rows}}.",
+  "trade_republic.dividend_tax_refund.hint":
+    "0 zenbatekoa duen errenkada ez da dibidendu bat. Bere atxikipen (tax) positiboa itzulketa bat da. DeclaRentak balore bereko dibidendu baten atxikipenetik kentzen du, 7 egun lehenago edo geroago. Halakorik ez badago, urte bereko aurreko dibidendu batetik kentzen du. Urtarrilaren 1etik 7ra bitarteko itzulketa bat aurreko urteko dibidendu batetik ere ken daiteke. Halako dibidendurik ez badago, DeclaRentak ez du kentzen, eta dibidendu horren atxikipena osorik kontatzen da: horrela gutxiago ordainduko zenuke. Hartu azken atxikipena Trade Republic-en zerga-txostenetik eta zuzendu eskuz Renta Web-en 0588 laukia, edo 0597 laukia balorea espainiarra bada.",
+  "trade_republic.trade_tax_positive":
+    "Trade Republic: {{count}} erosketa edo salmentak zerga (tax) positiboa dakarte, eta DeclaRentak ez du kontatzen: {{rows}}.",
+  "trade_republic.trade_tax_positive.hint":
+    "Trade Republic-ek zenbaki negatibo gisa idazten du erosketa edo salmenta batean ordaintzen duzun zerga. Zerga positiboa itzultzen dizuten dirua da, beraz, ez da eragiketaren gastu bat. DeclaRentak ez du kostuari gehitzen, ezta salmentatik kentzen ere. Horrela ez duzu gutxiago ordaintzen. DeclaRentak beste eragiketa batean kendu zuen zerga baten itzulketa bada, eragiketa horrek gastu gehiegi du: zuzendu eskuz Renta Web-en.",
+  "trade_republic.cash_type_not_read":
+    "Trade Republic: DeclaRentak ezagutzen ez duen motako {{count}} diru-mugimendu ez dira kalkulatzen: {{rows}}.",
+  "trade_republic.cash_type_not_read.hint":
+    "Errenkada bakoitzak balore bat izendatzen du eta zenbateko bat dakar, baina DeclaRentak ez daki zer den. Kupoi bat, dibidendu bat, kapital-itzulketa bat, interes bat edo komisio bat izan daiteke. Horregatik ez du batzen. Aitortzen duzun urteko diru-sarrera bat aitortu behar duzu hala ere. Gehitu eskuz Renta Web-en. Falta den komisio batek gehiago ordainarazi diezazuke bakarrik.",
+  "scalable.income_row_not_read":
+    "Scalable Capital: {{count}} dibidendu edo interes ezin dira irakurri eta ez dira kalkulatzen: {{rows}}.",
+  "scalable.income_row_not_read.hint":
+    "Kortxete artean huts egiten duen gelaxka dago. DeclaRentak ezagutzen ez duen egoera bat izan daiteke. DeclaRentak exekutatutako errenkadak bakarrik kalkulatzen ditu, eta ez ditu kontatzen bertan behera utzitakoak, baztertutakoak edo zain daudenak. Beste egoera batekin ez daki kobrantza egin zen ala ez. Dibidendu bat baliogabetzen duen errenkada baten atxikipena (tax) ere izan daiteke. Orduan DeclaRentak ez du errenkada hori kentzen, eta baliogabetutako dibidendua bere atxikipenarekin batuta geratzen da. Alderatu errenkada bakoitza Scalable Capital-en laburpenarekin. Aitortzen duzun urteko benetako kobrantza bat bada, gehitu zenbatekoa eta atxikipena eskuz Renta Web-en. Dibidendu bat baliogabetzen badu, kendu Renta Web-en dibidendu hori eta bere atxikipena.",
+  "scalable.dividend_tax_refund":
+    "Scalable Capital: {{count}} dibidendu-errenkadak 0 zenbatekoa eta atxikipen-itzulketa bat (tax positiboa) dakarte: {{rows}}.",
+  "scalable.dividend_tax_refund.hint":
+    "0 zenbatekoa duen errenkada ez da dibidendu bat. Scalable Capital-ek atxikipena (tax) negatiboan idazten du; beraz, positibo bat itzulketa bat da. DeclaRentak balore bereko dibidendu baten atxikipenetik kentzen du, 7 egun lehenago edo geroago. Halakorik ez badago, urte bereko aurreko dibidendu batetik kentzen du. Urtarrilaren 1etik 7ra bitarteko itzulketa bat aurreko urteko dibidendu batetik ere ken daiteke. Halako dibidendurik ez badago, DeclaRentak ez du kentzen, eta dibidendu horren atxikipena osorik kontatzen da: horrela gutxiago ordainduko zenuke. Hartu azken atxikipena Scalable Capital-en zerga-txostenetik eta zuzendu eskuz Renta Web-en 0588 laukia, edo 0597 laukia balorea espainiarra bada. Errenkada geroago kobratutako atxikipen bat bada, DeclaRentak ez du kontatzen: gehitu eskuz.",
   "parser.trading212.unresolved_price_skipped":
     "{{skipped}} eragiketa baztertu dira akzioko preziorik gabe eta zenbatekoa beste dibisa batean dutela.",
   "parser.trading212.unresolved_price_skipped.hint":
@@ -1109,11 +1274,47 @@ const eu: TranslationKeys = {
   "parser.cancelled_trades_unreadable": "IBKRren {{count}} ezeztapen baztertu dira, ezeztatzen duten eragiketarekin parekatu ezinik: kopuru edo prezio irakurgarri bat falta da ezeztapenean edo fitxategi honetako eragiketa batean.",
   "parser.cancelled_trades_unreadable.hint": "Ezeztatutako eragiketa fitxategi honetan badago, DeclaRentak benetako erosketa edo salmentatzat hartzen jarraitzen du. Egiaztatu Flex Queryak eragiketa bakoitzaren kopurua, prezioa eta exekuzio IDa (IB Execution ID) esportatzen dituela eta esportatu berriro.",
   "parser.open_position_quantity_unknown": "IBKRk ez du akzio kopuru irakurgarririk ematen {{count}} posizio irekitarako: {{holdings}}.",
-  "parser.open_position_quantity_unknown.hint": "DeclaRentak 0 akziorekin zenbatzen ditu: 720 ereduak bere balioarekin sartzen ditu, baina «Número de valores» eremuan 0rekin, eta D-6ak ez ditu sartzen. Berrikusi eskuz posizio horiek 720an eta D-6an, edo egiaztatu Flex Queryko Open Positions atalak kopurua duela eta esportatu berriro.",
+  "parser.open_position_quantity_unknown.hint": "DeclaRentak ez du haien akzio kopururik asmatzen: 720 ereduak eta D-6ak balore kopururik gabe erakusten dituzte eta eskuz idazteko eskatzen dizute, eta haien balioa ere ez badago, baloratu gabekotzat hartzen dituzte. Hartu kopurua IBKRren urte amaierako laburpenetik, edo egiaztatu Flex Queryko Open Positions atalak kopurua duela eta esportatu berriro.",
+  "parser.crypto_position_quantity_unknown": "IBKRk ez du unitate kopuru irakurgarririk ematen kriptomoneten {{count}} posiziotarako: {{holdings}}.",
+  "parser.crypto_position_quantity_unknown.hint": "DeclaRentak ez ditu haien unitateak asmatzen: 721 ereduak ezezagun gisa erakusten ditu, eta haien balioa ere ez badago, baloratu gabekotzat hartzen ditu; beraz, ezin du ondorioztatu aurkeztu behar ez duzunik. Hartu unitateak IBKRren urte amaierako laburpenetik, edo egiaztatu Flex Queryko Open Positions atalak kopurua duela eta esportatu berriro.",
+  "parser.open_position_zero_with_value": "IBKRk 0 akzio ematen ditu {{count}} posizio irekitarako, baina 0 ez den balio bat dute: {{holdings}}.",
+  "parser.open_position_zero_with_value.hint": "Balio baten ondoko 0 bat ez da akzio kopurua; beraz, ezezagutzat hartzen da, inoiz ez 0tzat. Balio positiboarekin, 720 ereduak eta D-6ak posizioa balore kopururik gabe erakusten dute eta eskuz idazteko eskatzen dizute, eta haren balioa 720ren atalaserako zenbatzen da. Balio negatiboarekin posizio motza da (zor dituzun akzioak, ez dituzunak), eta 720ak eta D-6ak ez dute sartzen. Hartu kopurua IBKRren urte amaierako laburpenetik.",
+  "parser.crypto_position_zero_with_value": "IBKRk 0 unitate ematen ditu kriptomoneten {{count}} posiziotarako, baina 0 ez den balio bat dute: {{holdings}}.",
+  "parser.crypto_position_zero_with_value.hint": "Balio baten ondoko 0 bat ez da unitate kopurua; beraz, ezezagutzat hartzen da, inoiz ez 0tzat. Balio positiboarekin, 721 ereduak haren unitateak ezezagun gisa erakusten ditu eta haren balioa atalaserako zenbatzen da. Balio negatiboarekin posizio motza da (zor dituzun kriptomonetak, ez dituzunak), eta 721ak ez du sartzen. Hartu unitateak IBKRren urte amaierako laburpenetik.",
+  "parser.open_position_zero_unconfirmed": "IBKRk 0 akzio ematen ditu {{count}} posizio irekitarako, hori berresten duen balio irakurgarririk gabe: {{holdings}}.",
+  "parser.open_position_zero_unconfirmed.hint": "Ondoan 0 balioa ez duen 0 bat esportazioaren akats bat izan daiteke; beraz, DeclaRentak ez du posizioa itxitzat jotzen: 720 ereduak ez du haren baja-erregistroa (C) idazten eta D-6ak ez du ezeztatzen, eta biek balore kopururik gabe eta balioztatu gabe erakusten dute. Egiaztatu IBKRren urte amaierako laburpenean oraindik baduzun: hala bada, hartu handik akzio kopurua eta balioa; saldu bazenuen, aitortu haren baja eskuz.",
+  "parser.crypto_position_zero_unconfirmed": "IBKRk 0 unitate ematen ditu kriptomoneten {{count}} posiziotarako, hori berresten duen balio irakurgarririk gabe: {{holdings}}.",
+  "parser.crypto_position_zero_unconfirmed.hint": "Ondoan 0 balioa ez duen 0 bat esportazioaren akats bat izan daiteke; beraz, DeclaRentak ez du posizioa itxitzat jotzen: 721 ereduak unitate ezezagunekin eta balioztatu gabe erakusten du, eta ezin du ondorioztatu aurkeztu behar ez duzunik. Egiaztatu IBKRren urte amaierako laburpenean oraindik baduzun: hala bada, hartu handik unitateak eta balioa; bestela, ez aitortu.",
+  "parser.open_position_sign_conflict": "IBKRk akzio edo unitate kopuru bat eta aurkako zeinuko balio bat ematen ditu {{count}} posizio irekitarako: {{holdings}}.",
+  "parser.open_position_sign_conflict.hint": "Kopuru positibo bat balio negatibo batekin, edo alderantziz, kontraesana da: DeclaRentak ez daki posizio luzea ala motza den; beraz, ez du baloratzen. 720 eta D-6 ereduek (akzioak, funtsak eta bonuak) edo 721 ereduak (kriptomonedak) baloratu gabe zenbatzen dute, eta ezin dute ondorioztatu aurkeztu behar ez dituzunik. Hartu kopurua eta balioa IBKRren urte amaierako laburpenetik.",
+  "parser.cash_balance_unreadable": "IBKRk ez du azken saldo irakurgarririk ematen {{count}} eskudiru saldotarako: {{accounts}}.",
+  "parser.cash_balance_unreadable.hint": "DeclaRentak ez du 0 €-tzat hartzen: 720 ereduak baloratu gabe erakusten du, eta ezin du ondorioztatu zure kontuak aitortu behar ez dituzunik. Hartu saldoa IBKRren urte amaierako laburpenetik, edo egiaztatu Flex Queryko Cash Report atalak azken saldoa (Ending Cash) duela eta esportatu berriro.",
   "parser.trade_quantity_unknown": "{{broker}} brokerraren fitxategiak ez du akzio kopuru edo prezio irakurgarririk ematen {{count}} eragiketatarako: {{trades}}.",
   "parser.trade_quantity_unknown.hint": "DeclaRentak ez du akziorik gehitzen edo kentzen haiengatik; beraz, balio horren irabaziak eta galerak ez dira fidagarriak, eta ez da aplikatzen 2 hilabeteko arauaren erosketa bakarraren salbuespena. Egiaztatu esportatutako fitxategiak eragiketa bakoitzaren kopurua eta prezioa dituela eta esportatu berriro.",
   "parser.crypto_quantity_unknown": "{{broker}} brokerraren fitxategiak ez du unitate kopuru edo prezio irakurgarririk ematen kriptomonetekin egindako {{count}} eragiketatarako: {{trades}}.",
   "parser.crypto_quantity_unknown.hint": "DeclaRentak ez du unitaterik gehitzen edo kentzen haiengatik; beraz, kriptomoneta horren irabaziak eta galerak ez dira fidagarriak. Horietako bat galerak izan zituen salmenta baten hurrengo urtean egindako berrerosketa bada, galera horrek zain geratu beharko du agian (LIRPF 33.5.e art.), eta DeclaRentak ez du blokeatzen, ez dakielako zenbat unitate berrerosi dituzun. Egiaztatu esportatutako fitxategiak eragiketa bakoitzaren kopurua eta prezioa dituela eta esportatu berriro.",
+  "parser.trade_row_unreadable": "{{broker}} brokerraren fitxategiko {{count}} eragiketa-errenkada ezin dira irakurri, eta ez dira kalkulatzen: {{rows}}.",
+  "parser.trade_row_unreadable.hint": "Kortxete artean dago huts egiten duen gelaxka. Falta da, hutsik dago, ezin da irakurri, edo DeclaRentak ezagutzen ez duen eragiketa mota bat du. Batzuetan ez dator bat errenkadako beste gelaxkekin. DeclaRentak ez du akziorik, unitaterik edo dirurik gehitzen edo kentzen errenkada horiengatik. Beraz, balore horien irabaziak eta galerak ez dira fidagarriak. Ez du 2 hilabeteko arauaren erosketa bakarraren salbuespena aplikatzen errenkada horietako batena izan daitekeen balore bati ere. Errenkada bat kriptomoneta baten berrerosketa izan daiteke, galerak izan zituen salmenta baten hurrengo urtean. Orduan, galera horrek zain geratu beharko du agian (LIRPF 33.5.e art.). DeclaRentak ez du blokeatzen. Errenkada bat benetako erosketa edo salmenta bada, deskargatu berriro brokerraren jatorrizko fitxategia, eta igo editatu gabe. Gelaxkak jatorrizkoan ere gaizki jarraitzen badu, kopiatu datua brokerraren laburpenetik, eta igo berriro fitxategia.",
+  "revolut.bad_fx_rate": "DeclaRentak Revoluteko laburpeneko {{count}} diru-sarrera edo diru-erretiratze baztertu ditu, haien truke-tasa (FX Rate) baliozkoa ez delako: {{rows}}.",
+  "revolut.bad_fx_rate.hint": "Diru-sarrerek eta diru-erretiratzeek bakarrik erabiltzen dute zutabe hori. DeclaRentak erosketak, salmentak eta dibidenduak EBZren truke-tasarekin kalkulatzen ditu, eta ez ditu baztertzen. Normalean esportazioko truke-tasaren gelaxka zenbakia ez delako, negatiboa delako edo zero delako gertatzen da. Deskargatu berriro Trading Account Statement osoa Revolut aplikaziotik, eta igo berriro.",
+  "revolut.holding_size_unknown": "Revoluteko laburpenak ez du esaten zenbat akzio edo unitate dituzun amaieran {{count}} baloretan: {{tickers}}.",
+  "revolut.holding_size_unknown.hint": "Bakoitzaren errenkada bat ezin da irakurri, edo ez du esaten zenbat akzio edo unitate mugitzen dituen (beste abisu batek izendatzen du). DeclaRentak irakur daitekeen zatia bakarrik erakusten du, eta 0 izan daiteke. 720 eta 721 ereduetarako, hartu posizio horien kopurua eta balioa Revoluteko laburpenetik eta gehitu eskuz.",
+  "parser.corporate_action_not_applied": "{{broker}}: DeclaRentak ez ditu aplikatu akzioen zatiketa, bilketa edo beste eragiketa sozietario bateko {{count}} errenkada: {{rows}}.",
+  "parser.corporate_action_not_applied.hint": "DeclaRentak ez ditu haiengatik balore horien akzio kopurua eta kostua aldatzen. Beraz, haien ondorengo salmenten irabaziak eta galerak baliteke zuzenak ez izatea. Egiaztatu brokerraren laburpenarekin. Ez die balore horiei 2 hilabeteko arauaren erosketa bakarraren salbuespena aplikatzen ere. Errenkada horietako batek dirua ordaindu bazizun, adibidez mugaeguna edo itzulketa bat, salmenta hori ez dago txostenean. Gehitu eskuz Renta Web-en.",
+  "parser.cash_row_undated": "{{broker}}: {{count}} diru-mugimenduk ez dute data irakurgarririk, eta ez dira kalkulatzen: {{rows}}.",
+  "parser.cash_row_undated.hint": "Kortxete artean dago dataren gelaxka. Datarik gabe, DeclaRentak ez daki zenbatekoa zein urtetakoa den, ezta EBZren zein truke-tasa dagokion ere. Beraz, ez du batzen eta ez du datarik asmatzen. Aitortzen duzun urteko dibidendu, atxikipen, interes edo beste diru-sarrera bat izan daiteke. Orduan, deskargatu berriro brokerraren jatorrizko fitxategia, eta igo editatu gabe. Datak jatorrizkoan ere gaizki jarraitzen badu, kopiatu brokerraren laburpenetik, eta igo berriro fitxategia. Zenbatekoa eskuz ere gehi dezakezu Renta Web-en.",
+  "parser.cash_row_unidentified": "{{broker}}: {{count}} dibidendu edo atxikipenek ez dute esaten zein baloirenak diren, eta ez dira kalkulatzen: {{rows}}.",
+  "parser.cash_row_unidentified.hint": "Errenkadak ez dakar ez tickerrik ez ISINik. Balorerik gabe, DeclaRentak ez daki dibidendua zein herrialdetatik datorren, ezta zein atxikipenekin doan ere. Beraz, ez du batzen eta ez du balorerik asmatzen. Aitortzen duzun urteko diru-sarrera bada, deskargatu berriro brokerraren jatorrizko fitxategia, eta igo editatu gabe. Errenkadak balorerik gabe jarraitzen badu, kopiatu tickerra edo ISINa brokerraren laburpenetik, eta igo berriro fitxategia. Zenbatekoa eskuz ere gehi dezakezu Renta Web-en.",
+  "parser.crypto_income_unidentified": "{{broker}}: kriptomonetetako {{count}} diru-sarrerak ez dute esaten zein kriptomoneta jaso zenuen, eta ez dira kalkulatzen: {{rows}}.",
+  "parser.crypto_income_unidentified.hint": "Kortxete artean dago kriptomonetaren gelaxka. Hura gabe, DeclaRentak ez daki zer jaso zenuen. Ez daki saltzean zer kostu eman behar dion ere. Horregatik, ez du diru-sarrera hori batzen, eta ez du kriptomonetarik asmatzen. Aitortzen duzun urteko diru-sarrera bada, aitortu egin behar duzu hala ere. Deskargatu berriro exchange-aren jatorrizko fitxategia, eta igo editatu gabe. Errenkadak jatorrizkoan ere gaizki jarraitzen badu, kopiatu falta den datua exchange-aren historiatik, eta igo berriro fitxategia. Diru-sarrera eskuz ere gehi dezakezu Renta Web-en.",
+  "parser.crypto_income_amount_unreadable": "{{broker}}: kriptomonetetako {{count}} diru-sarrerak ez dute zenbateko irakurgarririk, eta ez dira kalkulatzen: {{rows}}.",
+  "parser.crypto_income_amount_unreadable.hint": "Kortxete artean dago zenbatekoa, fitxategian dagoen bezala. Zenbatekorik gabe, DeclaRentak ez daki zenbat jaso zenuen. Horregatik, ez du diru-sarrera hori batzen, eta ez du zerotzat hartzen. Aitortzen duzun urteko diru-sarrera bada, aitortu egin behar duzu hala ere. Deskargatu berriro exchange-aren jatorrizko fitxategia, eta igo editatu gabe. Errenkadak jatorrizkoan ere gaizki jarraitzen badu, kopiatu falta den datua exchange-aren historiatik, eta igo berriro fitxategia. Diru-sarrera eskuz ere gehi dezakezu Renta Web-en.",
+  "parser.cash_income_amount_unreadable": "{{broker}}: {{count}} dibidendu, interes edo beste diru-sarrerek ez dute zenbateko irakurgarririk, eta ez dira kalkulatzen: {{rows}}.",
+  "parser.cash_income_amount_unreadable.hint": "Kortxete artean dago zenbatekoaren edo haren dibisaren gelaxka, fitxategian dagoen bezala. Hura gabe, DeclaRentak ez daki zenbat kobratu zenuen. Horregatik, ez ditu diru-sarrera hori eta haren atxikipena batzen, eta ez du zerotzat hartzen. Aitortzen duzun urteko diru-sarrera bada, aitortu egin behar duzu hala ere. Deskargatu berriro brokerraren jatorrizko fitxategia, eta igo editatu gabe. Errenkadak jatorrizkoan ere gaizki jarraitzen badu, kopiatu falta den datua brokerraren laburpenetik, eta igo berriro fitxategia. Zenbatekoa eta atxikipena eskuz ere gehi ditzakezu Renta Web-en.",
+  "parser.cash_row_not_booked": "{{broker}}: DeclaRentak ezagutzen ez duen motako {{count}} diru-mugimendu ez dira kalkulatzen: {{rows}}.",
+  "parser.cash_row_not_booked.hint": "Kortxete artean dago zenbatekoa, fitxategian dagoen bezala. DeclaRentak ez daki mugimendu hori zer den. Horregatik, ez du batzen eta ez du kentzen. Brokerrak eragiketa bati egindako doikuntza, konpentsazio bat edo komisio bat izan daiteke. Begiratu brokerraren laburpena. Aitortzen duzun urtean brokerrak diru hori ordaindu bazizun, aitortu behar duzun irabazia izan daiteke. Brokerrak kobratu bazizun, eragiketa baten gastua izan daiteke. Gehitu dagokiona eskuz Renta Web-en.",
+  "revolut.dividend_tax_correction": "Revoluteko laburpenak dibidendu baten atxikipenaren {{count}} zuzenketa dakartza (DIVIDEND TAX (CORRECTION)), eta DeclaRentak ez ditu batzen: {{rows}}.",
+  "revolut.dividend_tax_correction.hint": "Errenkada hauekin Revolutek dagoeneko kobratutako dibidendu baten atxikipena zuzentzen du. DeclaRentak Revoluteko dibidenduak zenbateko garbian inportatzen ditu. Ez du laburpen honetako atxikipena irakurtzen, ezta haren zuzenketa ere. Hartu dibidendu gordina eta azken atxikipena, zuzenduta, Revoluteko urteko txosten fiskaletik.",
 };
 
 export default eu;

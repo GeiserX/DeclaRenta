@@ -47,6 +47,12 @@ export interface DividendValuationOptions {
    */
   lookupRate?: (date: string, currency: string) => Decimal | null;
   onUnvalued?: (dividend: CashTransaction) => void;
+  /**
+   * Called for every refund part that joins no dividend
+   * (`WithholdingMatch.unjoined`), in the row's own currency. It lowers no
+   * withholding, so the caller names it (issue #467).
+   */
+  onUnjoinedRefund?: (refund: CashTransaction, amount: Decimal) => void;
 }
 
 /** The part of one withholding row that belongs to one dividend, in the row's own currency. */
@@ -66,6 +72,12 @@ export interface WithholdingMatch {
   pair: number[];
   /** Per dividend, every withholding part that belongs to it, its pair first. */
   parts: WithholdingPart[][];
+  /**
+   * Every refund part that joins no dividend, in file order: no dividend of
+   * its ISIN, broker and year still had that much withheld (issue #467). It
+   * lowers no withholding.
+   */
+  unjoined: WithholdingPart[];
 }
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -73,6 +85,15 @@ const yearOf = (date: string): string => normalizeDate(date).slice(0, 4);
 /** Both rows come from one broker, or one of them names none (a single-broker file). */
 const sameBroker = (a: CashTransaction, b: CashTransaction): boolean =>
   !a.brokerSource || !b.brokerSource || a.brokerSource === b.brokerSource;
+/** IBKR posts a correction in next year's statement, dated on its dividend's day. */
+const isPostedLate = (w: CashTransaction): boolean => !!w.reportDate && yearOf(w.reportDate) > yearOf(w.dateTime);
+/**
+ * Withholding row `w` (dated `wTime`) may belong by date to dividend `div`
+ * (dated `divTime`): within 7 days, and in the dividend's own year when the
+ * row was posted late.
+ */
+const dateReaches = (w: CashTransaction, wTime: number, postedLate: boolean, div: CashTransaction, divTime: number): boolean =>
+  Math.abs(wTime - divTime) <= SEVEN_DAYS_MS && (!postedLate || yearOf(w.dateTime) === yearOf(div.dateTime));
 
 /**
  * Match every withholding row to the dividend it belongs to (issues #96, #438).
@@ -87,8 +108,12 @@ const sameBroker = (a: CashTransaction, b: CashTransaction): boolean =>
  * +1.50, −1.00), or one payment split in two rows. Every row that belongs to
  * the dividend counts with its sign, so the withholding is the net tax paid.
  * A refund never takes more from a dividend than that dividend withheld: the
- * rest goes to the next dividend it can correct, and only what no dividend in
- * reach withheld is left out. So no refund is lost and no row counts twice.
+ * rest goes to the next dividend it can correct. A refund (or its rest) that
+ * no dividend within 7 days can take goes to a dividend of its ISIN and broker
+ * paid earlier in the refund's own year, or in the previous year when it is
+ * dated 1-7 January (issue #467). A dividend of the next year withheld after
+ * the refund takes it only when none of those can. What still finds no
+ * dividend is in `unjoined`, so the caller names it. No row counts twice.
  */
 export function matchWithholdings(
   cashTransactions: CashTransaction[],
@@ -118,7 +143,7 @@ export function matchWithholdings(
   // next year's statement, dated on its dividend's day) belongs to a dividend
   // of its own year. Without this, a weekly payer's next dividend, in the new
   // year and within 7 days, would take it.
-  const postedLate = withholdings.map((w) => !!w.reportDate && yearOf(w.reportDate) > yearOf(w.dateTime));
+  const postedLate = withholdings.map(isPostedLate);
 
   // Parse each withholding date ONCE and index by ISIN. Original indices are
   // appended in ascending order, so scanning a bucket front-to-back and taking
@@ -135,8 +160,7 @@ export function matchWithholdings(
   /** Row `index` may belong to dividend `divIndex`: within 7 days, not a reversal, same year when posted late. */
   const reaches = (index: number, divIndex: number): boolean =>
     !isReversal[divIndex] &&
-    Math.abs(withholdingTimes[index]! - divTimes[divIndex]!) <= SEVEN_DAYS_MS &&
-    (!postedLate[index] || yearOf(withholdings[index]!.dateTime) === yearOf(dividends[divIndex]!.dateTime));
+    dateReaches(withholdings[index]!, withholdingTimes[index]!, postedLate[index]!, dividends[divIndex]!, divTimes[divIndex]!);
 
   /**
    * First unconsumed, non-refund withholding of the dividend's ISIN and broker
@@ -189,8 +213,8 @@ export function matchWithholdings(
   // ISIN share the "" bucket, so they also need the same symbol. A row
   // corrects only a dividend of its own broker: a refund at one broker never
   // goes to another broker's nearer dividend of the same ISIN (a row with no
-  // broker name, as in a single-broker file, joins any). A row with no
-  // dividend in reach stays unpaired, as before.
+  // broker name, as in a single-broker file, joins any). A withholding with
+  // no dividend in reach stays unpaired, as before; a refund goes on to 3c.
   const parts: WithholdingPart[][] = pair.map((index) => (index >= 0 ? [{ index, amount: amounts[index]! }] : []));
   // What each dividend withheld so far and no refund took back, in its pair's currency.
   const capacity = pair.map((index) => (index >= 0 ? amounts[index]!.negated() : new Decimal(0)));
@@ -200,18 +224,27 @@ export function matchWithholdings(
     if (bucket) bucket.push(divIndex);
     else dividendIndexByIsin.set(d.isin, [divIndex]);
   });
-  const candidates = (index: number): number[] => {
+  /** Row `index` may correct dividend `divIndex`'s tax: its pair is in the row's currency, same symbol when no ISIN, same broker. */
+  const corrects = (index: number, divIndex: number): boolean => {
     const w = withholdings[index]!;
-    return (dividendIndexByIsin.get(w.isin) ?? []).filter(
-      (divIndex) =>
-        pair[divIndex]! >= 0 &&
-        withholdings[pair[divIndex]!]!.currency === w.currency &&
-        (w.isin !== "" || w.symbol === dividends[divIndex]!.symbol) &&
-        sameBroker(w, dividends[divIndex]!) &&
-        reaches(index, divIndex),
+    return (
+      pair[divIndex]! >= 0 &&
+      withholdings[pair[divIndex]!]!.currency === w.currency &&
+      (w.isin !== "" || w.symbol === dividends[divIndex]!.symbol) &&
+      sameBroker(w, dividends[divIndex]!)
     );
   };
+  const candidates = (index: number): number[] =>
+    (dividendIndexByIsin.get(withholdings[index]!.isin) ?? []).filter((divIndex) => corrects(index, divIndex) && reaches(index, divIndex));
   const distance = (index: number, divIndex: number) => Math.abs(withholdingTimes[index]! - divTimes[divIndex]!);
+  /**
+   * Dividend `divIndex` is of a later year than refund `index` and withheld
+   * after it (issue #467): the refund cannot give back that tax. It takes the
+   * refund only when no dividend of the refund's own reach (3b, 3c) can (3d).
+   */
+  const isLater = (index: number, divIndex: number): boolean =>
+    yearOf(dividends[divIndex]!.dateTime) > yearOf(withholdings[index]!.dateTime) &&
+    withholdingTimes[pair[divIndex]!]! > withholdingTimes[index]!;
 
   // 3a. Withholdings first (a second row of one payment, a new withholding
   // after a reversal): the nearest dividend, then the first in the file.
@@ -236,11 +269,50 @@ export function matchWithholdings(
   // Then nearest date, then the first dividend in the file. When every
   // dividend in a refund's reach is full, an earlier refund that can go to
   // another dividend in its own reach moves there to make room, so a refund
-  // is only left out when no allocation could fit it.
+  // is only left for 3c when no allocation within 7 days could fit it. A
+  // dividend of the next year withheld after the refund is not in this reach:
+  // a refund of 30 December would else lower the 2 January dividend's tax and
+  // leave its own June dividend's (issue #467). It waits for 3d.
+  const nearReachOf = new Map<number, number[]>();
+  const nearReach = (index: number): number[] => {
+    let r = nearReachOf.get(index);
+    if (!r) nearReachOf.set(index, (r = candidates(index)));
+    return r;
+  };
   const reachOf = new Map<number, number[]>();
   const reach = (index: number): number[] => {
     let r = reachOf.get(index);
-    if (!r) reachOf.set(index, (r = candidates(index)));
+    if (!r) reachOf.set(index, (r = nearReach(index).filter((divIndex) => !isLater(index, divIndex))));
+    return r;
+  };
+  // 3c reach (issue #467): what 3b reaches, plus every dividend the refund
+  // corrects paid on or before its date in the refund's own year. A broker
+  // can reverse a dividend and its tax weeks later; that refund was dropped,
+  // so 0588 or 0597 kept the tax. A refund dated 1-7 January also reaches a
+  // dividend of the previous year: the prior-year warning counts such a
+  // refund for that year and tells the user to recalculate it, so that year
+  // must then lose the tax (a 5 January refund of a 1 December dividend kept
+  // it). A row posted in a later year than its date never does. A dividend
+  // of another broker, or of any other year, is never in it.
+  const lateReachOf = new Map<number, number[]>();
+  const lateReach = (index: number): number[] => {
+    let r = lateReachOf.get(index);
+    if (!r) {
+      const w = withholdings[index]!;
+      const wTime = withholdingTimes[index]!;
+      const date = normalizeDate(w.dateTime);
+      const ownYear = date.slice(0, 4);
+      const priorYear = !postedLate[index] && date.slice(5) <= "01-07" ? String(Number(ownYear) - 1) : null;
+      r = (dividendIndexByIsin.get(w.isin) ?? []).filter((divIndex) => {
+        const divYear = yearOf(dividends[divIndex]!.dateTime);
+        return (
+          corrects(index, divIndex) &&
+          !isLater(index, divIndex) &&
+          (reaches(index, divIndex) || (!isReversal[divIndex] && divTimes[divIndex]! <= wTime && (divYear === ownYear || divYear === priorYear)))
+        );
+      });
+      lateReachOf.set(index, r);
+    }
     return r;
   };
   /** Per refund, what it gave each dividend. */
@@ -257,14 +329,14 @@ export function matchWithholdings(
    * Free room for refund `index` by moving earlier refunds along a chain of
    * dividends (shortest first) to one that still has capacity. Gives the
    * refund what the chain frees, up to `rest`, and returns it (0 when no chain
-   * exists). Every move stays within the moved refund's own reach.
+   * exists). Every move stays within the moved refund's own reach (`reachFn`).
    */
-  const makeRoom = (index: number, rest: Decimal): Decimal => {
+  const makeRoom = (index: number, rest: Decimal, reachFn: (index: number) => number[]): Decimal => {
     // How a dividend was reached: the refund that would move onto it, and the
     // dividend that refund leaves (−1 for refund `index` itself).
     const via = new Map<number, [number, number]>();
     const queue: number[] = [];
-    for (const divIndex of reach(index)) {
+    for (const divIndex of reachFn(index)) {
       via.set(divIndex, [index, -1]);
       queue.push(divIndex);
     }
@@ -286,7 +358,7 @@ export function matchWithholdings(
       }
       for (const [moved, byDividend] of given) {
         if (moved === index || !byDividend.get(at)?.greaterThan(0)) continue;
-        for (const next of reach(moved)) {
+        for (const next of reachFn(moved)) {
           if (via.has(next)) continue;
           via.set(next, [moved, at]);
           queue.push(next);
@@ -295,18 +367,15 @@ export function matchWithholdings(
     }
     return new Decimal(0);
   };
-  const refunds: number[] = [];
-  withholdings.forEach((_w, index) => {
-    if (consumedWithholdings.has(index) || !isRefund[index]) return;
-    refunds.push(index);
-    let rest = amounts[index]!;
+  /** Give refund `index` up to `rest` within `reachFn`, ranked as above; returns what no dividend took. */
+  const allocate = (index: number, rest: Decimal, reachFn: (index: number) => number[]): Decimal => {
     while (rest.greaterThan(0)) {
       const rank = (divIndex: number): number =>
         capacity[divIndex]!.greaterThanOrEqualTo(rest)
           ? parts[divIndex]!.some((p) => p.amount.equals(rest.negated())) ? 1 : 2
           : 3;
       let best = -1;
-      for (const divIndex of reach(index)) {
+      for (const divIndex of reachFn(index)) {
         if (!capacity[divIndex]!.greaterThan(0)) continue;
         if (
           best < 0 ||
@@ -316,18 +385,78 @@ export function matchWithholdings(
           best = divIndex;
         }
       }
-      const take = best >= 0 ? Decimal.min(rest, capacity[best]!) : makeRoom(index, rest);
+      const take = best >= 0 ? Decimal.min(rest, capacity[best]!) : makeRoom(index, rest, reachFn);
       if (take.isZero()) break;
       if (best >= 0) give(index, best, take);
       rest = rest.minus(take);
     }
+    return rest;
+  };
+  const refunds: number[] = [];
+  const left = new Map<number, Decimal>();
+  withholdings.forEach((_w, index) => {
+    if (consumedWithholdings.has(index) || !isRefund[index]) return;
+    refunds.push(index);
+    const rest = allocate(index, amounts[index]!, reach);
+    if (rest.greaterThan(0)) left.set(index, rest);
   });
+  // 3c (issue #467): only once every refund had its 7 days, what is left of
+  // a refund goes to a dividend in its late reach (same ISIN, broker and
+  // year, paid on or before it). It runs after 3b, so a file where every
+  // refund fits within 7 days matches exactly as before. What 3d still
+  // fits nowhere is `unjoined`: it lowers no tax and the report names it.
+  // 3d (issue #467): what is still left goes, by the same ranking and
+  // room-making, to any dividend within 7 days, now also one of the next
+  // year withheld after the refund. A refund that wants the 27 December
+  // dividend can so still push a 30 December one to 3 January, whatever the
+  // file order. With no such dividend in the file, every move 3d could make
+  // 3c could make too, so nothing changes.
+  const unjoined: WithholdingPart[] = [];
+  const stillLeft = new Map<number, Decimal>();
+  for (const [index, rest] of left) {
+    const after = allocate(index, rest, lateReach);
+    if (after.greaterThan(0)) stillLeft.set(index, after);
+  }
+  for (const [index, rest] of stillLeft) {
+    const after = allocate(index, rest, nearReach);
+    if (after.greaterThan(0)) unjoined.push({ index, amount: after });
+  }
   // A refund's parts follow the withholdings, in file order.
   for (const index of refunds) {
     for (const [divIndex, amount] of given.get(index) ?? []) parts[divIndex]!.push({ index, amount });
   }
 
-  return { dividends, withholdings, pair, parts };
+  return { dividends, withholdings, pair, parts, unjoined };
+}
+
+/**
+ * Every withholding row below 0 that some pass of `matchWithholdings` could
+ * give to one of the dividends in `owners`, whatever the row order: the same
+ * ISIN (the same symbol when there is none), the same broker, and within reach
+ * (`reaches`: 7 days, the dividend's own year for a row posted late, never a
+ * reversal). Which row the matcher actually gives a dividend depends on the
+ * order of the rows (pass 1 takes the first row in reach, not the nearest),
+ * so this set is the one answer every order agrees on. A refund (above 0) is
+ * never in it. In file order.
+ */
+export function withholdingsInReach(cashTransactions: CashTransaction[], owners: ReadonlySet<CashTransaction>): CashTransaction[] {
+  const time = (t: CashTransaction): number => parseDate(normalizeDate(t.dateTime)).getTime();
+  const dividends = cashTransactions
+    .filter((d) => owners.has(d) && (d.type === "Dividends" || d.type === "Payment In Lieu Of Dividends") && !new Decimal(d.amount).isNegative())
+    .map((div) => ({ div, divTime: time(div) }));
+  if (dividends.length === 0) return [];
+  return cashTransactions.filter((w) => {
+    if (w.type !== "Withholding Tax" || !new Decimal(w.amount).lessThan(0)) return false;
+    const wTime = time(w);
+    const postedLate = isPostedLate(w);
+    return dividends.some(
+      ({ div, divTime }) =>
+        w.isin === div.isin &&
+        (div.isin !== "" || w.symbol === div.symbol) &&
+        sameBroker(w, div) &&
+        dateReaches(w, wTime, postedLate, div, divTime),
+    );
+  });
 }
 
 /**
@@ -368,6 +497,7 @@ export function calculateDividends(
 ): DividendEntry[] {
   const match = matchWithholdings(cashTransactions);
   const { dividends, withholdings, pair } = match;
+  for (const { index, amount } of match.unjoined) options?.onUnjoinedRefund?.(withholdings[index]!, amount);
 
   const lookup = (date: string, currency: string): Decimal | null =>
     options?.lookupRate ? options.lookupRate(date, currency) : getEcbRate(rateMap, date, currency);

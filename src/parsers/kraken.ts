@@ -14,6 +14,7 @@ import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
 import { isEcbResolvable, isFiat } from "../engine/ecb.js";
+import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
 import {
   parseCsvLine,
   parseNumber,
@@ -23,6 +24,15 @@ import {
   findColumn,
   stripBom,
   timeOfDay,
+  tradeQuantityUnknownMessages,
+  cryptoIncomeUnidentifiedMessages,
+  cryptoIncomeAmountUnreadableMessages,
+  isReadableTradeDate,
+  unreadableTrade,
+  unreadableCell,
+  quantityUnreadable,
+  markUndatedTrades,
+  dropUndatedCash,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -30,8 +40,9 @@ import {
 // ---------------------------------------------------------------------------
 
 /**
- * Well-known Kraken asset codes that use the X/Z prefix convention.
- * Not all Kraken assets follow this pattern (e.g. DOT, ADA use plain names).
+ * Kraken's legacy asset codes, the only ones with an X/Z prefix, and their
+ * short names. Every other code is the coin's own ticker (DOT, ADA, and also
+ * ZETA, ZORA, XAUT, XTZ, whose X or Z is part of the name).
  */
 const KRAKEN_ASSET_MAP: Record<string, string> = {
   XXBT: "BTC",
@@ -46,6 +57,9 @@ const KRAKEN_ASSET_MAP: Record<string, string> = {
   XREP: "REP",
   XDAO: "DAO",
   XMLN: "MLN",
+  XICN: "ICN",
+  XNMC: "NMC",
+  XXVN: "XVN",
   XXDG: "DOGE",
   XDG: "DOGE",
   ETH2: "ETH",
@@ -55,49 +69,65 @@ const KRAKEN_ASSET_MAP: Record<string, string> = {
   ZJPY: "JPY",
   ZCAD: "CAD",
   ZAUD: "AUD",
+  ZKRW: "KRW",
 };
 
-/** Strip Kraken's X/Z prefix and return a clean symbol */
+/** Kraken's legacy code as its short name; any other code as written. */
 function cleanSymbol(raw: string): string {
   // Staked/earning balances carry a suffix (DOT.S, XBT.M, SOL.F, ...), and
   // bonded staking puts the unbonding days before it (DOT28.S, ATOM21.S). Drop
   // both first so the reward lands on the real coin and XTZ.S keeps its X.
   // Digits go only when a suffix is present, so API3 or C98 stay intact.
   const trimmed = raw.trim().toUpperCase().replace(/\d*\.(S|M|F|B|P)$/, "");
-  if (KRAKEN_ASSET_MAP[trimmed]) return KRAKEN_ASSET_MAP[trimmed];
-
-  // For 4+ char symbols starting with X or Z that aren't in the map,
-  // strip the prefix only if the remainder is 3+ chars (avoids stripping XRP → RP)
-  if (trimmed.length >= 4 && (trimmed[0] === "X" || trimmed[0] === "Z")) {
-    return trimmed.slice(1);
-  }
-  return trimmed;
+  // Only a legacy code loses its prefix. A real coin that starts with X or Z
+  // (ZETA, ZORA, XAUT, XUSD) lost its first letter: it could not match the
+  // same coin at another broker, so an art. 33.5.e rebuy was missed, and
+  // XUSD was booked as dollars (#467).
+  return KRAKEN_ASSET_MAP[trimmed] ?? trimmed;
 }
+
+// Well-known quote suffixes, longer first to avoid partial matches
+// (XBTPYUSD must match PYUSD before USD; XBTUSDT has no Z/X prefix at all).
+const QUOTE_SUFFIXES = [
+  "PYUSD", "USDT", "USDC", "EURT",
+  "ZEUR", "ZUSD", "ZGBP", "ZJPY", "ZCAD", "ZAUD",
+  "XETH", "XXBT", "XLTC", "XXRP",
+  "EUR", "USD", "GBP", "JPY", "CAD", "AUD",
+  "ETH", "XBT", "BTC",
+];
 
 /**
  * Split a Kraken pair into base and quote symbols.
- * Kraken pairs can be: XBTEUR, XXBTXETH, ETHEUR, DOTUSD, etc.
+ * Kraken pairs can be: XBTEUR, XXBTXETH, ETHEUR, DOTUSD, BTC/EUR, etc.
  *
  * `assumedQuote` is true when the pair matched no known quote suffix and the
  * quote is a guess: either the last 3 chars (6+ char pairs) are not a currency
- * the ECB publishes, or the pair is too short and the quote defaulted to EUR.
+ * the ECB publishes, or the pair is too short and the quote defaulted to EUR,
+ * or a slash pair is not two sides or its quote is no known currency or coin.
  * The caller warns in that case because the trade may be split or valued wrong.
  */
 function splitPair(pair: string): { base: string; quote: string; assumedQuote: boolean } {
   const p = pair.trim().toUpperCase();
 
-  // Try well-known quote suffixes, longer first to avoid partial matches
-  // (XBTPYUSD must match PYUSD before USD; XBTUSDT has no Z/X prefix at all).
-  const quoteSuffixes = [
-    "PYUSD", "USDT", "USDC", "EURT",
-    "ZEUR", "ZUSD", "ZGBP", "ZJPY", "ZCAD", "ZAUD",
-    "XETH", "XXBT", "XLTC", "XXRP",
-    "EUR", "USD", "GBP", "JPY", "CAD", "AUD",
-    "ETH", "XBT", "BTC",
-  ];
-  for (const suffix of quoteSuffixes) {
+  // A pair written with a slash (BTC/EUR) names both sides. It was booked as
+  // the coin "BTC/", which matched no BTC lot, reward or rebuy (#467). A
+  // quote that is no known currency or coin, or a pair that is not two
+  // sides, is a guess, and the caller names it.
+  if (p.includes("/")) {
+    const sides = p.split("/").map((x) => x.trim());
+    const base = cleanSymbol(sides[0] ?? "") || p;
+    const quote = cleanSymbol(sides[1] ?? "") || "EUR";
+    const known = isEcbResolvable(quote) || KNOWN_CRYPTO_SYMBOLS.has(quote) || QUOTE_SUFFIXES.some((q) => cleanSymbol(q) === quote);
+    return { base, quote, assumedQuote: sides.length !== 2 || !sides[0] || !sides[1] || !known };
+  }
+
+  for (const suffix of QUOTE_SUFFIXES) {
     if (p.endsWith(suffix) && p.length > suffix.length) {
       const baseRaw = p.slice(0, p.length - suffix.length);
+      // A legacy quote (ZEUR, XXBT) follows a legacy base (XXBTZEUR,
+      // XETHXXBT) or a known coin (USDTZUSD, Kraken's own key for USDT/USD).
+      // Tezos is XTZEUR: read as XT/ZEUR it lost its Z (#467).
+      if (/^[XZ]...$/.test(suffix) && !(baseRaw in KRAKEN_ASSET_MAP) && !KNOWN_CRYPTO_SYMBOLS.has(cleanSymbol(baseRaw))) continue;
       return { base: cleanSymbol(baseRaw), quote: cleanSymbol(suffix), assumedQuote: false };
     }
   }
@@ -211,6 +241,9 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
   // Pairs whose quote we could not recognize, mapped to the base/quote split we
   // guessed (may be mis-split or mis-valued).
   const unrecognizedPairs = new Map<string, string>();
+  // Rows that swap one fiat currency for another, by txid and the text that
+  // names them (#467).
+  const fiatConversions: { txid: string; row: string }[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -229,18 +262,96 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     const volDec = toFiniteDecimal(fields[cols.vol] ?? "0").abs();
     const costDec = toFiniteDecimal(fields[cols.cost] ?? "0").abs();
     const feeDec = toFiniteDecimal(fields[cols.fee] ?? "0");
-    const price = parseNumber(fields[cols.price] ?? "0");
+    // A missing column, a cell with no finite number ("", "€", "abc", "-"),
+    // or a negative price, which Kraken never writes, cannot be read. A
+    // written zero ("0", "0.00") prices no buy or sale either (#467).
+    const priceUsable = !quantityUnreadable(fields[cols.price]) && toFiniteDecimal(fields[cols.price]!).gt(0);
 
-    if (!txid || !pair) continue;
-
-    const { base, quote, assumedQuote } = splitPair(pair);
-    if (assumedQuote) unrecognizedPairs.set(pair, `${base}/${quote}`);
     const tradeDate = krakenDate(timeStr);
     const tradeTime = timeOfDay(timeStr);
+    // A row with no txid is still a trade: the id only names it (#467).
+    const rowId = txid || `kraken-row-${i}`;
+    if (!pair) {
+      // A row with no pair names no coin. A blank line is skipped; a trade
+      // row (a txid, a type or a volume) is kept as a trade that books
+      // nothing, and named.
+      if (txid || type || !volDec.isZero()) {
+        trades.push(unreadableTrade({
+          tradeID: rowId, symbol: "", isin: "", assetCategory: "CRYPTO", currency: "EUR", tradeDate, tradeTime,
+          exchange: "KRAKEN", ...(type === "sell" ? { buySell: "SELL" as const } : {}),
+        }, unreadableCell(headers[cols.pair] ?? "pair", "")));
+      }
+      continue;
+    }
+
+    const { base, quote, assumedQuote } = splitPair(pair);
+    // A pair of two fiat currencies (ZEURZUSD, EURUSD) is no crypto trade:
+    // booked as the coin "EUR", multidivisa made up a loss on euros and a
+    // sale of euros alone gave a gain. The FX engine reads only cash trades,
+    // so the row books nothing and is named, as at Binance (#467).
+    if (isFiat(base) && isFiat(quote)) {
+      const cell = (idx: number): string => (idx >= 0 ? (fields[idx] ?? "").trim() : "") || "—";
+      fiatConversions.push({ txid: rowId, row: `${pair} ${cell(cols.type)} ${cell(cols.vol)} ${cell(cols.cost)} ${timeStr || "—"}` });
+      continue;
+    }
+    if (assumedQuote) unrecognizedPairs.set(pair, `${base}/${quote}`);
+    // A type that is neither buy nor sell (empty, "settle", a margin
+    // settlement) is no purchase: it was booked as one (#468). The row is
+    // kept as a trade that books nothing, for each coin it names, and named.
+    if (type !== "buy" && type !== "sell") {
+      const cell = unreadableCell(headers[cols.type] ?? "type", fields[cols.type] ?? "");
+      const legs = [{ id: rowId, symbol: base, currency: quote }];
+      if (!isFiat(quote)) legs.push({ id: `${rowId}-${quote}`, symbol: quote, currency: base });
+      for (const leg of legs) {
+        trades.push(unreadableTrade({
+          tradeID: leg.id, symbol: leg.symbol, description: `${base}/${quote}`, isin: "", assetCategory: "CRYPTO",
+          currency: leg.currency, tradeDate, tradeTime, exchange: "KRAKEN",
+        }, cell));
+      }
+      continue;
+    }
+
+    // A buy or sale whose vol (or, for a crypto-quoted pair, cost) cannot be
+    // read was booked as zero units, so FIFO dropped it with no word: it may
+    // hide a gain, a loss or an art. 33.5.e repurchase. So may a row whose
+    // price is unreadable or a written zero and whose cost is unreadable or
+    // zero too: FIFO values a trade at price × vol, so the sale went for 0 €
+    // and a 6000 € gain became a 3000 € loss. It is kept as a trade that
+    // books nothing for each coin it names, and named (#467).
+    // Kraken writes vol positive on both sides. A buy of a negative vol says
+    // the coins went out, so it contradicts its side: read with its sign
+    // dropped it was one more lot, with no word. A sale of a negative vol is
+    // no row Kraken writes either, and read with its sign dropped it sold
+    // coins the file does not show leaving (#467). Both are named by vol.
+    const badCol = quantityUnreadable(fields[cols.vol]) || toFiniteDecimal(fields[cols.vol]!).lt(0) ? "vol"
+      : !isFiat(quote) && quantityUnreadable(fields[cols.cost]) ? "cost"
+      : !priceUsable && !volDec.isZero() && (quantityUnreadable(fields[cols.cost]) || costDec.isZero()) ? "price"
+      : "";
+    if (badCol) {
+      const idx = badCol === "vol" ? cols.vol : badCol === "cost" ? cols.cost : cols.price;
+      const cell = unreadableCell(idx >= 0 ? headers[idx]!.trim() : badCol, fields[idx]);
+      const legs = [{ id: rowId, symbol: base, currency: quote, buySell: type === "sell" ? "SELL" as const : "BUY" as const }];
+      if (!isFiat(quote)) legs.push({ id: `${rowId}-${quote}`, symbol: quote, currency: base, buySell: type === "sell" ? "BUY" : "SELL" });
+      for (const leg of legs) {
+        trades.push(unreadableTrade({
+          tradeID: leg.id, symbol: leg.symbol, description: `${base}/${quote}`, isin: "", assetCategory: "CRYPTO",
+          currency: leg.currency, tradeDate, tradeTime, exchange: "KRAKEN", buySell: leg.buySell,
+        }, cell));
+      }
+      continue;
+    }
+
     const isSell = type === "sell";
+    // FIFO values a trade at price × vol, never from cost. A price it cannot
+    // read crashed the report ("abc") or sold for 0 € ("", "€", and a written
+    // "0" or "0.00"): a gain became a loss with no word. Kraken writes cost =
+    // price × vol, so the price is then cost ÷ vol, the file's own numbers
+    // (#467). A readable nonzero price keeps the file's text.
+    const price = priceUsable ? parseNumber(fields[cols.price]!)
+      : volDec.isZero() ? "0" : costDec.div(volDec).toString();
 
     trades.push({
-      tradeID: txid,
+      tradeID: rowId,
       accountId: "",
       symbol: base,
       description: `${base}/${quote}`,
@@ -272,7 +383,7 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     // base coin exactly like the Binance two-leg permuta. Fiat quotes have none.
     if (!isFiat(quote) && !volDec.isZero() && !costDec.isZero()) {
       trades.push({
-        tradeID: `${txid}-${quote}`,
+        tradeID: `${rowId}-${quote}`,
         accountId: "",
         symbol: quote,
         description: `${base}/${quote}`,
@@ -300,10 +411,12 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     }
   }
 
+  markUndatedTrades(trades, "time");
+
   // A pair we couldn't split with certainty (no known quote suffix) was split by
   // a guess — warn so the user knows that trade may be mis-valued and can verify
   // it (skip-and-warn, three-tier message policy).
-  const parserMessages: TaxMessage[] = unrecognizedPairs.size > 0
+  const parserMessages: TaxMessage[] = [...(unrecognizedPairs.size > 0
     ? [{
         id: "kraken.unrecognized_pair",
         severity: "warning" as const,
@@ -311,7 +424,15 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
         hint: "Suele deberse a un par poco habitual no incluido en la lista de divisas conocidas. Revisa esas operaciones y, si la moneda o la divisa de cotización no son las indicadas, corrige su valor manualmente.",
         context: { count: String(unrecognizedPairs.size) },
       }]
-    : [];
+    : []), ...tradeQuantityUnknownMessages("Kraken", trades), ...(fiatConversions.length > 0
+    ? [{
+        id: "kraken.fiat_conversion_not_booked",
+        severity: "warning" as const,
+        message: `Kraken: ${fiatConversions.length} operación(es) cambian una moneda oficial por otra (por ejemplo, euros por dólares) y no se calculan: ${fiatConversions.map((f) => f.row).join("; ")}.`,
+        hint: "Cada fila trae el par, el tipo (buy o sell), la cantidad (vol), el importe (cost) y la fecha. DeclaRenta no calcula la ganancia o la pérdida por tipo de cambio de estos cambios de Kraken. Cambiar una divisa por euros o por otra divisa puede dar una ganancia o una pérdida. Es la diferencia entre su valor en euros al cambiarla y lo que te costó en euros. Calcúlala y añádela a mano en Renta Web.",
+        context: { count: String(fiatConversions.length), rows: fiatConversions.map((f) => f.row).join("; ") },
+      }]
+    : [])];
 
   return {
     accountId: "",
@@ -324,12 +445,31 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     openPositions: [],
     securitiesInfo: [],
     ...(parserMessages.length > 0 ? { parserMessages } : {}),
+    ...(fiatConversions.length > 0 ? { krakenNamedTradeIds: fiatConversions.map((f) => f.txid) } : {}),
   };
 }
+
 
 // ---------------------------------------------------------------------------
 // Ledgers CSV parser
 // ---------------------------------------------------------------------------
+
+/**
+ * Ledger types that buy, sell or swap a coin. "trade" comes from the Trades
+ * CSV; an instant buy or sale in the Kraken app (spend and receive), a
+ * conversion or a sale may be in no Trades CSV at all (#467). So may the
+ * result of a margin position (margin, settled), a delisting conversion
+ * (adjustment) and an NFT sale (nfttrade): each may be a gain.
+ */
+const LEDGER_TRADE_TYPES = new Set(["trade", "spend", "receive", "conversion", "sale", "margin", "settled", "adjustment", "nfttrade"]);
+
+/** Ledger types that give coins or money and may be income (#467). */
+const LEDGER_INCOME_TYPES = new Set(["reward", "dividend", "credit", "nftrebate", "nftcreatorfee"]);
+
+/** Ledger transfer subtypes that move the user's own coins between wallets. */
+const OWN_COIN_TRANSFERS = new Set([
+  "spottostaking", "stakingfromspot", "stakingtospot", "spotfromstaking", "spotfromfutures", "spottofutures",
+]);
 
 function parseLedgersCsv(lines: string[], delimiter: string): Statement {
   const headers = parseCsvLine(lines[0]!, delimiter);
@@ -341,9 +481,20 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
 
   const cashTransactions: CashTransaction[] = [];
   // Rows of a type this parser does not read, by type. Trades come from the
-  // Trades CSV; deposits, withdrawals, transfers and Earn allocations only move
-  // the user's own coins, so none of those is counted.
+  // Trades CSV (and are named at merge time when none books them); deposits,
+  // withdrawals, own-wallet transfers and Earn allocations only move the
+  // user's own coins, so none of those is counted.
   const ignoredTypes = new Map<string, number>();
+  // Staking rewards whose asset cell names no coin, named (#467).
+  const unidentifiedIncome: string[] = [];
+  // Staking rewards whose amount cell cannot be read, named (#467).
+  const unreadableIncome: string[] = [];
+  // Staking and Earn rows that take coins away, named (#467).
+  const negativeIncome: string[] = [];
+  // Reward, dividend and credit rows that give coins or money, named (#467).
+  const possibleIncome: string[] = [];
+  // Trade rows by refid: the date and each leg, "XXBT -0.1" (#467).
+  const ledgerTrades = new Map<string, { date: string; legs: string[] }>();
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -364,10 +515,49 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
     // Staking rewards: the older ledger books them as type "staking", the newer
     // Kraken Earn ledger as type "earn" with subtype "reward".
     const isEarnReward = type === "earn" && subtype === "reward";
-    if (type === "staking" || isEarnReward) {
+    // An airdrop (FLR, SGB) is a transfer of subtype "airdrop". It was skipped
+    // with every transfer, so the income went undeclared with no word (#467).
+    const isAirdrop = type === "transfer" && subtype === "airdrop";
+    if (type === "staking" || isEarnReward || isAirdrop) {
       const symbol = cleanSymbol(asset);
       const tradeDate = krakenDate(timeStr);
       const netAmount = amountDec.minus(feeLedgerDec);
+      // A reward with no asset says no coin: it is not booked under an empty
+      // one (which no rate can value), but named by type, amount, date and
+      // cell (#467).
+      if (!symbol) {
+        const rawType = [(fields[cols.type] ?? "").trim(), cols.subtype >= 0 ? (fields[cols.subtype] ?? "").trim() : ""].filter(Boolean).join(" ");
+        const shownDate = isReadableTradeDate(tradeDate) ? tradeDate : timeStr || "—";
+        unidentifiedIncome.push(`${rawType} ${(fields[cols.amount] ?? "").trim() || "—"} ${shownDate} [${unreadableCell(headers[cols.asset] ?? "asset", asset)}]`);
+        continue;
+      }
+      // A reward whose amount cannot be read was booked as 0 units, so the
+      // income went undeclared with no word. It is not booked, but named by
+      // type, coin, date and cell (#467).
+      const rawAmount = cols.amount >= 0 ? fields[cols.amount] : undefined;
+      if (quantityUnreadable(rawAmount)) {
+        const rawType = [(fields[cols.type] ?? "").trim(), cols.subtype >= 0 ? (fields[cols.subtype] ?? "").trim() : ""].filter(Boolean).join(" ");
+        const shownDate = isReadableTradeDate(tradeDate) ? tradeDate : timeStr || "—";
+        unreadableIncome.push(`${rawType} ${symbol} ${shownDate} [${unreadableCell(headers[cols.amount] ?? "amount", rawAmount)}]`);
+        continue;
+      }
+
+      // Only a credit is an airdrop. A row that takes coins away books no
+      // negative income: it is counted and named below.
+      if (isAirdrop && !netAmount.isPositive()) {
+        ignoredTypes.set("transfer/airdrop", (ignoredTypes.get("transfer/airdrop") ?? 0) + 1);
+        continue;
+      }
+      // A staking or Earn row that takes coins away (a negative amount, or a
+      // fee larger than the reward) was booked as negative income and cut
+      // the year's income with no word. DeclaRenta does not know which
+      // reward it cancels, so it books nothing and is named (#467).
+      if (netAmount.isNegative()) {
+        const rawType = [(fields[cols.type] ?? "").trim(), cols.subtype >= 0 ? (fields[cols.subtype] ?? "").trim() : ""].filter(Boolean).join(" ");
+        const shownDate = isReadableTradeDate(tradeDate) ? tradeDate : timeStr || "—";
+        negativeIncome.push(`${rawType} ${symbol} ${(fields[cols.amount] ?? "").trim()} (fee ${(cols.fee >= 0 ? fields[cols.fee] ?? "" : "").trim() || "0"}) ${shownDate}`);
+        continue;
+      }
 
       // Staking rewards are NOT foreign dividends (no issuer/withholding country,
       // not in the Art. 80 double-taxation pool). They are rendimiento del capital
@@ -376,11 +566,13 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
       // calculateDividends(). Paid in the staked coin with no fiat value here, so
       // rewardCostBasisEur is omitted — the report values it via ECB/manual rate
       // (and creates the cost-basis lot) or surfaces it for manual entry.
+      // An airdrop is a ganancia patrimonial not derived from a transmission
+      // (base general, art. 33.1 LIRPF; DGT V1948-21), as at Binance.
       cashTransactions.push({
-        transactionID: `kraken-${isEarnReward ? "earn" : "staking"}-${txid}`,
+        transactionID: `kraken-${isAirdrop ? "airdrop" : isEarnReward ? "earn" : "staking"}-${txid}`,
         accountId: "",
         symbol,
-        description: `Staking reward - ${symbol}`,
+        description: `${isAirdrop ? "Airdrop" : "Staking reward"} - ${symbol}`,
         isin: "",
         currency: symbol,
         dateTime: tradeDate,
@@ -388,25 +580,68 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
         amount: netAmount.toString(),
         fxRateToBase: "1",
         type: "Crypto Reward Income",
-        taxBucket: "ahorro",
+        taxBucket: isAirdrop ? "general" : "ahorro",
         rewardQuantity: netAmount.abs().toString(),
       });
-    } else if (!["trade", "deposit", "withdrawal", "transfer", "earn"].includes(type)) {
+    } else if (LEDGER_TRADE_TYPES.has(type)) {
+      // Trades are read from the Trades CSV, whose txid is this refid.
+      // `finalizeMergedStatement` names each one no Kraken trade books (#467).
+      // A leg of another type than "trade" carries its type.
+      const refid = (fields[cols.refid] ?? "").trim() || txid;
+      const tradeDate = krakenDate(timeStr);
+      const entry = ledgerTrades.get(refid) ?? { date: "", legs: [] };
+      if (!entry.date && isReadableTradeDate(tradeDate)) entry.date = tradeDate;
+      entry.legs.push(`${type === "trade" ? "" : `${type} `}${asset || "—"} ${(fields[cols.amount] ?? "").trim() || "—"}`);
+      ledgerTrades.set(refid, entry);
+    } else if (LEDGER_INCOME_TYPES.has(type) && (amountDec.gt(0) || quantityUnreadable(fields[cols.amount]))) {
+      // A reward, dividend, credit, NFT rebate or NFT creator fee that gives
+      // coins or money may be income.
+      // It was only counted by type, so the income could go undeclared with
+      // no row named. DeclaRenta does not know what income it is, so it
+      // books nothing and names the row (#467).
+      const tradeDate = krakenDate(timeStr);
+      const shownDate = isReadableTradeDate(tradeDate) ? tradeDate : timeStr || "—";
+      possibleIncome.push(`${type} ${cleanSymbol(asset) || "—"} ${(fields[cols.amount] ?? "").trim() || "—"} ${shownDate}`);
+    } else if (type === "transfer") {
+      // Only moves between the user's own wallets are skipped with no word.
+      // Any other transfer (a fork, an empty subtype) may be income: named.
+      if (!OWN_COIN_TRANSFERS.has(subtype)) {
+        const key = subtype ? `transfer/${subtype}` : "transfer";
+        ignoredTypes.set(key, (ignoredTypes.get(key) ?? 0) + 1);
+      }
+    } else if (!["deposit", "withdrawal", "earn"].includes(type)) {
       const key = type || "(vacío)";
       ignoredTypes.set(key, (ignoredTypes.get(key) ?? 0) + 1);
     }
   }
 
   const ignoredCount = [...ignoredTypes.values()].reduce((a, b) => a + b, 0);
-  const parserMessages: TaxMessage[] = ignoredCount > 0
+  const ignoredText = [...ignoredTypes].map(([t, n]) => `${t} (${n})`).join(", ");
+  const parserMessages: TaxMessage[] = [...dropUndatedCash("Kraken", cashTransactions, "time"), ...cryptoIncomeUnidentifiedMessages("Kraken", unidentifiedIncome), ...cryptoIncomeAmountUnreadableMessages("Kraken", unreadableIncome), ...(negativeIncome.length > 0
+    ? [{
+        id: "kraken.income_negative",
+        severity: "warning" as const,
+        message: `Kraken: ${negativeIncome.length} recompensa(s) de staking o Earn son negativas y no se calculan: ${negativeIncome.join("; ")}.`,
+        hint: "Una recompensa negativa suele ser una recompensa que Kraken te ha retirado. También sale negativa cuando la comisión (fee) es mayor que el importe (amount). DeclaRenta no sabe qué recompensa anula, así que no cambia ningún importe. Sigue contando las demás recompensas como ingreso y sus monedas como compradas a su valor de ese día. Si la fila anula un ingreso del año que declaras, quítalo a mano en Renta Web. Si después vendiste esa criptomoneda, el coste de la venta puede ser demasiado alto. Revisa en Renta Web el coste de esas ventas.",
+        context: { count: String(negativeIncome.length), rows: negativeIncome.join("; ") },
+      }]
+    : []), ...(possibleIncome.length > 0
+    ? [{
+        id: "kraken.ledger_income_not_booked",
+        severity: "warning" as const,
+        message: `Kraken: ${possibleIncome.length} movimiento(s) del libro mayor pueden ser ingresos y no se calculan: ${possibleIncome.join("; ")}.`,
+        hint: "Son filas de tipo reward, dividend, credit, nftrebate o nftcreatorfee que te dan monedas o dinero. DeclaRenta no sabe de qué ingreso se trata, así que no las suma. Una recompensa o un bono puede ser una ganancia patrimonial (base general). Un dividendo puede ser un rendimiento del capital mobiliario (base del ahorro). Si es un ingreso del año que declaras, decláralo a mano en Renta Web con su valor en euros de ese día.",
+        context: { count: String(possibleIncome.length), rows: possibleIncome.join("; ") },
+      }]
+    : []), ...(ignoredCount > 0
     ? [{
         id: "kraken.ledger_rows_ignored",
         severity: "info" as const,
-        message: `Se han ignorado ${ignoredCount} movimiento(s) del libro mayor de Kraken de tipos que no se procesan: ${[...ignoredTypes].map(([t, n]) => `${t} (${n})`).join(", ")}.`,
-        hint: "Del libro mayor solo se leen las recompensas de staking y Earn; las compraventas se leen del CSV de operaciones (Trades). Las compras instantáneas (tipos spend y receive) pueden no aparecer en ese CSV: si es tu caso, añádelas para que la moneda comprada tenga coste de adquisición.",
-        context: { count: String(ignoredCount) },
+        message: `Se han ignorado ${ignoredCount} movimiento(s) del libro mayor de Kraken de tipos que no se procesan: ${ignoredText}.`,
+        hint: "DeclaRenta lee del libro mayor solo las recompensas de staking y Earn y los airdrops. Lee las compraventas del CSV de operaciones (Trades). Una transferencia (transfer) que no mueve monedas entre tus propias cuentas puede ser un ingreso, como una bifurcación (fork). Si lo es, decláralo a mano en Renta Web.",
+        context: { count: String(ignoredCount), types: ignoredText },
       }]
-    : [];
+    : [])];
 
   return {
     accountId: "",
@@ -419,6 +654,9 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
     openPositions: [],
     securitiesInfo: [],
     ...(parserMessages.length > 0 ? { parserMessages } : {}),
+    ...(ledgerTrades.size > 0
+      ? { krakenLedgerTrades: [...ledgerTrades].map(([refid, t]) => ({ refid, row: `${refid} ${t.date || "—"} [${t.legs.join(", ")}]` })) }
+      : {}),
   };
 }
 

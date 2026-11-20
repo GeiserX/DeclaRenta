@@ -9,9 +9,8 @@ import { getCurrentLocale, t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { lookupPositionRate } from "../engine/ecb.js";
+import { lookupPositionRate, positionValueOf } from "../engine/ecb.js";
 import { buildModelo721Entries } from "../generators/modelo721.js";
-import Decimal from "decimal.js";
 import { fmtEur, fmtQty } from "./format.js";
 import { esc } from "./esc.js";
 import { renderPositionsDateBanner } from "./positions-date.js";
@@ -130,6 +129,14 @@ export function renderSection721(
   if (unvaluedCount > 0) {
     html += `<div class="banner banner-warning">${esc(t("m721.positions_unvalued", { count: String(unvaluedCount) }))}</div>`;
   }
+  // Coins whose units the export does not give: unknown, never 0 (#470).
+  const unknownUnits = positions.filter((p) => p.entry.quantityUnknown === true);
+  if (unknownUnits.length > 0) {
+    html += `<div class="banner banner-warning m721-quantity-unknown">${esc(t("m721.quantity_unknown", {
+      count: String(unknownUnits.length),
+      coins: unknownUnits.map((p) => p.entry.assetId).join(", "),
+    }))}</div>`;
+  }
 
   html += `<div class="threshold-bar">
     <div class="threshold-track">
@@ -164,7 +171,7 @@ export function renderSection721(
       return `<tr>
         <td class="mono">${esc(p.entry.description)}</td>
         <td>${esc(exchange)}</td>
-        <td>${fmtQty(p.entry.quantity)}</td>
+        <td>${p.entry.quantityUnknown === true ? "—" : fmtQty(p.entry.quantity)}</td>
         <td>${val}</td>
       </tr>`;
     }).join("")}</tbody>
@@ -174,7 +181,7 @@ export function renderSection721(
   // (valuation entries don't carry currency); same crypto filter the generator uses.
   const uniqueCurrencies = [...new Set(
     statement.openPositions
-      .filter((p) => p.assetCategory === "CRYPTO" && new Decimal(p.positionValue).greaterThan(0))
+      .filter((p) => p.assetCategory === "CRYPTO" && (positionValueOf(p)?.greaterThan(0) ?? false))
       .map((p) => p.currency),
   )].filter((c) => c !== "EUR").sort();
   if (uniqueCurrencies.length > 0) {
