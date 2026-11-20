@@ -946,10 +946,15 @@ describe("Clear in each panel (#472 review)", () => {
   // says so and nothing reruns.
   it("crypto prices: a refused Clear shows the error and does not rerun", async () => {
     const before = await waitFor(cryptoPanel, "crypto panel");
+    const strip = document.getElementById("results-split");
+    expect(strip).not.toBeNull();
     refuseRemoves = true;
     before.querySelector<HTMLButtonElement>("#crypto-rates-clear-btn")!.click();
     await new Promise((r) => setTimeout(r, 100));
     expect(cryptoPanel()).toBe(before);
+    // The panel stays after any run (its error marks it unsaved): the
+    // results strip proves no run started.
+    expect(document.getElementById("results-split")).toBe(strip);
     const error = before.querySelector<HTMLElement>(".crypto-rates-error-msg")!;
     expect(error.hidden).toBe(false);
     expect(error.textContent).toMatch(/borrar los precios|clear the saved prices/);
@@ -965,10 +970,15 @@ describe("Clear in each panel (#472 review)", () => {
 
   it("opening lots: a refused Clear shows the error and does not rerun", async () => {
     const before = await waitFor(lotsPanel, "opening lots panel");
+    const strip = document.getElementById("results-split");
+    expect(strip).not.toBeNull();
     refuseRemoves = true;
     before.querySelector<HTMLButtonElement>("#manual-opening-lots-clear-btn")!.click();
     await new Promise((r) => setTimeout(r, 100));
     expect(lotsPanel()).toBe(before);
+    // The panel stays after any run (its error marks it unsaved): the
+    // results strip proves no run started.
+    expect(document.getElementById("results-split")).toBe(strip);
     const error = before.querySelector<HTMLElement>(".manual-opening-lots-error-msg")!;
     expect(error.hidden).toBe(false);
     expect(error.textContent).toMatch(/borrar los lotes|clear the saved lots/);
@@ -1009,12 +1019,16 @@ describe("Clear in each panel (#472 review)", () => {
     expect(JSON.parse(localStorage.getItem("declarenta_antichurning_windows")!)).toEqual({ [LSE2_ISIN]: 12 });
   });
 
-  it("anti-churning window: a refused Clear leaves the selects as they were", async () => {
+  it("anti-churning window: a refused Clear leaves the selects as they were and does not rerun", async () => {
     const before = await waitFor(windowPanel, "window panel");
+    const strip = document.getElementById("results-split");
+    expect(strip).not.toBeNull();
     refuseRemoves = true;
     before.querySelector<HTMLButtonElement>(".antichurning-window-clear")!.click();
     expect(windowSelect(before).value).toBe("2");
     expect(before.querySelector<HTMLElement>(".antichurning-window-error")!.hidden).toBe(false);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(document.getElementById("results-split")).toBe(strip);
   });
 
   it("crypto prices: Clear, then a typed price while the rerun waits: the next Save does not restore the cleared price", async () => {
