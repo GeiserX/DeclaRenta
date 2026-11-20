@@ -6,6 +6,10 @@
  * - A Trade History cell of a coin whose ticker starts with a digit (1INCH,
  *   1000SATS) glued the coin's digits onto the number: "1001INCH" (100 units)
  *   was read as 1001, so FIFO took the wrong share of each lot.
+ * - Two orders in one ±1 s window that give up the same coin for two
+ *   different coins netted the given coin into one leg, booked against the
+ *   first counter-leg only: 0.2 BTC sold for 3000 € in place of 0.1 BTC for
+ *   3000 € and 0.1 BTC for 3300 USDT.
  */
 import Decimal from "decimal.js";
 import { describe, it, expect } from "vitest";
@@ -19,6 +23,7 @@ import type { Statement } from "../../src/types/broker.js";
 const METHODS: FxMethod[] = ["multidivisa", "tradicional-divisa", "monodivisa"];
 const TH = "Date(UTC),Pair,Side,Price,Executed,Amount,Fee";
 const TH_ES = "Tiempo,Par,Lado,Precio,Ejecutado,Cantidad,Tarifa";
+const TX = "User_ID,UTC_Time,Account,Operation,Coin,Change,Remark";
 
 function rates(): EcbRateMap {
   const map: EcbRateMap = new Map();
@@ -123,5 +128,66 @@ describe("#467 Binance Trade History: a coin whose ticker starts with a digit is
     const s = parse(TH, ["2025-03-01 10:00:00,BTCUSD1,BUY,100000,0.001BTC,100USD1,0USD1"]);
     expect(s.parserMessages ?? []).toEqual([]);
     expect(s.trades.map((t) => `${t.buySell} ${t.symbol} ${t.quantity}`)).toEqual(["SELL USD1 -100", "BUY BTC 0.001"]);
+  });
+});
+
+describe("#467 Binance: two orders in one window that give up the same coin never book it against one counterpart", () => {
+  // 0.2 BTC bought for 4000 € in January. On 01/06/2025, 0.1 BTC sold for
+  // 3000 € and 0.1 BTC for 3300 USDT (3630 €): gains of 1000 and 1630 €.
+  const buy = ["2025-01-10 09:00:00|Buy,BTC,0.2", "2025-01-10 09:00:00|Sell,EUR,-4000"];
+  const tx = (rows: string[], eur = false): Statement => parse(eur ? `${TX},EUR_Value` : TX, rows.map((r) => {
+    const [time, rest] = r.split("|");
+    const [op, coin, change, value] = rest!.split(",");
+    return `1,${time},Spot,${op},${coin},${change},${eur ? `,${value}` : ""}`;
+  }));
+  const at = (sec: number, legs: string[]): string[] => legs.map((l) => `2025-06-01 10:00:0${sec}|${l}`);
+  const cases: [string, (sec: number) => string[], boolean][] = [
+    ["spot: BTC to EUR, then BTC to USDT", (sec) => [...at(0, ["Sell,BTC,-0.1", "Buy,EUR,3000"]), ...at(sec, ["Sell,BTC,-0.1", "Buy,USDT,3300"])], false],
+    ["spot with an EUR value on every row", (sec) => [...at(0, ["Sell,BTC,-0.1,-3000", "Buy,EUR,3000,3000"]), ...at(sec, ["Sell,BTC,-0.1,-3000", "Buy,USDT,3300,3000"])], true],
+    ["spot: BTC to EUR and ETH bought with BTC", (sec) => [...at(0, ["Sell,BTC,-0.1", "Buy,EUR,3000"]), ...at(sec, ["Buy,ETH,1", "Sell,BTC,-0.1"])], false],
+    ["Convert: BTC to EUR, then BTC to USDT", (sec) => [...at(0, ["Binance Convert,BTC,-0.1", "Binance Convert,EUR,3000"]), ...at(sec, ["Binance Convert,BTC,-0.1", "Binance Convert,USDT,3300"])], false],
+  ];
+  const buyRows = (eur: boolean): string[] => eur ? buy.map((r, k) => `${r},${k === 0 ? "4000" : "-4000"}`) : buy;
+
+  describe.each(cases)("%s", (_label, legs, eur) => {
+    const control = tx([...buyRows(eur), ...legs(5)], eur);
+    const sameWindow = tx([...buyRows(eur), ...legs(0)], eur);
+    const oneSecond = tx([...buyRows(eur), ...legs(1)], eur);
+
+    it.each(METHODS)("[%s] control: 5 s apart, each order is booked on its own", (method) => {
+      const r = report(control, method);
+      expect(disposals(r, "BTC")[0]).toBe("0.1 p3000.00 c2000.00 g1000.00");
+      expect(control.parserMessages ?? []).toEqual([]);
+    });
+
+    it.each(METHODS)("[%s] in one window, each BTC row is booked against its own counterpart, as the control", (method) => {
+      for (const s of [sameWindow, oneSecond]) {
+        expect(quantities(s, "BTC").filter((q) => q.startsWith("-"))).toEqual(["-0.1", "-0.1"]);
+        expect(s.parserMessages ?? []).toEqual([]);
+        const r = report(s, method);
+        expect(disposals(r, "BTC")).toEqual(disposals(report(control, method), "BTC"));
+        expect(net(r)).toBe(net(report(control, method)));
+      }
+    });
+  });
+
+  it.each(METHODS)("[%s] the BTC rows written apart from their counterparts are paired by order and named", (method) => {
+    const legs = ["Sell,BTC,-0.1", "Sell,BTC,-0.1", "Buy,EUR,3000", "Buy,USDT,3300"];
+    const s = tx([...buy, ...at(0, legs)]);
+    const r = report(s, method);
+    expect(disposals(r, "BTC")).toEqual(["0.1 p3000.00 c2000.00 g1000.00", "0.1 p3630.00 c2000.00 g1630.00"]);
+    expect(net(r)).toBe("2630.00");
+    expect(message(r.messages, "binance.spot_cost_split")?.context?.rows)
+      .toBe("BTC Sell -0.1 2025-06-01 10:00:00; BTC Sell -0.1 2025-06-01 10:00:00; EUR Buy 3000 2025-06-01 10:00:00; USDT Buy 3300 2025-06-01 10:00:00");
+    expect(message(r.messages, "binance.unpaired_leg")).toBeUndefined();
+  });
+
+  it.each(METHODS)("[%s] control: one sale in two fills next to a straddling buy is still booked in full", (method) => {
+    // 0.1 BTC sold for 3000 € in two fills, and ETH bought at :01 with BTC
+    // paid at :02: the window cannot pair the ETH, which is named as before.
+    const s = tx([...buy, ...at(0, ["Sell,BTC,-0.05", "Buy,EUR,1500", "Sell,BTC,-0.05", "Buy,EUR,1500"]), ...at(1, ["Buy,ETH,1"]), ...at(2, ["Sell,BTC,-0.1"])]);
+    const r = report(s, method);
+    expect(disposals(r, "BTC")).toEqual(["0.05 p1500.00 c1000.00 g500.00", "0.05 p1500.00 c1000.00 g500.00"]);
+    expect(message(r.messages, "binance.unpaired_leg")?.context?.rows).toBe("ETH Buy 1 2025-06-01 10:00:01; BTC Sell -0.1 2025-06-01 10:00:02");
   });
 });

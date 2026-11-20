@@ -737,8 +737,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       // as Strategy does: a later window can still pair it, and a leg no window
       // pairs is reported as an unhandled movement instead of dropped silently.
       const handBack = (group: TxRow[], unpaired: NetLeg[]): void => {
-        const coins = new Set(unpaired.map((l) => l.coin));
-        for (const r of group) if (coins.has(r.coin)) r.parsed = false;
+        for (const l of unpaired) for (const r of l.rows ?? []) r.parsed = false;
         markRoundTrips(group);
       };
       if (start.operation === "buy crypto with fiat") {
@@ -1010,8 +1009,9 @@ type AddHint = (coin: string, date: string, qty: Decimal, eur: Decimal | null) =
  * different coins). When several disposals share one given-up coin — notably
  * `Buy Crypto With Fiat`, always funded in EUR/USD — `netLegs` merges them into
  * a single sell leg, leaving 1 sell vs N buys and all but one buy unpaired. The
- * caller must therefore pre-split such windows (step 4 sub-groups fiat buys by
- * funding-wallet Remark) before calling here. When EUR values are absent (all
+ * caller should therefore pre-split such windows (step 4 sub-groups fiat buys by
+ * funding-wallet Remark) before calling here; a merged leg that still meets a
+ * leg left over is paired again row by row (#467). When EUR values are absent (all
  * 0), the closest match is the next available buy in order — equivalent to
  * insertion-order pairing, the previous behavior. That order is a guess when
  * a side has two or more legs to choose from: "Buy ETH, Buy BTC, Sell EUR
@@ -1045,13 +1045,30 @@ function pairAndEmit(trades: Trade[], legs: NetLeg[], rows: TxRow[], addHint: Ad
       continue;
     }
     usedBuys.add(bestIdx);
-    const buy = buys[bestIdx]!;
-    pairs.push([sell, buy]);
+    pairs.push([sell, buys[bestIdx]!]);
+  }
+  const left = [...unpaired, ...buys.filter((_, j) => !usedBuys.has(j))];
+  // A paired leg netted from two or more rows of one sign, facing a leg left
+  // over on the other side, may hold that leftover's counterpart: "Sell BTC,
+  // Buy EUR" and "Sell BTC, Buy USDT" in one window net to one BTC leg, which
+  // took the EUR alone, so the whole 0.2 BTC was sold for 3000 € (#467). Then
+  // each row is its own leg and is paired with its own counterpart. That is
+  // what the file says when it writes every pair as two adjacent rows
+  // (proveOrder); otherwise the rows are named as a guess. A leg whose rows
+  // cancel each other (an intra-account split) keeps the netted pairing.
+  const leftSign = left[0]?.qty.isNegative();
+  const oneSign = legs.every((l) => l.rows !== undefined && l.rows.every((r) => r.change.isNegative() === l.qty.isNegative()));
+  const merged = left.length > 0 && oneSign && pairs.some((pair) => pair.some((l) => l.qty.isNegative() !== leftSign && l.rows!.length >= 2));
+  if (merged) {
+    const legRows = legs.flatMap((l) => l.rows ?? []).sort((a, b) => a.index - b.index);
+    const rowLegs = legRows.map((r): NetLeg => ({ coin: r.coin, qty: r.change, eur: r.eurValue, date: r.tradeDate, index: r.index, key: r.key, rows: [r] }));
+    return pairAndEmit(trades, rowLegs, legRows, addHint, label, units);
+  }
+  for (const [sell, buy] of pairs) {
     addHint(sell.coin, sell.date, sell.qty, sell.eur);
     addHint(buy.coin, buy.date, buy.qty, buy.eur);
     emitUnit(trades, sell, buy, label, units);
   }
-  const left = [...unpaired, ...buys.filter((_, j) => !usedBuys.has(j))];
   // Each leg one row of the group (no netting): the pairs are rows, and a
   // later window can prove a pairing that waits on one of them.
   const oneRowEach = rows.length === legs.length;
@@ -1418,7 +1435,7 @@ function emitSpotTrades(trades: Trade[], window: TxRow[], addHint: AddHint): voi
     // A leg its window could not pair stays consumed (no later window pairs
     // it across seconds) but is flagged, so it is named (#467).
     for (const leg of emitBareSpotGroup(trades, group, addHint, units)) {
-      for (const r of group) if (r.coin === leg.coin && r.change.isNegative() === leg.qty.isNegative()) r.unpaired = true;
+      for (const r of leg.rows ?? []) r.unpaired = true;
     }
   }
 
