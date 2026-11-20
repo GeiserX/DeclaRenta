@@ -1007,11 +1007,19 @@ export function generateTaxReport(
   // Dividends are valued like interest: a currency with no ECB or manual rate
   // (e.g. IBKR's CNH) is skipped with a warning instead of aborting the report.
   const unvaluedDividendCurrencies = new Map<string, number>();
+  // A refund (or its rest) that joins no dividend lowers no tax: it is named
+  // (`report.withholding_refund_unjoined`) in the report of the year it is
+  // dated or posted in, never dropped in silence (issue #467).
+  const unjoinedRefunds: string[] = [];
   let dividendEntries = calculateDividends(allCashTransactions, resolvedRateMap, {
     lookupRate: (date, currency) => lookupIncomeRate(date, currency, resolvedRateMap, manualRates),
     onUnvalued: (div) => {
       if (!div.dateTime.startsWith(yearStr)) return;
       unvaluedDividendCurrencies.set(div.currency, (unvaluedDividendCurrencies.get(div.currency) ?? 0) + 1);
+    },
+    onUnjoinedRefund: (refund, amount) => {
+      if (!refund.dateTime.startsWith(yearStr) && !refund.reportDate?.startsWith(yearStr)) return;
+      unjoinedRefunds.push(`${refund.symbol || refund.isin || refund.description} (${formatDateDmy(refund.dateTime)}, ${fmt2(amount)} ${refund.currency})`);
     },
   }).filter((d) => d.payDate.startsWith(yearStr));
   if (titulares > 1) dividendEntries = dividendEntries.map((d) => splitDividend(d, titulares));
@@ -1666,6 +1674,17 @@ export function generateTaxReport(
       severity: "warning",
       message: `${count} retención(es) del fichero están a 7 días o menos de un dividendo del mismo valor que no se suma: ${rows}. Pueden ser de ese dividendo, así que tampoco se suman. Así ningún otro dividendo las descuenta.`,
       hint: "Cuando declares a mano ese dividendo, declara también la retención que sea suya. Si una de ellas es de otro dividendo, declárala con ese otro dividendo.",
+      context: { count, rows },
+    });
+  }
+  if (unjoinedRefunds.length > 0) {
+    const count = String(unjoinedRefunds.length);
+    const rows = unjoinedRefunds.join(", ");
+    allMessages.push({
+      id: "report.withholding_refund_unjoined",
+      severity: "warning",
+      message: `${count} devolución(es) de retención del fichero no bajan la retención de ningún dividendo: ${rows}. En los datos no hay un dividendo del mismo valor, bróker y año con retención que puedan corregir. La casilla 0588 o la 0597 puede salir alta.`,
+      hint: "Una devolución corrige la retención de su dividendo. Si ese dividendo está en otro fichero, súbelo junto a este. Si es de un año que ya presentaste, corrige ese año. Si no, resta la devolución a mano de la retención de su dividendo: en la casilla 0588 si es extranjera y en la 0597 si es española.",
       context: { count, rows },
     });
   }

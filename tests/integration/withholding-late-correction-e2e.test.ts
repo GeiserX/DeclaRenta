@@ -505,3 +505,100 @@ describe("issue #438 — the warning leaves out a reversed dividend, as the repo
     expect(warnings(generateTaxReport(merged(filed, y2025), rates, 2025))).toEqual([]);
   });
 });
+
+describe("issue #467 — a refund dated more than 7 days from its dividend", () => {
+  const UNJOINED_ID = "report.withholding_refund_unjoined";
+  const rates = rateMap(2024, 2026);
+  /** One IBKR cash row of any security; a Spanish ISIN is booked in EUR. */
+  const row = (symbol: string, isin: string, type: string, amount: string, date: string, reportDate = date) => {
+    const ccy = isin.startsWith("ES") ? "EUR" : "USD";
+    const desc = `${symbol}(${isin}) CASH DIVIDEND ${ccy} 1 PER SHARE${type === "Withholding Tax" ? ` - ${isin.slice(0, 2)} TAX` : ""}`;
+    return `<CashTransaction transactionID="${id++}" accountId="U1" symbol="${symbol}" description="${desc}" isin="${isin}" currency="${ccy}" dateTime="${date};202000" settleDate="${date}" reportDate="${reportDate}" amount="${amount}" fxRateToBase="${ccy === "EUR" ? "1" : "0.9"}" type="${type}" levelOfDetail="DETAIL" />`;
+  };
+  const MSFT = "US5949181045";
+  const GOOG = "US02079K3059";
+  const SAN = "ES0113900J37";
+  const msft = (type: string, amount: string, date: string, reportDate?: string) => row("MSFT", MSFT, type, amount, date, reportDate);
+  const goog = [row("GOOG", GOOG, "Dividends", "200", "20250901"), row("GOOG", GOOG, "Withholding Tax", "-20", "20250901")];
+  const paid = [msft("Dividends", "100", "20250601"), msft("Withholding Tax", "-10", "20250601")];
+  /** MSFT's dividend reversed with its withholding on `date`. */
+  const reversed = (date: string) => [msft("Dividends", "-100", date), msft("Withholding Tax", "10", date)];
+  const unjoined = (r: TaxSummary) => r.messages.find((m) => m.id === UNJOINED_ID);
+
+  for (const method of METHODS) {
+    const opts = reportOptionsForMethod(method);
+    it(`control: reversed 3 days later, 0588 is GOOG's 20 USD = 18.00 € (${method})`, () => {
+      const r = generateTaxReport(merged(statement([...paid, ...reversed("20250604"), ...goog])), rates, 2025, opts);
+      expect(r.dividends.grossIncome.toFixed(2)).toBe("180.00");
+      expect(r.doubleTaxation.deduction.toFixed(2)).toBe("18.00");
+      expect(unjoined(r)).toBeUndefined();
+    });
+
+    it(`reversed 30 days later: the refund goes back to MSFT's dividend, 0588 = 18.00 € (${method})`, () => {
+      const r = generateTaxReport(merged(statement([...paid, ...reversed("20250701"), ...goog])), rates, 2025, opts);
+      expect(r.dividends.grossIncome.toFixed(2)).toBe("180.00");
+      expect(r.doubleTaxation.deduction.toFixed(2)).toBe("18.00");
+      expect(unjoined(r)).toBeUndefined();
+    });
+
+    it(`a Spanish dividend reversed 30 days later withholds nothing: 0597 = 0.00 (${method})`, () => {
+      const r = generateTaxReport(
+        merged(statement([row("SAN", SAN, "Dividends", "100", "20250601"), row("SAN", SAN, "Withholding Tax", "-19", "20250601"), row("SAN", SAN, "Dividends", "-100", "20250701"), row("SAN", SAN, "Withholding Tax", "19", "20250701")])),
+        rates,
+        2025,
+        opts,
+      );
+      expect(r.dividends.grossIncome.toFixed(2)).toBe("0.00");
+      expect(r.dividends.spanishWithholding.toFixed(2)).toBe("0.00");
+      expect(unjoined(r)).toBeUndefined();
+    });
+
+    it(`a refund whose dividend is not in the data is named, and 0588 keeps the tax (${method})`, () => {
+      const r = generateTaxReport(merged(statement([msft("Withholding Tax", "10", "20250701"), ...goog])), rates, 2025, opts);
+      expect(r.doubleTaxation.deduction.toFixed(2)).toBe("18.00");
+      expect(unjoined(r)?.severity).toBe("warning");
+      expect(unjoined(r)?.context).toEqual({ count: "1", rows: "MSFT (01/07/2025, 10.00 USD)" });
+    });
+
+    it(`a refund larger than the tax its dividend still has: the rest is named (${method})`, () => {
+      const r = generateTaxReport(merged(statement([...paid, msft("Withholding Tax", "15", "20250701"), ...goog])), rates, 2025, opts);
+      expect(r.doubleTaxation.deduction.toFixed(2)).toBe("18.00");
+      expect(unjoined(r)?.context).toEqual({ count: "1", rows: "MSFT (01/07/2025, 5.00 USD)" });
+    });
+
+    it(`a refund dated next year never lowers this year's 0588; next year's report names it (${method})`, () => {
+      const both = merged(statement([msft("Dividends", "100", "20250901"), msft("Withholding Tax", "-10", "20250901"), msft("Withholding Tax", "10", "20260120")], "20250101", "20261231"));
+      const r2025 = generateTaxReport(both, rates, 2025, opts);
+      expect(r2025.doubleTaxation.deduction.toFixed(2)).toBe("9.00");
+      expect(unjoined(r2025)).toBeUndefined();
+      expect(unjoined(generateTaxReport(both, rates, 2026, opts))?.context).toEqual({ count: "1", rows: "MSFT (20/01/2026, 10.00 USD)" });
+    });
+
+    it(`a refund at another broker never lowers this broker's 0588 (${method})`, () => {
+      let acc = createEmptyStatement();
+      acc = mergeStatement(acc, statement(paid), ibkrParser.name);
+      acc = mergeStatement(acc, statement([msft("Withholding Tax", "10", "20250701")]), "Other broker");
+      const r = generateTaxReport(finalizeMergedStatement(acc), rates, 2025, opts);
+      expect(r.doubleTaxation.deduction.toFixed(2)).toBe("9.00");
+      expect(unjoined(r)?.context).toEqual({ count: "1", rows: "MSFT (01/07/2025, 10.00 USD)" });
+    });
+
+    it(`an IBKR late refund dated 19 days after its 2024 dividend lowers 2024 and warns in 2025 (${method})`, () => {
+      const y2024 = statement([cash("Dividends", "10.00", "20240601"), cash("Withholding Tax", "-1.50", "20240601")], "20240101", "20241231");
+      const y2025 = statement([cash("Withholding Tax", "0.50", "20240620", "20250120")]);
+      const both = merged(y2024, y2025);
+      expect(generateTaxReport(both, rates, 2024, opts).doubleTaxation.deduction.toFixed(2)).toBe("0.90");
+      const r2025 = generateTaxReport(both, rates, 2025, opts);
+      expect(r2025.messages.filter((m) => m.id === MSG_ID).map((m) => m.context)).toEqual([{ year: "2024", reportYear: "2025", amount: "0.45" }]);
+      expect(unjoined(r2025)).toBeUndefined();
+    });
+  }
+
+  it("the Spanish text is the es locale's, byte for byte", () => {
+    const r = generateTaxReport(merged(statement([msft("Withholding Tax", "10", "20250701")])), rates, 2025);
+    const m = unjoined(r)!;
+    const fill = (s: string) => s.replace(/\{\{(\w+)\}\}/g, (_x, k: string) => m.context![k]!);
+    expect(m.message).toBe(fill(es[UNJOINED_ID as keyof typeof es] as string));
+    expect(m.hint).toBe(fill(es[`${UNJOINED_ID}.hint` as keyof typeof es] as string));
+  });
+});

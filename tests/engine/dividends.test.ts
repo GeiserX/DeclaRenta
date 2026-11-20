@@ -737,8 +737,57 @@ describe("withholding corrections (issue #438)", () => {
   });
 
   it("a withholding outside every dividend's 7-day window stays unpaired", () => {
-    const entries = calculateDividends([div("d"), wht("w", "-1.50"), wht("late", "0.50", { dateTime: "20250320" })], rates);
+    const entries = calculateDividends([div("d"), wht("w", "-1.50"), wht("extra", "-0.50", { dateTime: "20250320" })], rates);
     expect(entries[0]!.withholdingTaxEur.toFixed(4)).toBe("1.3500");
+  });
+});
+
+// Issue #467: a refund dated more than 7 days from every dividend it could
+// correct was dropped in silence, so 0588 or 0597 kept the refunded tax.
+describe("withholding corrections: a refund more than 7 days after its dividend (issue #467)", () => {
+  const rates = makeRateMap({ "2025-03-10": { USD: "0.90" }, "2025-06-10": { USD: "0.95" } });
+  const div = (id: string, extra: Partial<CashTransaction> = {}) =>
+    makeCashTx({ transactionID: id, dateTime: "20250310", amount: "10", type: "Dividends", ...extra });
+  const wht = (id: string, amount: string, extra: Partial<CashTransaction> = {}) =>
+    makeCashTx({ transactionID: id, dateTime: "20250310", amount, type: "Withholding Tax", ...extra });
+  const run = (rows: CashTransaction[]) => {
+    const unjoined: string[] = [];
+    const entries = calculateDividends(rows, rates, { onUnjoinedRefund: (w, amount) => unjoined.push(`${w.transactionID}:${amount.toFixed(2)}`) });
+    return { tax: entries.map((e) => e.withholdingTaxEur.toFixed(4)), unjoined };
+  };
+
+  it("a refund 10 days after its dividend lowers its withholding: 1.50 − 0.50 = 1.00 USD", () => {
+    expect(run([div("d"), wht("w", "-1.50"), wht("late", "0.50", { dateTime: "20250320" })])).toEqual({ tax: ["0.9000"], unjoined: [] });
+  });
+
+  it("a refund dated more than 7 days before every dividend joins none and is reported", () => {
+    expect(run([div("d"), wht("w", "-1.50"), wht("early", "0.50", { dateTime: "20250301" })])).toEqual({ tax: ["1.3500"], unjoined: ["early:0.50"] });
+  });
+
+  it("a refund dated in the next year never lowers this year's dividend", () => {
+    expect(run([div("d"), wht("w", "-1.50"), wht("next", "0.50", { dateTime: "20260320" })])).toEqual({ tax: ["1.3500"], unjoined: ["next:0.50"] });
+  });
+
+  it("a refund at another broker never lowers this broker's dividend", () => {
+    const rows = [div("d", { brokerSource: "A" }), wht("w", "-1.50", { brokerSource: "A" }), wht("other", "0.50", { dateTime: "20250320", brokerSource: "B" })];
+    expect(run(rows)).toEqual({ tax: ["1.3500"], unjoined: ["other:0.50"] });
+  });
+
+  it("only the part no dividend withheld is reported", () => {
+    expect(run([div("d"), wht("w", "-1.50"), wht("late", "2.00", { dateTime: "20250320" })])).toEqual({ tax: ["0.0000"], unjoined: ["late:0.50"] });
+  });
+
+  it("a refund within 7 days keeps its dividend; the late one takes the earlier dividend, whatever the file order", () => {
+    const rows = [
+      wht("late", "1.50", { dateTime: "20250620" }),
+      div("d1"),
+      wht("w1", "-1.50"),
+      div("d2", { dateTime: "20250610" }),
+      wht("w2", "-1.50", { dateTime: "20250610" }),
+      wht("near", "1.50", { dateTime: "20250612" }),
+    ];
+    expect(run(rows)).toEqual({ tax: ["0.0000", "0.0000"], unjoined: [] });
+    expect(run([...rows].reverse())).toEqual({ tax: ["0.0000", "0.0000"], unjoined: [] });
   });
 });
 
