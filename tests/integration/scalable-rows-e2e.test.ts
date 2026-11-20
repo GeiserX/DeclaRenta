@@ -13,6 +13,8 @@
  *   withholding, so a reversed Spanish dividend gave its 0597 credit again.
  * - A row whose status was not executed, cancelled or the like ("Settled")
  *   was dropped with no word, even a sale or a dividend.
+ * - A Distribution with a written 0 amount and a tax booked a 0 dividend that
+ *   took its own tax, so the tax raised the 0588 of the country's other dividends.
  */
 import { describe, it, expect } from "vitest";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
@@ -237,5 +239,34 @@ describe("Scalable status: a row of a status that is not known is never dropped 
   it("a cash row of another status that moves no shares and names no income stays skipped", () => {
     const deposit = "2025-01-10;10:00;Settled;T1;Deposit;Cash;Deposit;;;;1000,00;0;0;EUR";
     expect(parse([buy(), deposit]).parserMessages).toBeUndefined();
+  });
+});
+
+describe("Scalable round 3: rows booked against what the file says", () => {
+  const MSFT = "US5949181045";
+  const GOOG = "US02079K3059";
+  const ES = "ES0113900J37";
+  const dist = (isin: string, amount: string, tax: string, date: string, name = "Div") =>
+    `${date};10:00;Executed;D${date}${isin};${name};Security;Distribution;${isin};0;0;${amount};0;${tax};EUR`;
+  const sums = (r: TaxReport): string =>
+    `div=${r.dividends.grossIncome.toFixed(2)} sw=${r.dividends.spanishWithholding.toFixed(2)} dtd=${r.doubleTaxation.deduction.toFixed(2)}`;
+  const cash = (s: Statement): string[] => s.cashTransactions.map((c) => `${c.type} ${c.isin} ${c.amount}`);
+
+  it.each(METHODS)("[%s] control: one US dividend of 100 with 10 withheld gives a 0588 of 10", (method) => {
+    expect(sums(report([dist(MSFT, "100,00", "-10,00", "2025-06-01")], method))).toBe("div=100.00 sw=0.00 dtd=10.00");
+  });
+
+  it.each(METHODS)("[%s] a Distribution of 0 with a tax books only the tax, which never pairs with itself", (method) => {
+    for (const date of ["2025-06-01", "2025-08-01"]) {
+      const rows = [dist(MSFT, "100,00", "-10,00", "2025-06-01"), dist(GOOG, "0", "-3,00", date)];
+      expect(cash(parse(rows)), date).toEqual([`Dividends ${MSFT} 100`, `Withholding Tax ${MSFT} -10`, `Withholding Tax ${GOOG} -3`]);
+      expect(sums(report(rows, method)), date).toBe("div=100.00 sw=0.00 dtd=10.00");
+    }
+    // A Spanish tax with no dividend of its ISIN in reach is left out too.
+    expect(sums(report([dist(ES, "0,00", "-19,00", "2025-06-01")], method))).toBe("div=0.00 sw=0.00 dtd=0.00");
+  });
+
+  it("a written zero Distribution with no tax still books its zero, as the file says", () => {
+    expect(cash(parse([dist(GOOG, "0", "0", "2025-06-01")]))).toEqual([`Dividends ${GOOG} 0`]);
   });
 });

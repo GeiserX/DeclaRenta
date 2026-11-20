@@ -305,7 +305,15 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
           currency || "EUR", tradeDate, [unreadableCell(headers[cols.tax] ?? "tax", taxCell)]));
         continue;
       }
-      cashTransactions.push({
+      // A written zero amount with a tax is no dividend: the row only carries
+      // a tax (a late withholding, a refund). A 0 dividend took its own tax as
+      // its pair, and that tax then counted against the treaty cap of the
+      // country's other dividends with no income behind it. Its tax alone is
+      // booked below, as IBKR writes it, so the report joins it to a dividend
+      // of its ISIN within 7 days or leaves it out, as in Lightyear (#467). A
+      // written zero with no tax stays booked as the file writes it.
+      const taxNum = parseFloat(parseNumber(tax));
+      if (!(new Decimal(amount).isZero() && taxNum !== 0)) cashTransactions.push({
         transactionID: `scalable-${tradeDate}-${isin}-${i}`,
         accountId: "",
         symbol: description,
@@ -320,7 +328,6 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       });
 
       // If there's a tax amount, add withholding
-      const taxNum = parseFloat(parseNumber(tax));
       if (taxNum !== 0) {
         cashTransactions.push({
           transactionID: `scalable-tax-${tradeDate}-${isin}-${i}`,
