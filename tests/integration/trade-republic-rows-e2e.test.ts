@@ -23,6 +23,8 @@
  * - A positive fee on a buy or a sale (a rebate) was booked as a cost.
  * - A dividend of a written zero with a tax booked the tax as a withholding
  *   on 0 € of income, and a refund as a new withholding.
+ * - A dividend took its sign from original_amount alone: an amount of 100
+ *   with an original_amount of -110 booked negative income.
  * - A row of an unknown category with a written zero share count, and a CASH
  *   row of an unknown type with an empty amount, that named an ISIN were
  *   dropped with no word.
@@ -470,6 +472,56 @@ describe("Trade Republic dividend of a written zero with a tax: a withholding wi
       const s = tr(ES_DIV({ amount: "0", tax }));
       expect(s.cashTransactions.map((c) => [c.type, c.amount]), tax).toEqual([["Dividends", "0"]]);
       expect(s.parserMessages, tax).toBeUndefined();
+    }
+  });
+});
+
+describe("Trade Republic dividend whose amount and original_amount disagree in sign is not booked and is named", () => {
+  it.each(METHODS)("[%s] control: 100 EUR for 110 USD with -15 gives 0029 99.99 and 0588 15.00; a reversal of both signs nets 0", (method) => {
+    const r = report(tr(DIV({ tax: "-15.00" })), method);
+    expect([r.dividends.grossIncome.toFixed(2), r.doubleTaxation.deduction.toFixed(2)]).toEqual(["99.99", "15.00"]);
+    const reversed = tr(DIV({ tax: "-15.00" }), DIV({ amount: "-100.00", original_amount: "-110", tax: "15.00" }));
+    expect(reversed.parserMessages).toBeUndefined();
+    const rr = report(reversed, method);
+    expect([rr.dividends.grossIncome.toFixed(2), rr.doubleTaxation.deduction.toFixed(2)]).toEqual(["0.00", "0.00"]);
+  });
+
+  it.each(METHODS)("[%s] amount 100.00 with original_amount -110 books no negative income: 0029 0.00, not -99.99, and the row is named", (method) => {
+    const s = tr(DIV({ original_amount: "-110", tax: "-15.00" }));
+    expect(s.cashTransactions).toEqual([]);
+    expect(rowsOf(s, "parser.cash_income_amount_unreadable")).toBe(
+      'DIVIDEND Acme Corp (US0000001001) USD 20250515 (tax -15.00) [amount: "100.00", original_amount: "-110"]');
+    const r = report(s, method);
+    expect([r.dividends.grossIncome.toFixed(2), r.doubleTaxation.deduction.toFixed(2)]).toEqual(["0.00", "0.00"]);
+  });
+
+  it.each(METHODS)("[%s] next to a dividend, it never cancels that dividend's income", (method) => {
+    const r = report(tr(DIV({ tax: "-15.00" }), DIV({ date: "2025-05-20", original_amount: "-110", tax: "15.00" })), method);
+    expect([r.dividends.grossIncome.toFixed(2), r.doubleTaxation.deduction.toFixed(2)]).toEqual(["99.99", "15.00"]);
+  });
+
+  it.each(METHODS)("[%s] amount -100.00 with an unsigned original_amount 110 is not booked as a second dividend: 0029 99.99, not 199.98", (method) => {
+    const s = tr(DIV({ tax: "-15.00" }), DIV({ amount: "-100.00", original_amount: "110", tax: "15.00" }));
+    expect(s.cashTransactions.map((c) => [c.type, c.amount])).toEqual([["Dividends", "110"], ["Withholding Tax", "-15.00"]]);
+    expect(rowsOf(s, "parser.cash_income_amount_unreadable")).toBe(
+      'DIVIDEND Acme Corp (US0000001001) USD 20250515 (tax 15.00) [amount: "-100.00", original_amount: "110"]');
+    const r = report(s, method);
+    expect([r.dividends.grossIncome.toFixed(2), r.doubleTaxation.deduction.toFixed(2)]).toEqual(["99.99", "15.00"]);
+  });
+
+  it.each(METHODS)("[%s] amount 100.00 with original_amount 0 never books 0 income in silence", (method) => {
+    const s = tr(DIV({ original_amount: "0" }));
+    expect(s.cashTransactions).toEqual([]);
+    expect(rowsOf(s, "parser.cash_income_amount_unreadable")).toBe(
+      'DIVIDEND Acme Corp (US0000001001) USD 20250515 [amount: "100.00", original_amount: "0"]');
+    expect(report(s, method).dividends.grossIncome.toFixed(2)).toBe("0.00");
+  });
+
+  it("an empty or unreadable amount cell keeps the original_amount, as before", () => {
+    for (const amount of ["", "abc"]) {
+      const s = tr(DIV({ amount }));
+      expect(s.cashTransactions.map((c) => [c.type, c.amount, c.currency]), amount).toEqual([["Dividends", "110", "USD"]]);
+      expect(s.parserMessages, amount).toBeUndefined();
     }
   });
 });

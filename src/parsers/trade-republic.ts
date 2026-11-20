@@ -169,6 +169,9 @@ function parseTrCsv(lines: string[]): Statement {
     // "-Infinity") is no number: it is never booked as a withholding (#467).
     const taxUnreadable = field(fields, cols.tax) !== "" && quantityUnreadable(fields[cols.tax]);
     const taxDec = taxUnreadable ? toFiniteDecimal("0") : toFiniteDecimal(taxStr);
+    // How a named dividend row shows its tax: the cell when it cannot be read.
+    const dividendTaxText = (): string => taxUnreadable ? unreadableCell(headers[cols.tax] ?? "tax", fields[cols.tax])
+      : !taxDec.isZero() ? `${headers[cols.tax] ?? "tax"} ${taxStr}` : "";
     const fxRate = field(fields, cols.fxRate);
     const originalAmount = field(fields, cols.originalAmount);
     const originalCurrency = field(fields, cols.originalCurrency);
@@ -309,11 +312,8 @@ function parseTrCsv(lines: string[]): Statement {
       const amountCol = fromOriginal ? cols.originalAmount : cols.amount;
       if (quantityUnreadable(fields[amountCol])) {
         const security = type === "DIVIDEND" ? dividendSecurity(name, symbol) : "";
-        const taxShown = type !== "DIVIDEND" ? ""
-          : taxUnreadable ? unreadableCell(headers[cols.tax] ?? "tax", fields[cols.tax])
-          : !taxDec.isZero() ? `${headers[cols.tax] ?? "tax"} ${taxStr}` : "";
         unreadableIncome.push(cashIncomeRowText(field(fields, cols.type), security, fromOriginal ? originalCurrency : currency, tradeDate,
-          [unreadableCell(headers[amountCol] ?? "amount", fields[amountCol])], taxShown));
+          [unreadableCell(headers[amountCol] ?? "amount", fields[amountCol])], type === "DIVIDEND" ? dividendTaxText() : ""));
         continue;
       }
     }
@@ -339,6 +339,23 @@ function parseTrCsv(lines: string[]): Statement {
       // the reversed withholding, whatever its sign: read as a new
       // withholding, a reversed dividend gave its credit twice (#467).
       const reversal = new Decimal(divAmount).isNegative();
+      // A dividend read from original_amount takes its sign from that cell
+      // alone. When the account-currency amount is a readable nonzero
+      // number of the other sign, or original_amount is 0, the row says two
+      // things: 100 EUR credited against -110 USD booked negative income
+      // that cancelled other dividends, with no word. It is not booked, and
+      // neither is its tax, and the row is named with both cells (#467). An
+      // empty or unreadable amount cell keeps original_amount, as before.
+      if (fromOriginal && !quantityUnreadable(fields[cols.amount])) {
+        const accountAmount = toFiniteDecimal(field(fields, cols.amount));
+        const original = new Decimal(divAmount);
+        if (!accountAmount.isZero() && (original.isZero() || original.isNegative() !== accountAmount.isNegative())) {
+          unreadableIncome.push(cashIncomeRowText(field(fields, cols.type), dividendSecurity(name, symbol), divCurrency, tradeDate,
+            [unreadableCell(headers[cols.amount] ?? "amount", fields[cols.amount]),
+              unreadableCell(headers[cols.originalAmount] ?? "original_amount", fields[cols.originalAmount])], dividendTaxText()));
+          continue;
+        }
+      }
       const taxRow = (): string => cashIncomeRowText(field(fields, cols.type), `${dividendSecurity(name, symbol)} ${divAmount}`, divCurrency, tradeDate,
         [unreadableCell(headers[cols.tax] ?? "tax", fields[cols.tax])]);
       // A tax cell that cannot be read is no withholding. A dividend is then
@@ -376,7 +393,7 @@ function parseTrCsv(lines: string[]): Statement {
         if (taxDec.isNegative()) {
           const amountCol = fromOriginal ? cols.originalAmount : cols.amount;
           unreadableIncome.push(cashIncomeRowText(field(fields, cols.type), dividendSecurity(name, symbol), divCurrency, tradeDate,
-            [unreadableCell(headers[amountCol] ?? "amount", fields[amountCol])], `${headers[cols.tax] ?? "tax"} ${taxStr}`));
+            [unreadableCell(headers[amountCol] ?? "amount", fields[amountCol])], dividendTaxText()));
         } else {
           pushWithholding(taxDec.toString());
         }

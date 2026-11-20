@@ -1011,6 +1011,14 @@ práctico Renta 2025. The decisions, each pinned in
       (positive) is booked alone, as a refund, which the report takes from
       a dividend of its ISIN within 7 days, never below 0. Before, it was
       booked as a new withholding.
+      A Trade Republic dividend read from `original_amount` took its sign
+      from that cell alone. When `amount` is a readable nonzero number of
+      the other sign, or `original_amount` is 0, the row says two things:
+      it is not booked, nor its tax, and
+      `parser.cash_income_amount_unreadable` names it with both cells.
+      Before, 100 EUR credited against −110 USD booked negative income
+      that cancelled other dividends. An empty or unreadable `amount`
+      keeps `original_amount`.
     - eToro: a dividend whose net amount cannot be read (in the Spanish
       export, the EUR net), and an Interest Payment whose Amount cannot be
       read, is not booked, and neither is that dividend's withholding.
