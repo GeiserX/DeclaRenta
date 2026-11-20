@@ -1391,6 +1391,112 @@ describe("a kept opening-lots panel and the rows a crypto price adds or drops (#
   });
 });
 
+/**
+ * Two BTC sales after the SOL swap. With no SOL price both sales miss their
+ * lot; a saved price lets the swap's 0.01 BTC cover the first one only. The
+ * saved lots of one asset are one pool (report.ts 0d), so the panel shows one
+ * group per asset that names every sale missing a lot.
+ */
+const XML_TWO_BTC = XML_BTC_SALE.replace(
+  "</Trades>",
+  `<Trade tradeID="8" accountId="U0000001" symbol="BTC" description="BTC sold for EUR"
+          isin="" assetCategory="CRYPTO" currency="EUR"
+          tradeDate="${YEAR}0701" settlementDate="" quantity="-0.01" tradePrice="600"
+          tradeMoney="-6" proceeds="6" cost="0" fifoPnlRealized="0" fxRateToBase="1"
+          buySell="SELL" openCloseIndicator="C" exchange="BINANCE"
+          ibCommissionCurrency="EUR" ibCommission="0" taxes="0" />
+      </Trades>`,
+);
+
+describe("one asset sold twice with a missing lot each time (#472 review)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const LOTS_KEY = "declarenta_manual_opening_lots";
+  const btc = (p: HTMLElement) =>
+    [...p.querySelectorAll<HTMLElement>(".manual-opening-lot-group")].filter((g) => g.dataset.symbol === "BTC");
+  const sales = (g: HTMLElement) => [...g.querySelectorAll("p")].map((p) => /\d{4}-\d{2}-\d{2}/.exec(p.textContent)?.[0]);
+  const values = (g: HTMLElement) =>
+    [...g.querySelectorAll<HTMLTableRowElement>(".manual-opening-lot-row")].map((row) =>
+      ["acquireDate", "quantity", "pricePerShare"].map((f) => row.querySelector<HTMLInputElement>(`[data-field='${f}']`)!.value),
+    );
+  const input = (g: HTMLElement, f: string) => g.querySelector<HTMLInputElement>(`.manual-opening-lot-row [data-field='${f}']`)!;
+  const typeLot = (g: HTMLElement) => {
+    for (const [f, v] of [["acquireDate", `${YEAR}-01-15`], ["quantity", "0.01"], ["pricePerShare", "100"]] as const) {
+      input(g, f).value = v;
+      input(g, f).dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  };
+  const runLands = async (strip: Element | null, what: string) => {
+    await waitFor(() => (document.getElementById("results-split") !== strip ? true : null), what);
+    await new Promise((r) => setTimeout(r, 50));
+  };
+  const saveCrypto = async (price: string) => {
+    const crypto = await waitFor(cryptoPanel, "crypto panel");
+    for (const i of crypto.querySelectorAll<HTMLInputElement>(".crypto-rate-input")) i.value = price;
+    const strip = document.getElementById("results-split");
+    crypto.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    await runLands(strip, "rerun after the crypto Save");
+  };
+  const saveLots = async (panel: HTMLElement) => {
+    const strip = document.getElementById("results-split");
+    panel.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn")!.click();
+    const stored = JSON.parse(localStorage.getItem(LOTS_KEY) ?? "[]") as { symbol: string; quantity: string }[];
+    await runLands(strip, "rerun after the opening-lot Save");
+    return stored.filter((lot) => lot.symbol === "BTC").map((lot) => lot.quantity);
+  };
+
+  // Before, each sale had its own group and the Save stored the groups one by
+  // one under the same key: the empty second group wiped the lot typed in the
+  // first, and the panel still said «Guardado».
+  it("one BTC group names both sales, and a lot typed there is stored", async () => {
+    await startApp(undefined, XML_TWO_BTC);
+    const lots = await waitFor(lotsPanel, "opening lots panel");
+    expect(btc(lots)).toHaveLength(1);
+    expect(sales(btc(lots)[0]!)).toEqual([`${YEAR}-06-01`, `${YEAR}-07-01`]);
+    typeLot(btc(lots)[0]!);
+    expect(await saveLots(lots)).toEqual(["0.01"]);
+    expect(shown(lotsLabel())).toBe(true);
+  });
+
+  // A SOL price lets the swap cover the first sale: the run redraws the panel
+  // with one sale left, and the lot the user typed stays where they typed it.
+  it("an unsaved BTC lot, then a SOL price that covers the first sale: the lot and the focus stay", async () => {
+    await startApp(undefined, XML_TWO_BTC);
+    const lots = await waitFor(lotsPanel, "opening lots panel");
+    expect(btc(lots)).toHaveLength(1);
+    typeLot(btc(lots)[0]!);
+    input(btc(lots)[0]!, "quantity").focus();
+    await saveCrypto("150");
+    const after = lotsPanel()!;
+    expect(after).not.toBe(lots);
+    expect(btc(after)).toHaveLength(1);
+    expect(sales(btc(after)[0]!)).toEqual([`${YEAR}-07-01`]);
+    expect(values(btc(after)[0]!)).toEqual([[`${YEAR}-01-15`, "0.01", "100"]]);
+    expect(document.activeElement).toBe(input(btc(after)[0]!, "quantity"));
+    expect(lotsLabel().hidden).toBe(true);
+  });
+
+  // The reverse: a Clear of the prices brings the first sale back in front.
+  // The typed lot stays in the BTC group, and its Save stores it.
+  it("a saved price, an unsaved BTC lot, then a crypto Clear that adds the first sale: the lot stays and a Save stores it", async () => {
+    await startApp(undefined, XML_TWO_BTC);
+    await saveCrypto("150");
+    const lots = lotsPanel()!;
+    expect(sales(btc(lots)[0]!)).toEqual([`${YEAR}-07-01`]);
+    typeLot(btc(lots)[0]!);
+    const strip = document.getElementById("results-split");
+    cryptoPanel()!.querySelector<HTMLButtonElement>("#crypto-rates-clear-btn")!.click();
+    await runLands(strip, "rerun after the crypto Clear");
+    const after = lotsPanel()!;
+    expect(btc(after)).toHaveLength(1);
+    expect(sales(btc(after)[0]!)).toEqual([`${YEAR}-06-01`, `${YEAR}-07-01`]);
+    expect(values(btc(after)[0]!)).toEqual([[`${YEAR}-01-15`, "0.01", "100"]]);
+    expect(await saveLots(after)).toEqual(["0.01"]);
+  });
+});
+
 describe("a Save rerun that fails (#472 review)", () => {
   // The report generator throws on demand, so a rerun fails the way a broken
   // statement or engine error makes it fail.

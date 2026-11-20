@@ -488,6 +488,19 @@ function openingLotIssues(messages: TaxMessage[]): { issues: ManualOpeningLotIss
 }
 
 /**
+ * The panel's groups: one per asset, with every sale of it that misses a lot.
+ * The saved lots of an asset are one pool that FIFO spends on all its sales
+ * (report.ts 0d), and the Save replaces them by group key. Two groups with the
+ * same key would each replace the pool, so the last one won and an empty
+ * second group wiped the lot typed in the first (#472 review of 15c1b45).
+ */
+function openingLotGroups(issues: ManualOpeningLotIssue[]): ManualOpeningLotIssue[][] {
+  const byKey = new Map<string, ManualOpeningLotIssue[]>();
+  for (const issue of issues) byKey.set(issue.groupKey, [...(byKey.get(issue.groupKey) ?? []), issue]);
+  return [...byKey.values()];
+}
+
+/**
  * What the groups of a panel drawn from `messages` show besides their inputs,
  * in order. A run keeps a panel the user is editing only while this is the
  * same for its report (#472 review of e4e439e): a crypto price saved or
@@ -508,31 +521,28 @@ const OPENING_LOT_FIELDS = ["acquireDate", "quantity", "pricePerShare"] as const
 /** One typed row of a group: its three inputs and whether a refused Save flagged it. */
 type OpeningLotDraftRow = { values: string[]; invalid: boolean };
 
-/** The input the user is typing in: its group (key and which group with that key), row and field, and the caret. */
-type OpeningLotFocus = { key: string; index: number; row: number; field: string; start: number | null; end: number | null };
+/** The input the user is typing in: its group key, row and field, and the caret. */
+type OpeningLotFocus = { key: string; row: number; field: string; start: number | null; end: number | null };
 
 /**
  * What a panel holds that nobody saved: the typed rows of each group by group
- * key (a list, one entry per group with that key, in screen order), the error
- * on screen, whether the user left the panel open, and the input they are
- * typing in, so a redraw does not take their keystrokes away.
+ * key (one group per key, see openingLotGroups), the error on screen, whether
+ * the user left the panel open, and the input they are typing in, so a redraw
+ * does not take their keystrokes away.
  */
 export interface OpeningLotsDraft {
-  groups: Map<string, OpeningLotDraftRow[][]>;
+  groups: Map<string, OpeningLotDraftRow[]>;
   error: string | null;
   open: boolean;
   focus: OpeningLotFocus | null;
 }
 
-/** The groups of a panel with their key and which group with that key each one is. */
-function keyedGroups(panel: HTMLElement): { group: HTMLElement; key: string; index: number }[] {
-  const seen = new Map<string, number>();
-  return [...panel.querySelectorAll<HTMLElement>(".manual-opening-lot-group")].map((group) => {
-    const key = group.dataset.groupKey ?? "";
-    const index = seen.get(key) ?? 0;
-    seen.set(key, index + 1);
-    return { group, key, index };
-  });
+/** The groups of a panel with their key. */
+function keyedGroups(panel: HTMLElement): { group: HTMLElement; key: string }[] {
+  return [...panel.querySelectorAll<HTMLElement>(".manual-opening-lot-group")].map((group) => ({
+    group,
+    key: group.dataset.groupKey ?? "",
+  }));
 }
 
 function lotRows(group: HTMLElement): HTMLTableRowElement[] {
@@ -548,7 +558,6 @@ function readOpeningLotFocus(panel: HTMLElement, groups: ReturnType<typeof keyed
   const text = active.type === "text";
   return {
     key: at.key,
-    index: at.index,
     row: lotRows(at.group).indexOf(row),
     field: active.dataset.field ?? "",
     start: text ? active.selectionStart : null,
@@ -558,14 +567,16 @@ function readOpeningLotFocus(panel: HTMLElement, groups: ReturnType<typeof keyed
 
 /** Read the typed rows and the visible error of a drawn panel. */
 export function readOpeningLotsDraft(panel: HTMLElement): OpeningLotsDraft {
-  const groups = new Map<string, OpeningLotDraftRow[][]>();
+  const groups = new Map<string, OpeningLotDraftRow[]>();
   const keyed = keyedGroups(panel);
   for (const { group, key } of keyed) {
-    const rows = lotRows(group).map((row) => ({
-      values: OPENING_LOT_FIELDS.map((f) => row.querySelector<HTMLInputElement>(`[data-field='${f}']`)?.value ?? ""),
-      invalid: row.querySelector(".manual-opening-lot-input[aria-invalid='true']") !== null,
-    }));
-    groups.set(key, [...(groups.get(key) ?? []), rows]);
+    groups.set(
+      key,
+      lotRows(group).map((row) => ({
+        values: OPENING_LOT_FIELDS.map((f) => row.querySelector<HTMLInputElement>(`[data-field='${f}']`)?.value ?? ""),
+        invalid: row.querySelector(".manual-opening-lot-input[aria-invalid='true']") !== null,
+      })),
+    );
   }
   const error = panel.querySelector<HTMLElement>(".manual-opening-lots-error-msg");
   return {
@@ -587,8 +598,8 @@ export function readOpeningLotsDraft(panel: HTMLElement): OpeningLotsDraft {
 export function applyOpeningLotsDraft(panel: HTMLElement, draft: OpeningLotsDraft): void {
   if (panel instanceof HTMLDetailsElement) panel.open = draft.open;
   const keyed = keyedGroups(panel);
-  for (const { group, key, index } of keyed) {
-    const rows = draft.groups.get(key)?.[index];
+  for (const { group, key } of keyed) {
+    const rows = draft.groups.get(key);
     const tbody = group.querySelector<HTMLTableSectionElement>("tbody");
     if (!rows || rows.length === 0 || !tbody) continue;
     let drawn = lotRows(group);
@@ -613,7 +624,7 @@ export function applyOpeningLotsDraft(panel: HTMLElement, draft: OpeningLotsDraf
     error.textContent = draft.error;
   }
   const focus = draft.focus;
-  const at = focus && keyed.find(({ key, index }) => key === focus.key && index === focus.index);
+  const at = focus && keyed.find(({ key }) => key === focus.key);
   const input = at ? lotRows(at.group)[focus.row]?.querySelector<HTMLInputElement>(`[data-field='${focus.field}']`) : null;
   if (!focus || !input) return;
   input.focus();
@@ -640,17 +651,16 @@ export function renderManualOpeningLotsPanel(messages: TaxMessage[], { saved = f
   </details>`;
   }
 
-  const groups = issues
-    .map(
-      (
-        issue,
-      ) => `<section class="manual-opening-lot-group" data-group-key="${esc(issue.groupKey)}" data-symbol="${esc(issue.symbol)}" data-description="${esc(issue.description)}" data-isin="${esc(issue.isin)}" data-conid="${esc(issue.conid ?? "")}" data-asset-category="${esc(issue.assetCategory)}" data-currency="${esc(issue.currency)}">
+  const grouped = openingLotGroups(issues);
+  const groups = grouped
+    .map((sales) => {
+      const issue = sales[0]!;
+      const intros = sales
+        .filter((sale) => sale.missingQuantity && sale.sellDate)
+        .map((sale) => tr("opening_lots.group_intro", { quantity: sale.missingQuantity!, date: sale.sellDate! }));
+      return `<section class="manual-opening-lot-group" data-group-key="${esc(issue.groupKey)}" data-symbol="${esc(issue.symbol)}" data-description="${esc(issue.description)}" data-isin="${esc(issue.isin)}" data-conid="${esc(issue.conid ?? "")}" data-asset-category="${esc(issue.assetCategory)}" data-currency="${esc(issue.currency)}">
       <h4>${esc(issue.symbol)}${issue.isin ? ` <span class="mono">(${esc(issue.isin)})</span>` : ""}</h4>
-      <p>${esc(
-        issue.missingQuantity && issue.sellDate
-          ? tr("opening_lots.group_intro", { quantity: issue.missingQuantity, date: issue.sellDate })
-          : tr("opening_lots.group_intro_saved"),
-      )}</p>
+      ${(intros.length > 0 ? intros : [tr("opening_lots.group_intro_saved")]).map((intro) => `<p>${esc(intro)}</p>`).join("")}
       <div class="table-wrapper"><table>
         <thead><tr>
           <th>${esc(tr("opening_lots.col_acquire_date"))}</th>
@@ -660,8 +670,8 @@ export function renderManualOpeningLotsPanel(messages: TaxMessage[], { saved = f
         </tr></thead>
         <tbody>${renderOpeningLotRows(issue)}</tbody>
       </table></div>
-    </section>`,
-    )
+    </section>`;
+    })
     .join("");
 
   // A Save that covers the last missing lot redraws the panel from the stored
@@ -669,7 +679,7 @@ export function renderManualOpeningLotsPanel(messages: TaxMessage[], { saved = f
   return `<details class="manual-opening-lots-panel crypto-rates-panel"${hasActiveIssues || saved ? " open" : ""}>
     <summary class="manual-opening-lots-summary">
       <span class="manual-opening-lots-summary-text">${esc(tr("opening_lots.title"))}</span>
-      <span class="manual-opening-lots-summary-count">${issues.length}</span>
+      <span class="manual-opening-lots-summary-count">${grouped.length}</span>
     </summary>
     <div class="manual-opening-lots-body">
       <p>${esc(tr("opening_lots.description"))}</p>
