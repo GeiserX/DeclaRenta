@@ -93,7 +93,7 @@ La web muestra la misma guía de cada broker bajo «¿No se detectó tu broker?�
 
 **Limitaciones:** Los informes de Scalable no incluyen posiciones abiertas para el Modelo 720. Necesitarás esa información por separado.
 
-Un dividendo anulado (un importe negativo) resta el dividendo y su retención.
+DeclaRenta solo calcula las filas ejecutadas (`Executed`, `Ejecutada`, `Ausgeführt`). No cuenta las canceladas, rechazadas o pendientes. Si una fila trae otro estado, DeclaRenta no la calcula y te avisa con la fila. Un dividendo anulado (un importe negativo) resta el dividendo y su retención.
 
 ### eToro
 

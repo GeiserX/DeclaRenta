@@ -1177,9 +1177,9 @@ const eu: TranslationKeys = {
   "trade_republic.cash_type_not_read.hint":
     "Errenkada bakoitzak balore bat izendatzen du eta zenbateko bat dakar, baina DeclaRentak ez daki zer den. Kupoi bat, dibidendu bat, kapital-itzulketa bat, interes bat edo komisio bat izan daiteke. Horregatik ez du batzen. Aitortzen duzun urteko diru-sarrera bat aitortu behar duzu hala ere. Gehitu eskuz Renta Web-en. Falta den komisio batek gehiago ordainarazi diezazuke bakarrik.",
   "scalable.income_row_not_read":
-    "Scalable Capital: {{count}} dibidendu ezin dira irakurri eta ez dira kalkulatzen: {{rows}}.",
+    "Scalable Capital: {{count}} dibidendu edo interes ezin dira irakurri eta ez dira kalkulatzen: {{rows}}.",
   "scalable.income_row_not_read.hint":
-    "Kortxete artean huts egiten duen gelaxka dago. Dibidendu bat baliogabetzen duen errenkada baten atxikipena (tax) izan daiteke. Orduan DeclaRentak ez du errenkada hori kentzen, eta baliogabetutako dibidendua bere atxikipenarekin batuta geratzen da. Alderatu errenkada bakoitza Scalable Capital-en laburpenarekin. Dibidendu bat baliogabetzen badu, kendu Renta Web-en dibidendu hori eta bere atxikipena.",
+    "Kortxete artean huts egiten duen gelaxka dago. DeclaRentak ezagutzen ez duen egoera bat izan daiteke. DeclaRentak exekutatutako errenkadak bakarrik kalkulatzen ditu, eta ez ditu kontatzen bertan behera utzitakoak, baztertutakoak edo zain daudenak. Beste egoera batekin ez daki kobrantza egin zen ala ez. Dibidendu bat baliogabetzen duen errenkada baten atxikipena (tax) ere izan daiteke. Orduan DeclaRentak ez du errenkada hori kentzen, eta baliogabetutako dibidendua bere atxikipenarekin batuta geratzen da. Alderatu errenkada bakoitza Scalable Capital-en laburpenarekin. Aitortzen duzun urteko benetako kobrantza bat bada, gehitu zenbatekoa eta atxikipena eskuz Renta Web-en. Dibidendu bat baliogabetzen badu, kendu Renta Web-en dibidendu hori eta bere atxikipena.",
   "parser.trading212.unresolved_price_skipped":
     "{{skipped}} eragiketa baztertu dira akzioko preziorik gabe eta zenbatekoa beste dibisa batean dutela.",
   "parser.trading212.unresolved_price_skipped.hint":

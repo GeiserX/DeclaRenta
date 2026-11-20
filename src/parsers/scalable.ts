@@ -99,6 +99,13 @@ const BUY_TYPES = ["buy", "savings plan", "compra", "sparplan", "kauf"];
 // dividend/buy/sell type tokens contain these substrings, so there is no clash.
 const INTEREST_TYPES = ["interes", "zins"];
 
+// Statuses booked as executed. A status that says the order or payment never
+// happened stays skipped; any other is not read as executed, and the row is
+// named, never dropped with no word (#467).
+const EXECUTED_STATUSES = new Set(["executed", "ejecutada", "ejecutado", "ausgeführt"]);
+const NOT_EXECUTED_STATUS =
+  /cancel|reject|pend|expir|fail|storn|abgelehnt|abgebrochen|abgelaufen|fehlgeschlagen|ausstehend|anulad|rechaz|caducad|fallid/;
+
 // ---------------------------------------------------------------------------
 // Parser
 // ---------------------------------------------------------------------------
@@ -118,7 +125,8 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
   const unidentifiedCash: string[] = [];
   // Interest and distribution rows whose amount cannot be read (#467).
   const unreadableIncome: string[] = [];
-  // Reversed distributions whose tax cannot be read (#467).
+  // Interest and distribution rows of a status not known, and reversed
+  // distributions whose tax cannot be read (#467).
   const incomeNotRead: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
@@ -127,9 +135,12 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
 
     const fields = parseCsvLine(line, delimiter);
 
-    // Only process executed transactions
-    const status = (fields[cols.status] ?? "").trim().toLowerCase();
-    if (status && status !== "executed" && status !== "ejecutada" && status !== "ausgeführt") continue;
+    // Only executed rows are booked; an empty status is read as executed.
+    const statusText = (fields[cols.status] ?? "").trim();
+    const status = statusText.toLowerCase();
+    if (NOT_EXECUTED_STATUS.test(status)) continue;
+    const statusCell = status && !EXECUTED_STATUSES.has(status)
+      ? unreadableCell(headers[cols.status] ?? "status", statusText) : undefined;
 
     const dateStr = (fields[cols.date] ?? "").trim();
     // YYYY-MM-DD → YYYYMMDD; a German export may write DD.MM.YYYY. Any other
@@ -156,6 +167,17 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     // An interest or distribution row whose amount cannot be read is no
     // zero: neither it nor its tax is booked, and it is named (#467).
     const isIncome = INTEREST_TYPES.some((k) => type.includes(k)) || DIVIDEND_TYPES.some((d) => type.includes(d));
+    // An interest or distribution row of a status not known may never have
+    // been paid: neither it nor its tax is booked, and it is named (#467). A
+    // written zero amount with no tax books nothing anyway and stays skipped.
+    if (isIncome && statusCell !== undefined) {
+      if (quantityUnreadable(fields[cols.amount]) || !new Decimal(amount).isZero() || !new Decimal(tax).isZero()) {
+        const taxShown = new Decimal(tax).isZero() ? "" : `${headers[cols.tax] ?? "tax"} ${tax}`;
+        incomeNotRead.push(cashIncomeRowText((fields[cols.type] ?? "").trim(), isin ? `${description || "—"} (${isin})` : description,
+          currency || "EUR", tradeDate, [statusCell], taxShown));
+      }
+      continue;
+    }
     if (isIncome && quantityUnreadable(fields[cols.amount])) {
       const taxShown = new Decimal(tax).isZero() ? "" : `${headers[cols.tax] ?? "tax"} ${tax}`;
       const security = isin ? `${description || "—"} (${isin})` : description;
@@ -216,6 +238,21 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     const paidAction = isin !== "" && movesNoShares && isCorporateActionType(type) && amountCell !== "" &&
       (quantityUnreadable(amountCell) || !new Decimal(amount).isZero());
     const keptOther = otherType && (isin ? !movesNoShares || paidAction : !sharesUnreadable && !movesNoShares);
+    // A row of a status not known that would be booked or kept is kept as a
+    // row that books nothing, named by its status: it may be a purchase or a
+    // sale (#467). A cash row (a deposit, a fee) stays skipped.
+    if (statusCell !== undefined) {
+      const kept = sellType || buyType ? !(isin && movesNoShares) : keptOther && (isCorporateActionType(type) || !sharesEmpty);
+      if (kept) {
+        trades.push(unreadableTrade({
+          tradeID: reference || `scalable-row-${tradeDate}-${isin}-${i}`,
+          symbol: description, description, isin, assetCategory: /etf|fund/.test(assetType) ? "FUND" : "STK",
+          currency: currency || "EUR", tradeDate, tradeTime,
+          ...(sellType || buyType ? { buySell: sellType ? "SELL" as const : "BUY" as const } : {}), exchange: "XETR",
+        }, statusCell));
+      }
+      continue;
+    }
     // A split or another corporate action moves shares of its security: kept
     // as a row that books nothing (evidence of a holding, #453) and named as
     // not applied, not as an unreadable row.
@@ -398,8 +435,8 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     parserMessages.push({
       id: "scalable.income_row_not_read",
       severity: "warning",
-      message: `Scalable Capital: ${incomeNotRead.length} dividendo(s) no se pueden leer y no se calculan: ${rows}.`,
-      hint: "Entre corchetes va la celda que falla. Puede ser la retención (tax) de una fila que anula un dividendo. Entonces DeclaRenta no resta esa fila, y el dividendo anulado sigue sumado con su retención. Compara cada fila con el extracto de Scalable Capital. Si anula un dividendo, quita en Renta Web ese dividendo y su retención.",
+      message: `Scalable Capital: ${incomeNotRead.length} dividendo(s) o interés(es) no se pueden leer y no se calculan: ${rows}.`,
+      hint: "Entre corchetes va la celda que falla. Puede ser un estado que DeclaRenta no reconoce. DeclaRenta solo calcula las filas ejecutadas y no cuenta las canceladas, rechazadas o pendientes. Con otro estado no sabe si el cobro se hizo. También puede ser la retención (tax) de una fila que anula un dividendo. Entonces DeclaRenta no resta esa fila, y el dividendo anulado sigue sumado con su retención. Compara cada fila con el extracto de Scalable Capital. Si es un cobro real del año que declaras, añade el importe y la retención a mano en Renta Web. Si anula un dividendo, quita en Renta Web ese dividendo y su retención.",
       context: { count: String(incomeNotRead.length), rows },
     });
   }

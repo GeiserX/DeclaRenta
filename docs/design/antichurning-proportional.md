@@ -683,6 +683,12 @@ práctico Renta 2025. The decisions, each pinned in
       redemption) is a corporate-action row too, so the payout is named; it
       was dropped with no word. A blank or written zero amount stays
       skipped.
+      Scalable books only executed rows. A row whose status says it never
+      happened (cancelled, rejected, pending, expired, failed) stays
+      skipped. A row of any other status ("Settled") was dropped with no
+      word: a buy, a sale or a row that moves shares is now an unreadable
+      row named by `status`, and an interest or distribution is not booked
+      and is named by `scalable.income_row_not_read`.
       The `tax` of a reversed (negative) Scalable Distribution is a refund,
       never a new withholding: a reversed Spanish dividend kept its 0597
       credit. A reversal whose `tax` cannot be read is not booked and is

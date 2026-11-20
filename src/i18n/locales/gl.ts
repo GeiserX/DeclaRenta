@@ -1175,9 +1175,9 @@ const gl: TranslationKeys = {
   "trade_republic.cash_type_not_read.hint":
     "Cada fila nomea un valor e trae un importe, pero DeclaRenta non sabe que é. Pode ser un cupón, un dividendo, unha devolución de capital, un xuro ou unha comisión. Por iso non o suma. Un ingreso do ano que declaras tes que declaralo igualmente. Engádeo a man en Renta Web. Unha comisión que falta só pode facerche pagar máis.",
   "scalable.income_row_not_read":
-    "Scalable Capital: {{count}} dividendo(s) non se poden ler e non se calculan: {{rows}}.",
+    "Scalable Capital: {{count}} dividendo(s) ou xuro(s) non se poden ler e non se calculan: {{rows}}.",
   "scalable.income_row_not_read.hint":
-    "Entre corchetes vai a cela que falla. Pode ser a retención (tax) dunha fila que anula un dividendo. Entón DeclaRenta non resta esa fila, e o dividendo anulado segue sumado coa súa retención. Compara cada fila co extracto de Scalable Capital. Se anula un dividendo, quita en Renta Web ese dividendo e a súa retención.",
+    "Entre corchetes vai a cela que falla. Pode ser un estado que DeclaRenta non recoñece. DeclaRenta só calcula as filas executadas e non conta as canceladas, rexeitadas ou pendentes. Con outro estado non sabe se o cobro se fixo. Tamén pode ser a retención (tax) dunha fila que anula un dividendo. Entón DeclaRenta non resta esa fila, e o dividendo anulado segue sumado coa súa retención. Compara cada fila co extracto de Scalable Capital. Se é un cobro real do ano que declaras, engade o importe e a retención a man en Renta Web. Se anula un dividendo, quita en Renta Web ese dividendo e a súa retención.",
   "parser.trading212.unresolved_price_skipped":
     "Omitíronse {{skipped}} operacións sen prezo por acción e con importe noutra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":

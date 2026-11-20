@@ -1175,9 +1175,9 @@ const ca: TranslationKeys = {
   "trade_republic.cash_type_not_read.hint":
     "Cada fila nomena un valor i porta un import, però DeclaRenta no sap què és. Pot ser un cupó, un dividend, una devolució de capital, un interès o una comissió. Per això no el suma. Un ingrés de l'any que declares l'has de declarar igualment. Afegeix-lo a mà a Renta Web. Una comissió que falta només et pot fer pagar més.",
   "scalable.income_row_not_read":
-    "Scalable Capital: {{count}} dividend(s) no es poden llegir i no es calculen: {{rows}}.",
+    "Scalable Capital: {{count}} dividend(s) o interès(os) no es poden llegir i no es calculen: {{rows}}.",
   "scalable.income_row_not_read.hint":
-    "Entre claudàtors hi ha la cel·la que falla. Pot ser la retenció (tax) d'una fila que anul·la un dividend. Llavors DeclaRenta no resta aquesta fila, i el dividend anul·lat continua sumat amb la seva retenció. Compara cada fila amb l'extracte de Scalable Capital. Si anul·la un dividend, treu a Renta Web aquest dividend i la seva retenció.",
+    "Entre claudàtors hi ha la cel·la que falla. Pot ser un estat que DeclaRenta no reconeix. DeclaRenta només calcula les files executades i no compta les cancel·lades, rebutjades o pendents. Amb un altre estat no sap si el cobrament es va fer. També pot ser la retenció (tax) d'una fila que anul·la un dividend. Llavors DeclaRenta no resta aquesta fila, i el dividend anul·lat continua sumat amb la seva retenció. Compara cada fila amb l'extracte de Scalable Capital. Si és un cobrament real de l'any que declares, afegeix l'import i la retenció a mà a Renta Web. Si anul·la un dividend, treu a Renta Web aquest dividend i la seva retenció.",
   "parser.trading212.unresolved_price_skipped":
     "S'han omès {{skipped}} operacions sense preu per acció i amb import en una altra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":

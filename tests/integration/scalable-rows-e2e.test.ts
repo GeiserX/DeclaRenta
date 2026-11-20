@@ -11,6 +11,8 @@
  *   (a cash merger, a redemption) was dropped with no word.
  * - The tax of a reversed (negative) Distribution was booked as a new
  *   withholding, so a reversed Spanish dividend gave its 0597 credit again.
+ * - A row whose status was not executed, cancelled or the like ("Settled")
+ *   was dropped with no word, even a sale or a dividend.
  */
 import { describe, it, expect } from "vitest";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
@@ -180,5 +182,60 @@ describe("Scalable reversed Distribution: its tax is a refund, never a second wi
     const rows = [div("100,00", "-15,00", "2025-06-01", US), div("-100,00", "15,00", "2025-06-10", US), div("100,00", "-15,00", "2025-06-11", US)];
     expect(parse(rows).cashTransactions.filter((c) => c.type === "Withholding Tax").map((c) => c.amount)).toEqual(["-15", "15", "-15"]);
     expect(sums(report(rows, method))).toBe("div=100.00 sw=0.00 dtd=15.00");
+  });
+});
+
+describe("Scalable status: a row of a status that is not known is never dropped with no word", () => {
+  const withStatus = (row: string, status: string) => row.replace(";Executed;", `;${status};`);
+  const dividend = "2025-06-01;10:00;Executed;D1;Apple;Security;Distribution;US0378331005;0;0;100,00;0;-15,00;USD";
+  const interest = "2025-06-30;10:00;Executed;I1;Zinsen;Cash;Interest;;0;0;12,34;0;0;EUR";
+
+  it.each(METHODS)("[%s] control: an executed sale, in any spelling, gives a 550 € gain", (method) => {
+    for (const status of ["Executed", "EXECUTED", "ausgeführt", "Ausgeführt", "Ejecutada", "Ejecutado", ""]) {
+      const r = report([buy(), withStatus(sell(), status)], method);
+      expect(r.capitalGains.transmissionValue.toFixed(2), status).toBe("1650.00");
+      expect(r.capitalGains.netGainLoss.toFixed(2), status).toBe("550.00");
+      expect(parse([buy(), withStatus(sell(), status)]).parserMessages, status).toBeUndefined();
+    }
+  });
+
+  it.each(METHODS)("[%s] a cancelled, rejected, pending or expired row stays skipped with no word", (method) => {
+    for (const status of ["Cancelled", "Rejected", "Pending", "Expired", "Failed", "Storniert", "Abgelehnt", "Ausstehend", "Cancelada", "Rechazada", "Pendiente", "Anulada"]) {
+      const rows = [buy(), withStatus(sell(), status), withStatus(dividend, status), withStatus(interest, status)];
+      expect(parse(rows).parserMessages, status).toBeUndefined();
+      const r = report(rows, method);
+      expect(r.capitalGains.transmissionValue.toFixed(2), status).toBe("0.00");
+      expect(r.dividends.grossIncome.toFixed(2), status).toBe("0.00");
+      expect(r.interest.earned.toFixed(2), status).toBe("0.00");
+    }
+  });
+
+  it.each(METHODS)("[%s] a sale of another status is an unreadable row named by its status", (method) => {
+    for (const status of ["Settled", "Completed", "Done", "Booked"]) {
+      const s = parse([buy(), withStatus(sell(), status)]);
+      expect(msg(s, "parser.trade_row_unreadable"), status).toBe(`Apple (US0378331005) 20250903 [status: ${JSON.stringify(status)}]`);
+      const r = report([buy(), withStatus(sell(), status)], method);
+      expect(r.capitalGains.transmissionValue.toFixed(2), status).toBe("0.00");
+      expect(r.messages.map((m) => m.id), status).toContain("parser.trade_row_unreadable");
+    }
+    const b = parse([withStatus(buy(), "Settled"), sell()]);
+    expect(msg(b, "parser.trade_row_unreadable")).toBe('Apple (US0378331005) 20250203 [status: "Settled"]');
+  });
+
+  it.each(METHODS)("[%s] a dividend or interest of another status is not booked and is named", (method) => {
+    const rows = [withStatus(dividend, "Settled"), withStatus(interest, "Gutgeschrieben")];
+    const s = parse(rows);
+    expect(s.cashTransactions).toEqual([]);
+    expect(msg(s, "scalable.income_row_not_read")).toBe(
+      'Distribution Apple (US0378331005) USD 20250601 (tax -15) [status: "Settled"]; Interest Zinsen EUR 20250630 [status: "Gutgeschrieben"]');
+    const r = report(rows, method);
+    expect(r.dividends.grossIncome.toFixed(2)).toBe("0.00");
+    expect(r.interest.earned.toFixed(2)).toBe("0.00");
+    expect(r.messages.map((m) => m.id)).toContain("scalable.income_row_not_read");
+  });
+
+  it("a cash row of another status that moves no shares and names no income stays skipped", () => {
+    const deposit = "2025-01-10;10:00;Settled;T1;Deposit;Cash;Deposit;;;;1000,00;0;0;EUR";
+    expect(parse([buy(), deposit]).parserMessages).toBeUndefined();
   });
 });
