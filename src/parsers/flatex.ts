@@ -147,6 +147,8 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
   const custodyNet = new Map<string, Decimal>();
   // The same legs per ISIN and day, each kept as a row that books nothing.
   const custodyLegs = new Map<string, { net: Decimal; unknown: boolean; rows: Trade[] }>();
+  // Readable Stornos of an order, matched below with the fill they cancel.
+  const stornos: { row: Trade; note: string; side: Trade["buySell"]; qty: Decimal; price: Decimal }[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -169,7 +171,8 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     // file with no Buchungsinformationen column leaves the Nominal's sign. A
     // Storno reverses a Kauf or Verkauf and is neither: its text has the word
     // and its Nominal the opposite sign, so a reversed sale was booked as a
-    // second sale and its loss deducted twice. It is kept unreadable below.
+    // second sale and its loss deducted twice. It cancels the fill it
+    // reverses (after the loop), or is kept unreadable below.
     const storno = STORNO_RE.test(info);
     const buyText = infoCol >= 0 ? !storno && BUY_RE.test(info) : !qtyUnknown && qtyNum.isPositive();
     const sellText = infoCol >= 0 ? !storno && SELL_RE.test(info) && !buyText : !qtyUnknown && qtyNum.isNegative();
@@ -256,6 +259,10 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     // the count may be unsigned).
     if (!buyText && !sellText) {
       keepUnreadable(unreadableCell(headers[infoCol] ?? "Buchungsinformationen", info));
+      const side = SELL_RE.test(info) ? "SELL" : BUY_RE.test(info) ? "BUY" : undefined;
+      if (storno && side && orderKey && !qtyUnknown && !priceUnknown && currency && isReadableDay(tradeDate)) {
+        stornos.push({ row: trades[trades.length - 1]!, note: `${FLATEX_ORDER_NOTE}${orderKey}`, side, qty: qtyNum.abs(), price: priceDec });
+      }
       continue;
     }
     if (buyText && qtyNum.isNegative()) {
@@ -318,12 +325,42 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     });
   }
 
+  // Flatex corrects a fill with a Storno of it, and often a new fill of the
+  // same order. The Storno cancels the booked fill of its order with the
+  // same ISIN, side, currency, |Nominal| and Kurs, on its day or before (the
+  // earliest one): both leave the trades and the pair is named. Kept, the
+  // fill was a second sale and its loss was deducted twice (#467). A Storno
+  // that matches no fill stays a named row that books nothing.
+  const cancelled: string[] = [];
+  for (const s of stornos) {
+    const fill = trades
+      .filter((t) => t.notes === s.note && t.quantityUnknown !== true && t.isin === s.row.isin && t.buySell === s.side &&
+        t.currency === s.row.currency && new Decimal(t.quantity).abs().eq(s.qty) && new Decimal(t.tradePrice).eq(s.price) &&
+        isReadableDay(t.tradeDate) && t.tradeDate <= s.row.tradeDate)
+      .reduce<Trade | undefined>((first, t) => (first && first.tradeDate <= t.tradeDate ? first : t), undefined);
+    if (!fill) continue;
+    trades.splice(trades.indexOf(fill), 1);
+    trades.splice(trades.indexOf(s.row), 1);
+    cancelled.push(`${s.note.slice(FLATEX_ORDER_NOTE.length)} ${fill.isin} ${fill.tradeDate} [${fill.quantity} × ${fill.tradePrice} ${fill.currency}] Storno ${s.row.tradeDate}`);
+  }
+
   // An unmatched transfer leg moves shares in or out of the depot: kept.
   for (const legs of custodyLegs.values()) {
     if (legs.unknown || !legs.net.isZero()) trades.push(...legs.rows);
   }
 
   const parserMessages: TaxMessage[] = [];
+  if (cancelled.length > 0) {
+    const count = String(cancelled.length);
+    const rows = cancelled.join("; ");
+    parserMessages.push({
+      id: "flatex.depot.storno_cancelled",
+      severity: "info",
+      message: `Flatex: ${count} ejecución(es) anulada(s) con un Storno no se calculan: ${rows}.`,
+      hint: "Flatex corrige una ejecución con un Storno que la anula, y a veces con una ejecución nueva de la misma orden. DeclaRenta quita del cálculo cada ejecución anulada y su Storno, y calcula la ejecución nueva si está en el archivo. Cada fila trae el número de orden, el valor y la fecha de la ejecución anulada. Entre corchetes van sus títulos y su precio. Al final va la fecha del Storno.",
+      context: { count, rows },
+    });
+  }
   for (const [isin, net] of custodyNet) {
     if (!net.isZero()) {
       parserMessages.push({

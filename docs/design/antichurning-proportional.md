@@ -734,9 +734,15 @@ práctico Renta 2025. The decisions, each pinned in
       Nominal's sign alone (#468). A row with neither word is unreadable, so
       a Depotübertrag Ausgang is no sale and an Einbuchung no repurchase. A
       Kauf with a negative Nominal is unreadable; a Verkauf with a positive
-      Nominal stays a sale. A Storno of a Kauf or a Verkauf is neither: it is
-      unreadable, named by its text (a reversed sale was booked as a second
-      sale). A Kauf or Verkauf with no ISIN is kept, and so is a row of
+      Nominal stays a sale. A Storno of a Kauf or a Verkauf is neither (a
+      reversed sale was booked as a second sale). It cancels the booked
+      fill of its order with the same ISIN, side, currency, |Nominal| and
+      Kurs, on its day or before: both leave the trades, so a corrected
+      sale counts once, at the rebooked price, and
+      `flatex.depot.storno_cancelled` (info) names each pair. Before, the
+      cancelled fill stayed booked and its loss was deducted twice. A Storno
+      that matches no fill, or has no order number, stays unreadable, named
+      by its text. A Kauf or Verkauf with no ISIN is kept, and so is a row of
       another text with no ISIN that names a security and moves shares, or
       has a Nominal that cannot be read and a readable Kurs. A row of the
       ISIN with a written zero Kurs is a corporate-action

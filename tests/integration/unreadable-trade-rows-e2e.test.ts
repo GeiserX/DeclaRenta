@@ -3664,13 +3664,70 @@ describe("#467 Flatex: a cash leg, income row, currency, Kurs or order number th
     });
   });
 
-  it("the order warning reads in the five locales", () => {
-    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
-      expect(locale[FEE]).toContain("{{count}}");
-      expect(locale[FEE]).toContain("{{rows}}");
-      expect(locale[`${FEE}.hint`]).toBeTruthy();
+  // Sweep 3: Flatex corrects a fill with a Storno of it and a new fill of the
+  // same order. The Storno was named, but the fill it cancels stayed booked,
+  // so the loss was deducted twice.
+  describe("a Depotumsätze Storno and the fill it cancels", () => {
+    const CANCELLED = "flatex.depot.storno_cancelled";
+    const SALE_INFO = `Ausführung ORDER Verkauf ${ISIN} 222222`;
+    const sale = (kurs: string, ta: string): string => drow("03.06.2024", "-10", SALE_INFO, ta, kurs);
+    const storno = (kurs = "80,00", info = `Storno ${SALE_INFO}`): string => drow("03.06.2024", "10", info, "9003", kurs);
+
+    it.each(METHODS)("[%s] a sale cancelled and rebooked counts once, at the rebooked price", (method) => {
+      const control = merged(depot(BUY, sale("85,00", "9004")));
+      expect(gains(report(control, method))).toEqual(["850.00", "1000.00", "-150.00"]);
+      const statement = merged(depot(BUY, sale("80,00", "9002"), storno(), sale("85,00", "9004")));
+      expect(statement.trades.map((t) => [t.buySell, t.quantity, t.tradePrice])).toEqual([["BUY", "10", "100.00"], ["SELL", "-10", "85.00"]]);
+      expect([message(statement, CANCELLED)?.severity, message(statement, CANCELLED)?.context?.rows]).toEqual(
+        ["info", `222222 ${ISIN} 20240603 [-10 × 80.00 EUR] Storno 20240603`]);
+      expect(unreadableRows(statement)).toBeUndefined();
+      expect(gains(report(statement, method))).toEqual(["850.00", "1000.00", "-150.00"]);
+    });
+
+    it.each(METHODS)("[%s] a sale cancelled with no rebook is no sale", (method) => {
+      const statement = merged(depot(BUY, sale("80,00", "9002"), storno()));
+      expect(statement.trades.map((t) => t.buySell)).toEqual(["BUY"]);
+      expect(gains(report(statement, method))).toEqual(["0.00", "0.00", "0.00"]);
+    });
+
+    it.each(METHODS)("[%s] a buy cancelled and rebooked costs the rebooked price: a gain stays a gain", (method) => {
+      const buyInfo = `Ausführung ORDER Kauf ${ISIN} 111111`;
+      const sellAt95 = drow("03.06.2024", "-10", `Ausführung ORDER Verkauf ${ISIN} 222222`, "9014", "95,00");
+      const rebook = drow("01.03.2024", "10", buyInfo, "9013", "90,00");
+      const control = merged(depot(rebook, sellAt95));
+      expect(gains(report(control, method))).toEqual(["950.00", "900.00", "50.00"]);
+      const statement = merged(depot(BUY, drow("01.03.2024", "-10", `Storno ${buyInfo}`, "9012", "100,00"), rebook, sellAt95));
+      expect(message(statement, CANCELLED)?.context?.rows).toBe(`111111 ${ISIN} 20240301 [10 × 100.00 EUR] Storno 20240301`);
+      expect(gains(report(statement, method))).toEqual(["950.00", "900.00", "50.00"]);
+    });
+
+    it.each(METHODS)("[%s] with the Konto legs, the rebooked sale keeps its own 5.90 € fee", (method) => {
+      const leg = (ta: string, amount: string, text = SALE_INFO): string => krow("03.06.2024", text, ta, amount);
+      const control = merged(depot(BUY, sale("85,00", "9004")), konto(legBuy(), leg("8004", "844,10")));
+      expect(gains(report(control, method))).toEqual(["844.10", "1005.90", "-161.80"]);
+      const statement = merged(depot(BUY, sale("80,00", "9002"), storno(), sale("85,00", "9004")),
+        konto(legBuy(), leg("8002", "794,10"), leg("8003", "-794,10", `Storno ${SALE_INFO}`), leg("8004", "844,10")));
+      expect(statement.trades.map((t) => t.commission)).toEqual(["-5.9", "-5.9"]);
+      expect(gains(report(statement, method))).toEqual(["844.10", "1005.90", "-161.80"]);
+    });
+
+    it.each(METHODS)("[%s] a Storno that matches no fill of its order stays a named row, and the fill stays booked", (method) => {
+      const statement = merged(depot(BUY, sale("80,00", "9002"), storno("81,00")));
+      expect(message(statement, CANCELLED)).toBeUndefined();
+      expect(unreadableRows(statement)).toBe(`XYZ SA (${ISIN}) 20240603 [Buchungsinformationen: "Storno Ausführung ORDER Verkauf ES00000…"]`);
+      expect(gains(report(statement, method))).toEqual(["800.00", "1000.00", "-200.00"]);
+    });
+  });
+
+  it("the order warnings read in the five locales", () => {
+    for (const id of [FEE, "flatex.depot.storno_cancelled"]) {
+      for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+        expect(locale[id]).toContain("{{count}}");
+        expect(locale[id]).toContain("{{rows}}");
+        expect(locale[`${id}.hint`]).toBeTruthy();
+      }
+      expect(isTranslationKey(id)).toBe(true);
     }
-    expect(isTranslationKey(FEE)).toBe(true);
   });
 });
 

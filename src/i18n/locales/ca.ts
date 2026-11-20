@@ -1045,6 +1045,10 @@ const ca: TranslationKeys = {
     "Flatex: {{count}} operació(ns) no tenen la comissió calculada, perquè els seus apunts de caixa no quadren amb l'operació: {{rows}}.",
   "flatex.commission.not_recovered.hint":
     "Cada fila porta el número d'ordre, el valor i la data. Entre claudàtors hi ha l'import de l'operació i la suma dels seus apunts de caixa. Si un import no es pot llegir, hi ha la seva cel·la. Pot faltar un apunt o sobrar-ne un. Un apunt pot tenir un import o una data que no es pot llegir, o una data que no és la de l'operació. També hi pot haver una execució de l'ordre que no es pot llegir. DeclaRenta deixa aquesta comissió a 0. No la suma al cost de les compres ni la resta del valor de les vendes. Consulta la comissió a la liquidació de l'ordre a Flatex. Si la vols deduir, afegeix-la a mà a Renta Web.",
+  "flatex.depot.storno_cancelled":
+    "Flatex: {{count}} execució(ns) anul·lada(es) amb un Storno no es calculen: {{rows}}.",
+  "flatex.depot.storno_cancelled.hint":
+    "Flatex corregeix una execució amb un Storno que l'anul·la, i de vegades amb una execució nova de la mateixa ordre. DeclaRenta treu del càlcul cada execució anul·lada i el seu Storno, i calcula l'execució nova si és al fitxer. Cada fila porta el número d'ordre, el valor i la data de l'execució anul·lada. Entre claudàtors hi ha els seus títols i el seu preu. Al final hi ha la data del Storno.",
   "flatex.commission.multi_fill_prorated":
     "Ordres de Flatex executades en diverses parts: {{orders}}. La seva comissió s'ha repartit entre les execucions en proporció al seu import.",
   "flatex.commission.multi_fill_prorated.hint":

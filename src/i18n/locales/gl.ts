@@ -1045,6 +1045,10 @@ const gl: TranslationKeys = {
     "Flatex: {{count}} operación(s) non teñen a comisión calculada, porque os seus apuntamentos de caixa non cadran coa operación: {{rows}}.",
   "flatex.commission.not_recovered.hint":
     "Cada fila trae o número de orde, o valor e a data. Entre corchetes vai o importe da operación e a suma dos seus apuntamentos de caixa. Se un importe non se pode ler, vai a súa cela. Pode faltar un apuntamento ou sobrar un. Un apuntamento pode ter un importe ou unha data que non se pode ler, ou unha data que non é a da operación. Tamén pode haber unha execución da orde que non se pode ler. DeclaRenta deixa esa comisión en 0. Non a suma ao custo das compras nin a resta do valor das vendas. Consulta a comisión na liquidación da orde en Flatex. Se queres deducila, engádea a man en Renta Web.",
+  "flatex.depot.storno_cancelled":
+    "Flatex: {{count}} execución(s) anulada(s) cun Storno non se calculan: {{rows}}.",
+  "flatex.depot.storno_cancelled.hint":
+    "Flatex corrixe unha execución cun Storno que a anula, e ás veces cunha execución nova da mesma orde. DeclaRenta quita do cálculo cada execución anulada e o seu Storno, e calcula a execución nova se está no ficheiro. Cada fila trae o número de orde, o valor e a data da execución anulada. Entre corchetes van os seus títulos e o seu prezo. Ao final vai a data do Storno.",
   "flatex.commission.multi_fill_prorated":
     "Ordes de Flatex executadas en varias partes: {{orders}}. A súa comisión repartiuse entre as execucións en proporción ao seu importe.",
   "flatex.commission.multi_fill_prorated.hint":

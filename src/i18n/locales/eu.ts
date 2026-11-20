@@ -1047,6 +1047,10 @@ const eu: TranslationKeys = {
     "Flatex: {{count}} eragiketak ez dute komisio kalkulaturik, haien kutxa-idazpenak eragiketarekin bat ez datozelako: {{rows}}.",
   "flatex.commission.not_recovered.hint":
     "Errenkada bakoitzak aginduaren zenbakia, balorea eta data ditu. Kortxete artean daude eragiketaren zenbatekoa eta haren kutxa-idazpenen batura. Zenbateko bat irakurri ezin bada, haren gelaxka dago. Baliteke kutxa-idazpen bat falta izatea edo bat soberan egotea. Baliteke idazpen baten zenbatekoa edo data irakurri ezin izatea, edo haren data eragiketarena ez izatea. Baliteke, halaber, aginduaren exekuzio bat irakurri ezin izatea. DeclaRentak 0an uzten du komisio hori. Ez dio erosketen kostuari gehitzen, eta ez dio salmenten balioari kentzen. Kontsultatu komisioa Flatex-eko aginduaren likidazioan. Kendu nahi baduzu, gehitu eskuz Renta Web-en.",
+  "flatex.depot.storno_cancelled":
+    "Flatex: Storno batekin baliogabetutako {{count}} exekuzio ez dira kalkulatzen: {{rows}}.",
+  "flatex.depot.storno_cancelled.hint":
+    "Flatexek exekuzio bat zuzentzen du hura baliogabetzen duen Storno batekin, eta batzuetan agindu bereko exekuzio berri batekin. DeclaRentak baliogabetutako exekuzio bakoitza eta haren Stornoa kalkulutik kentzen ditu, eta exekuzio berria kalkulatzen du fitxategian badago. Errenkada bakoitzak aginduaren zenbakia, balorea eta baliogabetutako exekuzioaren data ditu. Kortxete artean daude haren tituluak eta prezioa. Amaieran dago Stornoaren data.",
   "flatex.commission.multi_fill_prorated":
     "Hainbat zatitan exekutatutako Flatex aginduak: {{orders}}. Haien komisioa exekuzioen artean banatu da, bakoitzaren zenbatekoaren arabera.",
   "flatex.commission.multi_fill_prorated.hint":
