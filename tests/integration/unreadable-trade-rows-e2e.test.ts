@@ -1777,6 +1777,7 @@ describe("#466 #467 #468 the warnings of these issues read as plain short senten
     "freedom24.row_skipped_malformed", "freedom24.dividend_amount_unreadable", "freedom24.tax_amount_unreadable",
     "parser.trade_row_unreadable", "parser.corporate_action_not_applied", "parser.cash_row_undated",
     "parser.cash_row_unidentified", "parser.crypto_income_unidentified", "parser.crypto_income_amount_unreadable", "parser.cash_income_amount_unreadable",
+    "parser.cash_row_not_booked",
     "revolut.bad_fx_rate", "revolut.holding_size_unknown", "revolut.dividend_tax_correction",
     "etoro.columns_not_detected", "etoro.staking_not_imported", "degiro.cash_row_undescribed",
   ];

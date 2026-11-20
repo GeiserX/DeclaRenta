@@ -343,6 +343,26 @@ export function cashIncomeAmountUnreadableMessages(broker: string, rows: readonl
 }
 
 /**
+ * The warning naming every money row of a type the parser does not know (a
+ * Trading 212 "Result adjustment"): `rows` from {@link cashIncomeRowText},
+ * with the amount cell as the file writes it (#467). It moves no shares, so
+ * it is no trade, but its money can be a gain or a cost of a trade: it is
+ * not booked under a guessed meaning, and never dropped with no word.
+ */
+export function cashRowsNotBookedMessages(broker: string, rows: readonly string[]): TaxMessage[] {
+  if (rows.length === 0) return [];
+  const count = String(rows.length);
+  const list = rows.join("; ");
+  return [{
+    id: "parser.cash_row_not_booked",
+    severity: "warning",
+    message: `${broker}: ${count} movimiento(s) de dinero de un tipo que DeclaRenta no reconoce no se calculan: ${list}.`,
+    hint: "Entre corchetes va el importe tal como está en el archivo. DeclaRenta no sabe qué es ese movimiento. Por eso no lo suma ni lo resta. Puede ser un ajuste del broker sobre una operación, una compensación o una comisión. Mira el extracto del broker. Si el broker te abonó ese dinero en el año que declaras, puede ser una ganancia que tienes que declarar. Si te lo cobró, puede ser un gasto de una operación. Añade lo que corresponda a mano en Renta Web.",
+    context: { broker, count, rows: list },
+  }];
+}
+
+/**
  * The warnings naming every trade whose quantity or price the file does not
  * give: one for shares and other securities, one for crypto (whose rule is
  * art. 33.5.e, with no one-purchase exception), or none; one naming every

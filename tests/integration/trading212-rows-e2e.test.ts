@@ -12,6 +12,7 @@
  * - A withholding refund (a positive withholding row) was one more withholding.
  * - The withholding of a dividend whose Total cannot be read was still booked.
  * - An empty currency cell was read as EUR.
+ * - A "Result adjustment" was dropped with its money and with no word.
  */
 import { describe, it, expect } from "vitest";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
@@ -20,6 +21,7 @@ import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from ".
 import type { FxMethod, TaxSummary as TaxReport } from "../../src/types/tax.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { Statement } from "../../src/types/broker.js";
+import es from "../../src/i18n/locales/es.js";
 
 const METHODS: FxMethod[] = ["multidivisa", "tradicional-divisa", "monodivisa"];
 const H = "Action,Time,ISIN,Ticker,Name,No. of shares,Price / share,Currency (Price / share),Exchange rate,Result,Currency (Result),Total,Currency (Total),Notes,ID";
@@ -346,5 +348,54 @@ describe("Trading 212 lending interest is interest income", () => {
   it("Lending interest whose Total cannot be read is named", () => {
     expect(msg(parse(["Lending interest,2025-03-01 00:00:00,,,,,,,,,,abc,EUR,,l1"]), "parser.cash_income_amount_unreadable"))
       .toBe('Lending interest EUR 20250301 [Total: "abc"]');
+  });
+});
+
+// A "Result adjustment" is a credit or a debit Trading 212 makes to correct a
+// trade's result. It moves no shares, so it is no trade, but it was dropped
+// with its money and with no word: a credit is gain the report never saw.
+describe("Trading 212 money rows of an unknown action are named, never dropped with no word", () => {
+  const adjustment = (total: string) => `Result adjustment,2025-06-11 09:30:00,${AAPL},AAPL,Apple,,,,,,,${total},EUR,,r1`;
+
+  it.each(METHODS)("[%s] a Result adjustment of +50 or -50 EUR is named; the sale's numbers do not move", (method) => {
+    const control = report([buy(), sell()], method);
+    expect(control.capitalGains.netGainLoss.toFixed(2)).toBe("550.00");
+    for (const total of ["50", "-50"]) {
+      const s = parse([buy(), sell(), adjustment(total)]);
+      expect(s.trades.map((t) => t.tradeID), total).toEqual(["trading212-buy-b1", "trading212-sell-s1"]);
+      expect(s.cashTransactions, total).toEqual([]);
+      expect(msg(s, "parser.cash_row_not_booked"), total).toBe(`Result adjustment AAPL EUR 20250611 [Total: "${total}"]`);
+      const r = report([buy(), sell(), adjustment(total)], method);
+      expect(r.capitalGains.transmissionValue.toFixed(2), total).toBe("1650.00");
+      expect(r.capitalGains.netGainLoss.toFixed(2), total).toBe("550.00");
+      expect(r.messages.map((m) => m.id), total).toContain("parser.cash_row_not_booked");
+    }
+  });
+
+  it("an unknown money row with no security, or a written share count of 0, is named the same way", () => {
+    const s = parse([
+      "Custody fee,2025-06-11 09:30:00,,,,,,,,,,-2,EUR,,c1",
+      `Result adjustment,2025-06-12 09:30:00,${AAPL},AAPL,Apple,0,,,,,,abc,EUR,,r2`,
+    ]);
+    expect(msg(s, "parser.cash_row_not_booked")).toBe(
+      'Custody fee EUR 20250611 [Total: "-2"]; Result adjustment AAPL EUR 20250612 [Total: "abc"]');
+    const emitted = s.parserMessages!.find((m) => m.id === "parser.cash_row_not_booked")!;
+    const esText = es as Record<string, string>;
+    expect(emitted.message).toBe(esText["parser.cash_row_not_booked"]!.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => emitted.context?.[k] ?? ""));
+    expect(emitted.hint).toBe(esText["parser.cash_row_not_booked.hint"]);
+  });
+
+  it("control: a written zero or an empty Total, deposits, withdrawals, conversions, card rows and cashback stay skipped with no word", () => {
+    const s = parse([
+      adjustment("0"), adjustment(""),
+      "Deposit,2025-01-02 10:00:00,,,,,,,,,,1000,EUR,,x1",
+      "Withdrawal,2025-01-03 10:00:00,,,,,,,,,,-100,EUR,,x2",
+      "Currency conversion,2025-01-04 10:00:00,,,,,,,,,,-100,EUR,,x3",
+      "Card debit,2025-01-05 10:00:00,,,,,,,,,,-20,EUR,,x4",
+      "Card credit,2025-01-06 10:00:00,,,,,,,,,,20,EUR,,x5",
+      "New card cost,2025-01-07 10:00:00,,,,,,,,,,-5,EUR,,x6",
+      "Spending cashback,2025-01-08 10:00:00,,,,,,,,,,0.5,EUR,,x7",
+    ]);
+    expect([s.trades, s.cashTransactions, s.parserMessages]).toEqual([[], [], undefined]);
   });
 });

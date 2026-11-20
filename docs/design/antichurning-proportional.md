@@ -601,7 +601,10 @@ práctico Renta 2025. The decisions, each pinned in
       action that is not a buy, sale, dividend, interest, split or cash row
       and writes a share count. An unknown action with an empty share cell
       (`Result adjustment`) is a cash row, not evidence; the same holds for
-      Lightyear and Scalable (`Fee`, `Tax`).
+      Lightyear and Scalable (`Fee`, `Tax`). Its money is not booked, but a
+      Trading 212 Total that is not a written zero is named by
+      `parser.cash_row_not_booked` (it was dropped with no word, so a
+      credit was gain the report never saw).
       Each leg of a `Stock split open` or `Stock split close` is a
       corporate-action row (above).
       FIFO values a Trading 212 buy or sale at `No. of shares` ×

@@ -15,7 +15,10 @@
  * - Dividend (Dividend tax) → cash transaction (Withholding Tax); a positive
  *   one in a file that writes withholdings negative is a refund
  * - Interest on cash / Lending interest → cash transaction (interest)
- * - Deposit / Withdrawal / Currency conversion / Card debit / Spending cashback → skipped
+ * - Deposit / Withdrawal / Currency conversion / Card debit / Card credit /
+ *   New card cost / Spending cashback → skipped
+ * - Any other action that moves no shares ("Result adjustment") → not booked;
+ *   a Total that is not a written zero is named in a warning
  *
  * Limitations:
  * - No open positions in CSV — Modelo 720/D-6 cannot be generated from this alone.
@@ -48,6 +51,7 @@ import {
   cashRowsUnidentifiedMessages,
   cashIncomeRowText,
   cashIncomeAmountUnreadableMessages,
+  cashRowsNotBookedMessages,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -164,8 +168,13 @@ function isStockSplitAction(action: string): boolean {
   return /^stock split (open|close)$/i.test(action);
 }
 
+/**
+ * Money that is no income and no cost of a trade: moves to and from the
+ * account and card spending. "Card credit" (a card payment returned) and
+ * "New card cost" are card rows too, never a money row to name (#467).
+ */
 function isSkippedAction(action: string): boolean {
-  return /deposit|withdrawal|currency conversion|card debit|spending cashback/i.test(action);
+  return /deposit|withdrawal|currency conversion|card debit|card credit|new card cost|spending cashback/i.test(action);
 }
 
 // Fractional currency normalization (GBX pence, ZAc cents, ILA agorot →
@@ -196,6 +205,8 @@ function parseTrading212Csv(lines: string[]): Statement {
   // Dividend, interest and withholding rows whose Total or currency cannot
   // be read (#467). A dividend's `key` finds its withholdings below.
   const unreadableIncome: { key?: string; type: string; security: string; currency: string; date: string; cells: string[] }[] = [];
+  // Money rows of an action no branch knows, which move no shares (#467).
+  const notBookedCash: string[] = [];
   // The engine pairs a withholding with a dividend by ISIN alone, so the key
   // is the ISIN when there is one: a withholding that writes no Ticker is
   // still that dividend's.
@@ -272,7 +283,7 @@ function parseTrading212Csv(lines: string[]): Statement {
     // shares and stays skipped, as does one that names no security. One that
     // names its security only by Name is kept when it writes a share count.
     // One with an empty share cell is a cash row ("Result adjustment", a fee,
-    // a tax): it moves no shares and stays skipped, as it was.
+    // a tax): it moves no shares and is no trade.
     const buy = isBuyAction(action);
     const sell = isSellAction(action);
     const otherAction = !buy && !sell && !isDividendTaxAction(action) && !isDividendAction(action) && !isInterestAction(action);
@@ -280,7 +291,17 @@ function parseTrading212Csv(lines: string[]): Statement {
     const movesNoShares = !sharesUnreadable && new Decimal(sharesStr).isZero();
     const named = ticker || isin ? true : name !== "" && !sharesUnreadable;
     const sharesEmpty = (fields[cols.shares] ?? "").trim() === "";
-    if (otherAction && (!named || movesNoShares || sharesEmpty)) continue;
+    if (otherAction && (!named || movesNoShares || sharesEmpty)) {
+      // Its money is not booked under a guessed meaning, but a "Result
+      // adjustment" credit is gain the report would never see: a Total that
+      // is not a written zero is named (#467). An empty Total writes no money.
+      const totalCell = (fields[cols.total] ?? "").trim();
+      if (totalCell !== "" && (quantityUnreadable(totalCell) || !new Decimal(totalStr).isZero())) {
+        notBookedCash.push(cashIncomeRowText(action, ticker || isin || name, cashCurrencyCell, tradeDate,
+          [unreadableCell(headers[cols.total] ?? "Total", totalCell)]));
+      }
+      continue;
+    }
     const unreadableCellOf = (): string | undefined => {
       if (!timeRaw) return unreadableCell(headers[cols.time] ?? "Time", timeRaw);
       if (otherAction) return unreadableCell(headers[cols.action] ?? "Action", action);
@@ -582,6 +603,7 @@ function parseTrading212Csv(lines: string[]): Statement {
     ...dropUndatedCash("Trading 212", cashTransactions, headers[cols.time] ?? "Time"),
     ...cashRowsUnidentifiedMessages("Trading 212", unidentifiedCash),
     ...cashIncomeAmountUnreadableMessages("Trading 212", unreadableRows),
+    ...cashRowsNotBookedMessages("Trading 212", notBookedCash),
   );
 
   return {
