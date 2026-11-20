@@ -864,8 +864,11 @@ práctico Renta 2025. The decisions, each pinned in
       booked as 0, so a sale became a full loss with no word, or was passed
       on as text and stopped the whole report with a `DecimalError`. The
       price is now cost ÷ vol, the file's own numbers; a row with neither
-      is an unreadable row named by its `price`. A written 0 stays the
-      file's word.
+      is an unreadable row named by its `price`. A written zero price ("0",
+      "0.00") is treated the same way: it sold the coins for 0 €, so a
+      6000 € gain became a 3000 € loss with no word. With a readable
+      nonzero cost the price is cost ÷ vol; with a zero or unreadable cost
+      the row is an unreadable row named by its `price`, for each coin.
       Only Kraken's legacy codes (XXBT, XETH, ZEUR, XICN, XNMC, XXVN, ...)
       lose their X or Z prefix. Any other code was cut too, so ZETA became
       ETA, XAUT became AUT and XUSD became dollars: a rebuy of the same

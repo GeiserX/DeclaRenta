@@ -4102,9 +4102,61 @@ describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and a
       });
     });
 
-    it("a written zero price stays the file's word", () => {
-      expect(kraken(krBuy, krSell("0.00")).trades[1]!.tradePrice).toBe("0.00");
-      expect(kraken(krBuy, krSell("0")).parserMessages).toBeUndefined();
+    // A written zero price ("0", "0.00") was booked as the file's word, so the
+    // sale went for 0 €: the 6000 € gain became a 3000 € loss with no word.
+    // Kraken writes cost = price × vol, so a readable cost prices the row.
+    describe.each(["0", "0.00", "0.00000"])("a written zero price %j with a readable cost", (price) => {
+      it.each(METHODS)("[%s] the sale is priced cost ÷ vol: the 6000 € gain, nothing named", (method) => {
+        const parsed = kraken(krBuy, krSell(price));
+        expect(parsed.trades.map((t) => [t.buySell, t.quantity, t.tradePrice])).toEqual([["BUY", "0.1", "30000.00"], ["SELL", "-0.1", "90000"]]);
+        expect(parsed.parserMessages).toBeUndefined();
+        const r = run([[parsed, "Kraken"]], 2025, method);
+        expect([net(r), r.capitalGains.transmissionValue.toFixed(2)]).toEqual(["6000.00", "9000.00"]);
+      });
+    });
+
+    it.each(METHODS)("[%s] a buy with a written zero price is priced cost ÷ vol, never a lot that cost 0", (method) => {
+      const parsed = kraken(krBuy.replace('"30000.00"', '"0"'), krSell("90000.00"));
+      expect(parsed.trades[0]!.tradePrice).toBe("30000");
+      expect(net(run([[parsed, "Kraken"]], 2025, method))).toBe("6000.00");
+    });
+
+    // With a zero or unreadable cost too, nothing in the row says what the
+    // sale was worth: it books no 3000 € loss and is named by its price cell.
+    describe.each([["0", "0", 'BTC 20250301 [price: "0"]'], ["0.00", "0.00", 'BTC 20250301 [price: "0.00"]'], ["0", "abc", 'BTC 20250301 [price: "0"]'], ["abc", "0", 'BTC 20250301 [price: "abc"]']])("price %j and cost %j", (price, cost, rows) => {
+      it.each(METHODS)("[%s] the sale books nothing and is named by its price cell", (method) => {
+        const parsed = kraken(krBuy, krSell(price, cost));
+        expect(unreadableRows(parsed)).toBe(rows);
+        expect(parsed.trades[1]!.quantityUnknown).toBe(true);
+        const r = run([[parsed, "Kraken"]], 2025, method);
+        expect([net(r), r.capitalGains.disposals]).toEqual(["0.00", []]);
+        expect(r.messages.find((m) => m.id === "parser.trade_row_unreadable")?.context?.rows).toBe(rows);
+      });
+    });
+
+    describe("a crypto-quoted sale of 1 ETH for 0.05 BTC (BTC at 50000 €), bought for 1500 €", () => {
+      const rows = (price: string, cost = "0.05"): Statement => kraken(
+        `"T0","O0","XETHZEUR","2024-03-15 10:30:00","buy","limit","1500.00","1500.00","0","1","0.0","",""`,
+        `"T1","O1","XETHXXBT","2025-03-15 10:30:00","sell","limit","${price}","${cost}","0","1","0.0","",""`);
+      const btc = manual({ BTC: "50000" });
+
+      it.each(METHODS)("[%s] control: price 0.05 gains 1000 €", (method) => {
+        expect(net(runWith([[rows("0.05"), "Kraken"]], 2025, method, btc))).toBe("1000.00");
+      });
+
+      it.each(METHODS)("[%s] a written zero price is priced cost ÷ vol: the same 1000 € gain", (method) => {
+        const parsed = rows("0");
+        expect(parsed.trades.find((t) => t.tradeID === "T1")!.tradePrice).toBe("0.05");
+        expect(parsed.parserMessages).toBeUndefined();
+        expect(net(runWith([[parsed, "Kraken"]], 2025, method, btc))).toBe("1000.00");
+      });
+
+      it.each(METHODS)("[%s] a written zero price and cost names both coins and books no 1500 € loss", (method) => {
+        const parsed = rows("0", "0");
+        expect(unreadableRows(parsed)).toBe('ETH 20250315 [price: "0"]; BTC 20250315 [price: "0"]');
+        const r = runWith([[parsed, "Kraken"]], 2025, method, btc);
+        expect([net(r), r.capitalGains.disposals]).toEqual(["0.00", []]);
+      });
     });
 
     it.each(METHODS)("[%s] a crypto-quoted buy whose price cannot be read is priced cost ÷ vol, never a crash", (method) => {
