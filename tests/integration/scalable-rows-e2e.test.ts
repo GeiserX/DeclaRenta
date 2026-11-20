@@ -22,6 +22,8 @@
  * - A Buy with a negative share count was booked as a second purchase.
  * - A buy or sale whose amount contradicts shares × price (a bond quoted in %)
  *   was booked at shares × price.
+ * - A Distribution with a written 0 amount and a positive tax (a refund) was
+ *   booked as a new withholding, so the refund raised the 0597 or the 0588.
  */
 import { describe, it, expect } from "vitest";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
@@ -30,6 +32,11 @@ import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from ".
 import type { FxMethod, TaxSummary as TaxReport } from "../../src/types/tax.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { Statement } from "../../src/types/broker.js";
+import es from "../../src/i18n/locales/es.js";
+import en from "../../src/i18n/locales/en.js";
+import ca from "../../src/i18n/locales/ca.js";
+import eu from "../../src/i18n/locales/eu.js";
+import gl from "../../src/i18n/locales/gl.js";
 
 const METHODS: FxMethod[] = ["multidivisa", "tradicional-divisa", "monodivisa"];
 const H = "date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency";
@@ -364,5 +371,62 @@ describe("Scalable round 3: rows booked against what the file says", () => {
     expect(r.capitalGains.transmissionValue.toFixed(2)).toBe("0.00");
     expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("0.00");
     expect(r.messages.map((m) => m.id)).toContain("parser.trade_row_unreadable");
+  });
+});
+
+describe("Scalable round 4: a Distribution of 0 with a positive tax is a refund, never a new withholding (#467)", () => {
+  const MSFT = "US5949181045";
+  const ES = "ES0113900J37";
+  const dist = (isin: string, amount: string, tax: string, date: string) =>
+    `${date};10:00;Executed;D${date}${isin};Div;Security;Distribution;${isin};0;0;${amount};0;${tax};EUR`;
+  const sums = (r: TaxReport): string =>
+    `div=${r.dividends.grossIncome.toFixed(2)} sw=${r.dividends.spanishWithholding.toFixed(2)} dtd=${r.doubleTaxation.deduction.toFixed(2)}`;
+  const cash = (s: Statement): string[] => s.cashTransactions.map((c) => `${c.type} ${c.isin} ${c.amount}`);
+  const REFUND = "scalable.dividend_tax_refund";
+
+  it.each(METHODS)("[%s] control: a Spanish dividend of 100 with 19 withheld gives a 0597 of 19, and nothing is named", (method) => {
+    const rows = [dist(ES, "100,00", "-19,00", "2025-06-01")];
+    expect(parse(rows).parserMessages).toBeUndefined();
+    expect(sums(report(rows, method))).toBe("div=100.00 sw=19.00 dtd=0.00");
+  });
+
+  it.each(METHODS)("[%s] a zero row with +5 two days later lowers the 0597 to 14, not 24, and is named", (method) => {
+    const rows = [dist(ES, "100,00", "-19,00", "2025-06-01"), dist(ES, "0,00", "5,00", "2025-06-03")];
+    const s = parse(rows);
+    expect(cash(s)).toEqual([`Dividends ${ES} 100`, `Withholding Tax ${ES} -19`, `Withholding Tax ${ES} 5`]);
+    expect(msg(s, REFUND)).toBe(`Distribution Div (${ES}) EUR 20250603 [amount: "0,00", tax: "5,00"]`);
+    const r = report(rows, method);
+    expect(sums(r)).toBe("div=100.00 sw=14.00 dtd=0.00");
+    expect(r.messages.map((m) => m.id)).toContain(REFUND);
+  });
+
+  it.each(METHODS)("[%s] a US refund lowers the 0588 from 15 to 10", (method) => {
+    const rows = [dist(MSFT, "100,00", "-15,00", "2025-06-01"), dist(MSFT, "0,00", "5,00", "2025-06-03")];
+    expect(sums(report(rows, method))).toBe("div=100.00 sw=0.00 dtd=10.00");
+  });
+
+  it.each(METHODS)("[%s] a refund 60 days after its dividend is out of the report's 7 days: the 0597 stays 19, and the row is named", (method) => {
+    const rows = [dist(ES, "100,00", "-19,00", "2025-06-01"), dist(ES, "0,00", "5,00", "2025-08-01")];
+    expect(msg(parse(rows), REFUND)).toBe(`Distribution Div (${ES}) EUR 20250801 [amount: "0,00", tax: "5,00"]`);
+    const r = report(rows, method);
+    expect(sums(r)).toBe("div=100.00 sw=19.00 dtd=0.00");
+    expect(r.messages.map((m) => m.id)).toContain(REFUND);
+  });
+
+  it.each(METHODS)("[%s] control: a zero row with -5 stays a late withholding, with no word", (method) => {
+    const rows = [dist(ES, "100,00", "-19,00", "2025-06-01"), dist(ES, "0,00", "-5,00", "2025-06-03")];
+    expect(parse(rows).parserMessages).toBeUndefined();
+    expect(sums(report(rows, method))).toBe("div=100.00 sw=24.00 dtd=0.00");
+  });
+
+  it("the warning is the es locale and exists in the five locales", () => {
+    const m = parse([dist(ES, "0,00", "5,00", "2025-06-03")]).parserMessages!.find((x) => x.id === REFUND)!;
+    const fill = (text: string): string => text.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => m.context?.[k] ?? "");
+    expect(m.message).toBe(fill((es as Record<string, string>)[REFUND]!));
+    expect(m.hint).toBe((es as Record<string, string>)[`${REFUND}.hint`]);
+    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+      expect(locale[REFUND]).toContain("{{rows}}");
+      expect(locale[`${REFUND}.hint`]).toContain("Renta Web");
+    }
   });
 });

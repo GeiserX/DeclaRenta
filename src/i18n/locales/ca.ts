@@ -1198,6 +1198,10 @@ const ca: TranslationKeys = {
     "Scalable Capital: {{count}} dividend(s) o interès(os) no es poden llegir i no es calculen: {{rows}}.",
   "scalable.income_row_not_read.hint":
     "Entre claudàtors hi ha la cel·la que falla. Pot ser un estat que DeclaRenta no reconeix. DeclaRenta només calcula les files executades i no compta les cancel·lades, rebutjades o pendents. Amb un altre estat no sap si el cobrament es va fer. També pot ser la retenció (tax) d'una fila que anul·la un dividend. Llavors DeclaRenta no resta aquesta fila, i el dividend anul·lat continua sumat amb la seva retenció. Compara cada fila amb l'extracte de Scalable Capital. Si és un cobrament real de l'any que declares, afegeix l'import i la retenció a mà a Renta Web. Si anul·la un dividend, treu a Renta Web aquest dividend i la seva retenció.",
+  "scalable.dividend_tax_refund":
+    "Scalable Capital: {{count}} fila(es) de dividend porten import 0 i una devolució de retenció (tax positiu): {{rows}}.",
+  "scalable.dividend_tax_refund.hint":
+    "Una fila amb import 0 no és un dividend. Scalable Capital escriu la retenció (tax) en negatiu, així que una de positiva és una devolució. DeclaRenta la resta de la retenció d'un dividend del mateix valor de 7 dies abans o després. Si no n'hi ha cap, no la resta, i la retenció d'aquest dividend compta sencera: així pagaries de menys. Pren la retenció final de l'informe fiscal de Scalable Capital i corregeix a mà a Renta Web la casella 0588, o la 0597 si el valor és espanyol. Si la fila és una retenció cobrada més tard, DeclaRenta no la compta: afegeix-la a mà.",
   "parser.trading212.unresolved_price_skipped":
     "S'han omès {{skipped}} operacions sense preu per acció i amb import en una altra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":

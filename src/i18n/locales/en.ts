@@ -1196,6 +1196,10 @@ const en: TranslationKeys = {
     "Scalable Capital: {{count}} dividend(s) or interest payment(s) cannot be read and are not calculated: {{rows}}.",
   "scalable.income_row_not_read.hint":
     "The cell that fails is in brackets. It can be a status DeclaRenta does not know. DeclaRenta only calculates executed rows and does not count cancelled, rejected or pending ones. With another status it does not know if the payment was made. It can also be the withholding (tax) of a row that reverses a dividend. Then DeclaRenta does not subtract that row, and the reversed dividend stays added with its withholding. Compare each row with the Scalable Capital statement. If it is a real payment of the year you declare, add the amount and the withholding by hand in Renta Web. If it reverses a dividend, remove that dividend and its withholding in Renta Web.",
+  "scalable.dividend_tax_refund":
+    "Scalable Capital: {{count}} dividend row(s) have an amount of 0 and a withholding refund (a positive tax): {{rows}}.",
+  "scalable.dividend_tax_refund.hint":
+    "A row with an amount of 0 is no dividend. Scalable Capital writes a withholding (tax) as a negative number, so a positive one is a refund. DeclaRenta subtracts it from the withholding of a dividend of the same security from 7 days before or after. If there is none, it does not subtract it, and the withholding of that dividend counts in full: you would underpay. Take the final withholding from the Scalable Capital tax report and correct box 0588 by hand in Renta Web, or box 0597 if the security is Spanish. If the row is a withholding charged later, DeclaRenta does not count it: add it by hand.",
   "parser.trading212.unresolved_price_skipped":
     "{{skipped}} operations without a price per share and with an amount in another currency were skipped.",
   "parser.trading212.unresolved_price_skipped.hint":

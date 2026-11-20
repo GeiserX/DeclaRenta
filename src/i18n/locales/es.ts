@@ -1235,6 +1235,10 @@ const es = {
     "Scalable Capital: {{count}} dividendo(s) o interés(es) no se pueden leer y no se calculan: {{rows}}.",
   "scalable.income_row_not_read.hint":
     "Entre corchetes va la celda que falla. Puede ser un estado que DeclaRenta no reconoce. DeclaRenta solo calcula las filas ejecutadas y no cuenta las canceladas, rechazadas o pendientes. Con otro estado no sabe si el cobro se hizo. También puede ser la retención (tax) de una fila que anula un dividendo. Entonces DeclaRenta no resta esa fila, y el dividendo anulado sigue sumado con su retención. Compara cada fila con el extracto de Scalable Capital. Si es un cobro real del año que declaras, añade el importe y la retención a mano en Renta Web. Si anula un dividendo, quita en Renta Web ese dividendo y su retención.",
+  "scalable.dividend_tax_refund":
+    "Scalable Capital: {{count}} fila(s) de dividendo traen importe 0 y una devolución de retención (tax positivo): {{rows}}.",
+  "scalable.dividend_tax_refund.hint":
+    "Una fila con importe 0 no es un dividendo. Scalable Capital escribe la retención (tax) en negativo, así que una positiva es una devolución. DeclaRenta la resta de la retención de un dividendo del mismo valor de 7 días antes o después. Si no hay ninguno, no la resta, y la retención de ese dividendo cuenta entera: así pagarías de menos. Toma la retención final del informe fiscal de Scalable Capital y corrige a mano en Renta Web la casilla 0588, o la 0597 si el valor es español. Si la fila es una retención cobrada más tarde, DeclaRenta no la cuenta: añádela a mano.",
   "parser.trading212.unresolved_price_skipped":
     "Se omitieron {{skipped}} operaciones sin precio por acción y con importe en otra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":

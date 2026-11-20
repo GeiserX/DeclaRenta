@@ -1200,6 +1200,10 @@ const eu: TranslationKeys = {
     "Scalable Capital: {{count}} dibidendu edo interes ezin dira irakurri eta ez dira kalkulatzen: {{rows}}.",
   "scalable.income_row_not_read.hint":
     "Kortxete artean huts egiten duen gelaxka dago. DeclaRentak ezagutzen ez duen egoera bat izan daiteke. DeclaRentak exekutatutako errenkadak bakarrik kalkulatzen ditu, eta ez ditu kontatzen bertan behera utzitakoak, baztertutakoak edo zain daudenak. Beste egoera batekin ez daki kobrantza egin zen ala ez. Dibidendu bat baliogabetzen duen errenkada baten atxikipena (tax) ere izan daiteke. Orduan DeclaRentak ez du errenkada hori kentzen, eta baliogabetutako dibidendua bere atxikipenarekin batuta geratzen da. Alderatu errenkada bakoitza Scalable Capital-en laburpenarekin. Aitortzen duzun urteko benetako kobrantza bat bada, gehitu zenbatekoa eta atxikipena eskuz Renta Web-en. Dibidendu bat baliogabetzen badu, kendu Renta Web-en dibidendu hori eta bere atxikipena.",
+  "scalable.dividend_tax_refund":
+    "Scalable Capital: {{count}} dibidendu-errenkadak 0 zenbatekoa eta atxikipen-itzulketa bat (tax positiboa) dakarte: {{rows}}.",
+  "scalable.dividend_tax_refund.hint":
+    "0 zenbatekoa duen errenkada ez da dibidendu bat. Scalable Capital-ek atxikipena (tax) negatiboan idazten du; beraz, positibo bat itzulketa bat da. DeclaRentak balore bereko dibidendu baten atxikipenetik kentzen du, 7 egun lehenago edo geroago. Ez badago bat ere, ez du kentzen, eta dibidendu horren atxikipena osorik kontatzen da: horrela gutxiago ordainduko zenuke. Hartu azken atxikipena Scalable Capital-en zerga-txostenetik eta zuzendu eskuz Renta Web-en 0588 laukia, edo 0597 laukia balorea espainiarra bada. Errenkada geroago kobratutako atxikipen bat bada, DeclaRentak ez du kontatzen: gehitu eskuz.",
   "parser.trading212.unresolved_price_skipped":
     "{{skipped}} eragiketa baztertu dira akzioko preziorik gabe eta zenbatekoa beste dibisa batean dutela.",
   "parser.trading212.unresolved_price_skipped.hint":

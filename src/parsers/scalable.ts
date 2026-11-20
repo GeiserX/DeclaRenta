@@ -132,6 +132,8 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
   // Interest and distribution rows of a status not known, and reversed
   // distributions whose tax cannot be read (#467).
   const incomeNotRead: string[] = [];
+  // Distribution rows of a written zero whose tax is a refund, booked alone (#467).
+  const zeroDividendRefund: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -320,7 +322,20 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       // booked below, as IBKR writes it, so the report joins it to a dividend
       // of its ISIN within 7 days or leaves it out, as in Lightyear (#467). A
       // written zero with no tax stays booked as the file writes it.
+      // Scalable writes a withholding negative ("-2,33"), so a positive tax on
+      // a written zero is money paid back, a refund. Read as a new
+      // withholding, 100 with -19 and then 0 with +5 gave a 0597 of 24 instead
+      // of 14. It is booked as a refund, which the report takes from a
+      // dividend of its ISIN within 7 days, never below 0, and it is named:
+      // with no dividend that close the report leaves it out. In a file that
+      // writes withholdings positive the row may be a late withholding: booked
+      // as a refund it can only raise the tax (#467).
       const taxNum = parseFloat(parseNumber(tax));
+      const zeroRefund = new Decimal(amount).isZero() && new Decimal(tax).isPositive();
+      if (zeroRefund) {
+        zeroDividendRefund.push(cashIncomeRowText((fields[cols.type] ?? "").trim(), `${description || "—"} (${isin})`, currency || "EUR", tradeDate,
+          [unreadableCell(headers[cols.amount] ?? "amount", fields[cols.amount]), unreadableCell(headers[cols.tax] ?? "tax", fields[cols.tax])]));
+      }
       if (!(new Decimal(amount).isZero() && taxNum !== 0)) cashTransactions.push({
         transactionID: `scalable-${tradeDate}-${isin}-${i}`,
         accountId: "",
@@ -346,7 +361,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
           currency: currency || "EUR",
           dateTime: tradeDate,
           settleDate: tradeDate,
-          amount: reversal ? new Decimal(tax).abs().toString() : new Decimal(tax).abs().neg().toString(),
+          amount: reversal || zeroRefund ? new Decimal(tax).abs().toString() : new Decimal(tax).abs().neg().toString(),
           fxRateToBase: "1",
           type: "Withholding Tax",
         });
@@ -487,6 +502,16 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       message: `Scalable Capital: ${incomeNotRead.length} dividendo(s) o interés(es) no se pueden leer y no se calculan: ${rows}.`,
       hint: "Entre corchetes va la celda que falla. Puede ser un estado que DeclaRenta no reconoce. DeclaRenta solo calcula las filas ejecutadas y no cuenta las canceladas, rechazadas o pendientes. Con otro estado no sabe si el cobro se hizo. También puede ser la retención (tax) de una fila que anula un dividendo. Entonces DeclaRenta no resta esa fila, y el dividendo anulado sigue sumado con su retención. Compara cada fila con el extracto de Scalable Capital. Si es un cobro real del año que declaras, añade el importe y la retención a mano en Renta Web. Si anula un dividendo, quita en Renta Web ese dividendo y su retención.",
       context: { count: String(incomeNotRead.length), rows },
+    });
+  }
+  if (zeroDividendRefund.length > 0) {
+    const rows = zeroDividendRefund.join("; ");
+    parserMessages.push({
+      id: "scalable.dividend_tax_refund",
+      severity: "warning",
+      message: `Scalable Capital: ${zeroDividendRefund.length} fila(s) de dividendo traen importe 0 y una devolución de retención (tax positivo): ${rows}.`,
+      hint: "Una fila con importe 0 no es un dividendo. Scalable Capital escribe la retención (tax) en negativo, así que una positiva es una devolución. DeclaRenta la resta de la retención de un dividendo del mismo valor de 7 días antes o después. Si no hay ninguno, no la resta, y la retención de ese dividendo cuenta entera: así pagarías de menos. Toma la retención final del informe fiscal de Scalable Capital y corrige a mano en Renta Web la casilla 0588, o la 0597 si el valor es español. Si la fila es una retención cobrada más tarde, DeclaRenta no la cuenta: añádela a mano.",
+      context: { count: String(zeroDividendRefund.length), rows },
     });
   }
   markUndatedTrades(trades, headers[cols.date] ?? "date");
