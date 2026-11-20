@@ -1176,6 +1176,10 @@ const eu: TranslationKeys = {
     "Trade Republic: DeclaRentak ezagutzen ez duen motako {{count}} diru-mugimendu ez dira kalkulatzen: {{rows}}.",
   "trade_republic.cash_type_not_read.hint":
     "Errenkada bakoitzak balore bat izendatzen du eta zenbateko bat dakar, baina DeclaRentak ez daki zer den. Kupoi bat, dibidendu bat, kapital-itzulketa bat, interes bat edo komisio bat izan daiteke. Horregatik ez du batzen. Aitortzen duzun urteko diru-sarrera bat aitortu behar duzu hala ere. Gehitu eskuz Renta Web-en. Falta den komisio batek gehiago ordainarazi diezazuke bakarrik.",
+  "scalable.income_row_not_read":
+    "Scalable Capital: {{count}} dibidendu ezin dira irakurri eta ez dira kalkulatzen: {{rows}}.",
+  "scalable.income_row_not_read.hint":
+    "Kortxete artean huts egiten duen gelaxka dago. Dibidendu bat baliogabetzen duen errenkada baten atxikipena (tax) izan daiteke. Orduan DeclaRentak ez du errenkada hori kentzen, eta baliogabetutako dibidendua bere atxikipenarekin batuta geratzen da. Alderatu errenkada bakoitza Scalable Capital-en laburpenarekin. Dibidendu bat baliogabetzen badu, kendu Renta Web-en dibidendu hori eta bere atxikipena.",
   "parser.trading212.unresolved_price_skipped":
     "{{skipped}} eragiketa baztertu dira akzioko preziorik gabe eta zenbatekoa beste dibisa batean dutela.",
   "parser.trading212.unresolved_price_skipped.hint":

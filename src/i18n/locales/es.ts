@@ -1211,6 +1211,10 @@ const es = {
     "Trade Republic: {{count}} movimiento(s) de dinero de un tipo que DeclaRenta no reconoce no se calculan: {{rows}}.",
   "trade_republic.cash_type_not_read.hint":
     "Cada fila nombra un valor y trae un importe, pero DeclaRenta no sabe qué es. Puede ser un cupón, un dividendo, una devolución de capital, un interés o una comisión. Por eso no lo suma. Un ingreso del año que declaras tienes que declararlo igualmente. Añádelo a mano en Renta Web. Una comisión que falta solo puede hacerte pagar más.",
+  "scalable.income_row_not_read":
+    "Scalable Capital: {{count}} dividendo(s) no se pueden leer y no se calculan: {{rows}}.",
+  "scalable.income_row_not_read.hint":
+    "Entre corchetes va la celda que falla. Puede ser la retención (tax) de una fila que anula un dividendo. Entonces DeclaRenta no resta esa fila, y el dividendo anulado sigue sumado con su retención. Compara cada fila con el extracto de Scalable Capital. Si anula un dividendo, quita en Renta Web ese dividendo y su retención.",
   "parser.trading212.unresolved_price_skipped":
     "Se omitieron {{skipped}} operaciones sin precio por acción y con importe en otra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":

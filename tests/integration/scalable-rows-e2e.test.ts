@@ -9,6 +9,8 @@
  *   booked at price 0: a gain became a full loss with no word.
  * - A "Corporate action" row with a written 0 share count and a cash amount
  *   (a cash merger, a redemption) was dropped with no word.
+ * - The tax of a reversed (negative) Distribution was booked as a new
+ *   withholding, so a reversed Spanish dividend gave its 0597 credit again.
  */
 import { describe, it, expect } from "vitest";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
@@ -123,5 +125,60 @@ describe("Scalable corporate action with a written 0 share count and money: kept
       expect(s.trades.length, amount).toBe(1);
       expect(s.parserMessages, amount).toBeUndefined();
     }
+  });
+});
+
+describe("Scalable reversed Distribution: its tax is a refund, never a second withholding", () => {
+  const ES = "ES0113900J37";
+  const US = "US0378331005";
+  const div = (amount: string, tax: string, date: string, isin = ES) =>
+    `${date};10:00;Executed;D${date};Banco;Security;Distribution;${isin};0;0;${amount};0;${tax};EUR`;
+  const sums = (r: TaxReport): string =>
+    `div=${r.dividends.grossIncome.toFixed(2)} sw=${r.dividends.spanishWithholding.toFixed(2)} dtd=${r.doubleTaxation.deduction.toFixed(2)}`;
+
+  it.each(METHODS)("[%s] control: one Spanish dividend of 100 with 19 withheld", (method) => {
+    expect(sums(report([div("100,00", "-19,00", "2025-06-01")], method))).toBe("div=100.00 sw=19.00 dtd=0.00");
+  });
+
+  it.each(METHODS)("[%s] a Spanish dividend reversed and paid again keeps one withholding of 19 in 0597", (method) => {
+    const rows = [div("100,00", "-19,00", "2025-06-01"), div("-100,00", "19,00", "2025-06-10"), div("100,00", "-19,00", "2025-06-11")];
+    expect(parse(rows).cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual([
+      "Dividends 100", "Withholding Tax -19", "Dividends -100", "Withholding Tax 19", "Dividends 100", "Withholding Tax -19",
+    ]);
+    expect(sums(report(rows, method))).toBe("div=100.00 sw=19.00 dtd=0.00");
+  });
+
+  it.each(METHODS)("[%s] a full reversal refunds its tax, written positive or negative: 0597 is 0", (method) => {
+    for (const tax of ["19,00", "-19,00"]) {
+      const rows = [div("100,00", "-19,00", "2025-06-01"), div("-100,00", tax, "2025-06-05")];
+      expect(parse(rows).cashTransactions.map((c) => `${c.type} ${c.amount}`), tax).toEqual([
+        "Dividends 100", "Withholding Tax -19", "Dividends -100", "Withholding Tax 19",
+      ]);
+      expect(sums(report(rows, method)), tax).toBe("div=0.00 sw=0.00 dtd=0.00");
+    }
+  });
+
+  it.each(METHODS)("[%s] a reversal whose tax cannot be read is not booked and is named, so the dividend keeps its income", (method) => {
+    for (const tax of ["abc", "€", "19,00 EUR"]) {
+      const rows = [div("100,00", "-19,00", "2025-06-01"), div("-100,00", tax, "2025-06-10")];
+      const s = parse(rows);
+      expect(s.cashTransactions.map((c) => `${c.type} ${c.amount}`), tax).toEqual(["Dividends 100", "Withholding Tax -19"]);
+      expect(msg(s, "scalable.income_row_not_read"), tax).toBe(`Distribution Banco (${ES}) -100 EUR 20250610 [tax: ${JSON.stringify(tax)}]`);
+      const r = report(rows, method);
+      expect(sums(r), tax).toBe("div=100.00 sw=19.00 dtd=0.00");
+      expect(r.messages.map((m) => m.id), tax).toContain("scalable.income_row_not_read");
+    }
+  });
+
+  it.each(METHODS)("[%s] a dividend whose tax cannot be read is booked in full with no withholding", (method) => {
+    const rows = [div("100,00", "abc", "2025-06-01")];
+    expect(parse(rows).parserMessages).toBeUndefined();
+    expect(sums(report(rows, method))).toBe("div=100.00 sw=0.00 dtd=0.00");
+  });
+
+  it.each(METHODS)("[%s] a foreign dividend reversed and paid again keeps one withholding of 15 in 0588", (method) => {
+    const rows = [div("100,00", "-15,00", "2025-06-01", US), div("-100,00", "15,00", "2025-06-10", US), div("100,00", "-15,00", "2025-06-11", US)];
+    expect(parse(rows).cashTransactions.filter((c) => c.type === "Withholding Tax").map((c) => c.amount)).toEqual(["-15", "15", "-15"]);
+    expect(sums(report(rows, method))).toBe("div=100.00 sw=0.00 dtd=15.00");
   });
 });

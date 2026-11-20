@@ -1172,6 +1172,10 @@ const en: TranslationKeys = {
     "Trade Republic: {{count}} money movement(s) of a type DeclaRenta does not know are not calculated: {{rows}}.",
   "trade_republic.cash_type_not_read.hint":
     "Each row names a security and has an amount, but DeclaRenta does not know what it is. It can be a coupon, a dividend, a return of capital, an interest or a fee. So it does not add it. Income of the year you declare must be declared anyway. Add it by hand in Renta Web. A missing fee can only make you pay more.",
+  "scalable.income_row_not_read":
+    "Scalable Capital: {{count}} dividend(s) cannot be read and are not calculated: {{rows}}.",
+  "scalable.income_row_not_read.hint":
+    "The cell that fails is in brackets. It can be the withholding (tax) of a row that reverses a dividend. Then DeclaRenta does not subtract that row, and the reversed dividend stays added with its withholding. Compare each row with the Scalable Capital statement. If it reverses a dividend, remove that dividend and its withholding in Renta Web.",
   "parser.trading212.unresolved_price_skipped":
     "{{skipped}} operations without a price per share and with an amount in another currency were skipped.",
   "parser.trading212.unresolved_price_skipped.hint":

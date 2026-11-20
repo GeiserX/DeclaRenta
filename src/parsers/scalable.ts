@@ -118,6 +118,8 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
   const unidentifiedCash: string[] = [];
   // Interest and distribution rows whose amount cannot be read (#467).
   const unreadableIncome: string[] = [];
+  // Reversed distributions whose tax cannot be read (#467).
+  const incomeNotRead: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -253,6 +255,19 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     if (DIVIDEND_TYPES.some((d) => type.includes(d))) {
       // Include ISIN country code so dividend engine can extract withholding country
       const isinCountry = isin.length >= 2 ? isin.slice(0, 2).toUpperCase() : "";
+      // A negative distribution reverses one. Its tax is a refund of the
+      // reversed withholding, whatever its sign: read as a new withholding, a
+      // reversed Spanish dividend gave its 0597 credit twice (#467). A tax
+      // cell that cannot be read is no withholding: a dividend is booked in
+      // full with none, which can only raise the tax; a reversal is not booked
+      // at all, so the dividend it reverses keeps its income, and is named.
+      const reversal = new Decimal(amount).isNegative();
+      const taxCell = cols.tax >= 0 ? fields[cols.tax] : undefined;
+      if (reversal && taxCell !== undefined && taxCell.trim() !== "" && quantityUnreadable(taxCell)) {
+        incomeNotRead.push(cashIncomeRowText((fields[cols.type] ?? "").trim(), `${description || "—"} (${isin}) ${amount}`,
+          currency || "EUR", tradeDate, [unreadableCell(headers[cols.tax] ?? "tax", taxCell)]));
+        continue;
+      }
       cashTransactions.push({
         transactionID: `scalable-${tradeDate}-${isin}-${i}`,
         accountId: "",
@@ -279,7 +294,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
           currency: currency || "EUR",
           dateTime: tradeDate,
           settleDate: tradeDate,
-          amount: new Decimal(tax).abs().neg().toString(),
+          amount: reversal ? new Decimal(tax).abs().toString() : new Decimal(tax).abs().neg().toString(),
           fxRateToBase: "1",
           type: "Withholding Tax",
         });
@@ -376,6 +391,16 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       message: `Se detectó una retención en ${interestWithholdingRows} fila(s) de intereses de Scalable Capital. El interés se ha declarado íntegro en la casilla 0027.`,
       hint: "La deducción por doble imposición (casilla 0588) sobre intereses aún no se calcula automáticamente. Revisa la retención en tu certificado fiscal y, si procede, decláralo manualmente. Los intereses de cuenta a no residentes suelen pagarse sin retención.",
       context: { count: String(interestWithholdingRows) },
+    });
+  }
+  if (incomeNotRead.length > 0) {
+    const rows = incomeNotRead.join("; ");
+    parserMessages.push({
+      id: "scalable.income_row_not_read",
+      severity: "warning",
+      message: `Scalable Capital: ${incomeNotRead.length} dividendo(s) no se pueden leer y no se calculan: ${rows}.`,
+      hint: "Entre corchetes va la celda que falla. Puede ser la retención (tax) de una fila que anula un dividendo. Entonces DeclaRenta no resta esa fila, y el dividendo anulado sigue sumado con su retención. Compara cada fila con el extracto de Scalable Capital. Si anula un dividendo, quita en Renta Web ese dividendo y su retención.",
+      context: { count: String(incomeNotRead.length), rows },
     });
   }
   markUndatedTrades(trades, headers[cols.date] ?? "date");

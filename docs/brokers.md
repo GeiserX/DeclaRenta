@@ -93,6 +93,8 @@ La web muestra la misma guía de cada broker bajo «¿No se detectó tu broker?�
 
 **Limitaciones:** Los informes de Scalable no incluyen posiciones abiertas para el Modelo 720. Necesitarás esa información por separado.
 
+Un dividendo anulado (un importe negativo) resta el dividendo y su retención.
+
 ### eToro
 
 1. Inicia sesión en **eToro**.

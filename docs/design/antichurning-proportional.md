@@ -683,6 +683,10 @@ práctico Renta 2025. The decisions, each pinned in
       redemption) is a corporate-action row too, so the payout is named; it
       was dropped with no word. A blank or written zero amount stays
       skipped.
+      The `tax` of a reversed (negative) Scalable Distribution is a refund,
+      never a new withholding: a reversed Spanish dividend kept its 0597
+      credit. A reversal whose `tax` cannot be read is not booked and is
+      named, so the dividend it reverses keeps its income.
       FIFO values a Lightyear buy or sale at Quantity × `Price/share`. A
       price that could not be read ("n/a", "-") stopped the report with a
       `DecimalError`, and an empty, missing or written-zero one sold the
