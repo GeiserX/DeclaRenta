@@ -717,6 +717,36 @@ function traditionalFxMessages(input: {
   return out;
 }
 
+const isDividendRow = (c: CashTransaction): boolean => c.type === "Dividends" || c.type === "Payment In Lieu Of Dividends";
+
+/**
+ * The withholding rows that belong to a dividend the report leaves out. The
+ * matcher runs as the report runs it (`collapseCorrections`, then
+ * `matchWithholdings`) on the rows the report keeps plus the dividends it
+ * leaves out, so each such dividend takes its own withholding before any
+ * other dividend can. A row goes with the dividend only when no part of it
+ * belongs to a dividend the report keeps: a refund split between both stays
+ * (it can only lower the deduction), so every kept dividend keeps the
+ * withholding it has with the excluded one in the rows.
+ */
+function withholdingsOfExcluded(
+  rows: CashTransaction[],
+  excludedDividends: ReadonlySet<CashTransaction>,
+  outOfRange: ReadonlySet<CashTransaction>,
+  uncountable: ReadonlySet<CashTransaction>,
+): CashTransaction[] {
+  const match = matchWithholdings(
+    collapseCorrections(rows.filter((c) => excludedDividends.has(c) || (!outOfRange.has(c) && !uncountable.has(c)))),
+  );
+  const toExcluded = new Set<number>();
+  const toKept = new Set<number>();
+  match.parts.forEach((parts, divIndex) => {
+    const target = excludedDividends.has(match.dividends[divIndex]!) ? toExcluded : toKept;
+    for (const { index } of parts) target.add(index);
+  });
+  return match.withholdings.filter((_w, index) => toExcluded.has(index) && !toKept.has(index));
+}
+
 /**
  * Generate a complete tax report from an IBKR Flex Statement.
  *
@@ -809,9 +839,18 @@ export function generateTaxReport(
     }
     return value !== null && !isCountableAmount(value.amountEur);
   });
-  const cashTransactions = uncountableCash.length === 0
+  // The withholding of a dividend left out (either rule above) goes with
+  // it, counted nowhere and named (`report.withholding_of_excluded_dividend`).
+  // A trap: left in the rows, the matcher paired it with the next dividend of
+  // the security within 7 days, and box 0588 deducted a tax that dividend
+  // never paid (CodeRabbit on 10e1918).
+  const excludedDividends = new Set([...outOfRangeCash, ...uncountableCash].filter(isDividendRow));
+  const withholdingsLeftOut = excludedDividends.size === 0
+    ? []
+    : withholdingsOfExcluded(statement.cashTransactions, excludedDividends, new Set(outOfRangeCash), new Set(uncountableCash));
+  const cashTransactions = uncountableCash.length === 0 && withholdingsLeftOut.length === 0
     ? readableCash
-    : readableCash.filter((c) => !uncountableCash.includes(c));
+    : readableCash.filter((c) => !uncountableCash.includes(c) && !withholdingsLeftOut.includes(c));
 
   // 0c. Crypto reward income (staking, Simple Earn interest, airdrops, referral)
   //     establishes an acquisition lot at the EUR value taxed as income, so a
@@ -1617,6 +1656,18 @@ export function generateTaxReport(
       severity: "error",
       message: `${count} cobro(s) o cargo(s) del fichero tienen un valor en euros que no es un número o que llega a un billón de euros: ${rows}. Sus importes no se suman a las casillas.`,
       hint: "Suele ser un error del fichero o del tipo de cambio: ningún dividendo, interés o retención real llega a un billón de euros. Revisa esas filas en el fichero del bróker y en los tipos de cambio, y declara su importe a mano.",
+      context: { count, rows },
+    });
+  }
+  // The withholding of a dividend left out: counted nowhere with it.
+  if (withholdingsLeftOut.length > 0) {
+    const count = String(withholdingsLeftOut.length);
+    const rows = withholdingsLeftOut.map((c) => `${c.symbol || c.isin || c.description} (${formatDateDmy(c.dateTime)})`).join(", ");
+    allMessages.push({
+      id: "report.withholding_of_excluded_dividend",
+      severity: "warning",
+      message: `${count} retención(es) del fichero son de un dividendo que no se suma: ${rows}. Tampoco se suman, para que no se descuenten de otro dividendo.`,
+      hint: "Cuando declares a mano ese dividendo, declara también su retención.",
       context: { count, rows },
     });
   }

@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
+import { localizeHint, localizeMessage, setLocale } from "../../src/i18n/index.js";
 import type { CashTransaction, FlexStatement, Trade } from "../../src/types/ibkr.js";
-import type { TaxSummary } from "../../src/types/tax.js";
+import type { FxMethod, TaxSummary } from "../../src/types/tax.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
 // ===========================================================================
@@ -77,6 +78,22 @@ function conversion(date: string, usd: string, direction: "fund" | "toEur"): Tra
     openCloseIndicator: "O",
     exchange: "IDEALFX",
   });
+}
+
+function cash(id: string, date: string, amount: string, type: CashTransaction["type"]): CashTransaction {
+  return {
+    transactionID: id,
+    accountId: "U1",
+    symbol: "XYZ",
+    description: "XYZ(US0000004531) Cash Dividend USD 0.50",
+    isin: "US0000004531",
+    currency: "USD",
+    dateTime: date,
+    settleDate: date,
+    amount,
+    fxRateToBase: "1",
+    type,
+  };
 }
 
 function statement(trades: Trade[], cashTransactions: CashTransaction[] = [], toDate = "20251231"): FlexStatement {
@@ -249,5 +266,92 @@ describe("a coin sale with no rate for its quote still takes its lot (crypto val
     expect(message(r, "report.crypto_valuation_unresolved")).toBeDefined();
     const sale = r.capitalGains.disposals.find((d) => d.sellDate.startsWith("2025-04-10"))!;
     expect(sale.costBasisEur.toString()).toBe("300");
+  });
+});
+
+describe("the withholding of a dividend left out goes with it (dividends, CodeRabbit 4634270137)", () => {
+  const rates = rateMap({ USD: "1" });
+  const METHODS: FxMethod[] = ["multidivisa", "tradicional-divisa", "monodivisa"];
+
+  for (const [label, amount, named] of [
+    ["worth 1e12 € or more", "9e15", "report.cash_amount_too_large"],
+    ["with a number no broker writes", "1e2000", "report.trade_out_of_range"],
+  ] as const) {
+    for (const method of METHODS) {
+      it(`a dividend ${label} keeps its 15 USD withholding off the next day's dividend (${method})`, () => {
+        // XYZ pays 9e15 USD on 14 March, with 15 USD withheld, and 50 USD on
+        // 15 March with nothing withheld. The first is left out; its 15 USD
+        // must not become the second's: a trap, the matcher paired it with
+        // the only dividend left within 7 days and box 0588 deducted it.
+        const r = generateTaxReport(statement([], [
+          cash("D1", "2025-03-14", amount, "Dividends"),
+          cash("W1", "2025-03-14", "-15", "Withholding Tax"),
+          cash("D2", "2025-03-15", "50", "Dividends"),
+        ]), rates, 2025, reportOptionsForMethod(method));
+        expect(message(r, named)?.context?.rows).toBe("XYZ (14/03/2025)");
+        expect(r.dividends.grossIncome.toString()).toBe("50");
+        expect(r.dividends.entries.map((e) => e.withholdingTaxEur.toString())).toEqual(["0"]);
+        expect(r.doubleTaxation.deduction.toString()).toBe("0");
+        const left = message(r, "report.withholding_of_excluded_dividend");
+        expect(left?.severity).toBe("warning");
+        expect(left?.context).toMatchObject({ count: "1", rows: "XYZ (14/03/2025)" });
+      });
+    }
+  }
+
+  it("a retained dividend keeps its own withholding beside one left out", () => {
+    const r = generateTaxReport(statement([], [
+      cash("D1", "2025-03-14", "9e15", "Dividends"),
+      cash("W1", "2025-03-14", "-15", "Withholding Tax"),
+      cash("D2", "2025-03-15", "50", "Dividends"),
+      cash("W2", "2025-03-15", "-7.5", "Withholding Tax"),
+    ]), rates, 2025, reportOptionsForMethod("multidivisa"));
+    expect(r.dividends.entries.map((e) => e.withholdingTaxEur.toString())).toEqual(["7.5"]);
+    expect(message(r, "report.withholding_of_excluded_dividend")?.context).toMatchObject({ count: "1" });
+  });
+
+  it("a refund split between a dividend left out and a kept one stays, so it can only lower the deduction", () => {
+    // The 20 USD refund corrects 15 of D1's withholding and 5 of D2's. Its
+    // part of D2 must stay; dropping the whole row would give D2 its 10 USD
+    // back. Kept, it takes all 10: a deduction of 0, never more than 5.
+    const r = generateTaxReport(statement([], [
+      cash("D1", "2025-03-14", "9e15", "Dividends"),
+      cash("W1", "2025-03-14", "-15", "Withholding Tax"),
+      cash("D2", "2025-03-15", "50", "Dividends"),
+      cash("W2", "2025-03-15", "-10", "Withholding Tax"),
+      cash("R1", "2025-03-14", "20", "Withholding Tax"),
+    ]), rates, 2025, reportOptionsForMethod("multidivisa"));
+    expect(r.dividends.entries.map((e) => e.withholdingTaxEur.toString())).toEqual(["0"]);
+    expect(message(r, "report.withholding_of_excluded_dividend")?.context).toMatchObject({ count: "1", rows: "XYZ (14/03/2025)" });
+  });
+
+  it("with no dividend left out every withholding stays where it was (control)", () => {
+    const r = generateTaxReport(statement([], [
+      cash("D1", "2025-03-14", "100", "Dividends"),
+      cash("W1", "2025-03-14", "-15", "Withholding Tax"),
+      cash("D2", "2025-03-15", "50", "Dividends"),
+    ]), rates, 2025, reportOptionsForMethod("multidivisa"));
+    expect(r.dividends.entries.map((e) => e.withholdingTaxEur.toString())).toEqual(["15", "0"]);
+    expect(message(r, "report.withholding_of_excluded_dividend")).toBeUndefined();
+  });
+
+  it("names the withholding left out in the 5 locales", async () => {
+    const r = generateTaxReport(statement([], [
+      cash("D1", "2025-03-14", "9e15", "Dividends"),
+      cash("W1", "2025-03-14", "-15", "Withholding Tax"),
+    ]), rates, 2025, reportOptionsForMethod("monodivisa"));
+    const m = message(r, "report.withholding_of_excluded_dividend")!;
+    expect(localizeMessage(m)).toBe(m.message);
+    expect(localizeHint(m)).toBe(m.hint);
+    try {
+      for (const locale of ["en", "ca", "eu", "gl"] as const) {
+        await setLocale(locale);
+        expect(localizeMessage(m)).not.toBe(m.message);
+        expect(localizeMessage(m)).toContain("XYZ (14/03/2025)");
+        expect(localizeHint(m)).not.toBe(m.hint);
+      }
+    } finally {
+      await setLocale("es");
+    }
   });
 });

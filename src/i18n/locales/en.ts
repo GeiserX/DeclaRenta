@@ -1028,6 +1028,10 @@ const en: TranslationKeys = {
     "{{count}} cash row(s) in the file have a value in euros that is not a number or that reaches a trillion euros (10^12): {{rows}}. Their amounts are not added to the boxes.",
   "report.cash_amount_too_large.hint":
     "It is usually an error in the file or in the exchange rate: no real dividend, interest or withholding reaches a trillion euros. Check those rows in the broker's file and the exchange rates, and declare their amount by hand.",
+  "report.withholding_of_excluded_dividend":
+    "{{count}} withholding row(s) in the file belong to a dividend that is not added: {{rows}}. They are not added either, so they are not deducted from another dividend.",
+  "report.withholding_of_excluded_dividend.hint":
+    "When you declare that dividend by hand, declare its withholding too.",
   "report.non_finite_disposal":
     "{{count}} sale(s) have an amount that is not a number (NaN or infinity) or that has more than 12 integer digits in euros: {{rows}}. That amount is not added to the boxes. The other operations of the year are added.",
   "report.non_finite_disposal.hint":

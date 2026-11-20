@@ -1030,6 +1030,10 @@ const gl: TranslationKeys = {
     "{{count}} cobro(s) ou cargo(s) do ficheiro teñen un valor en euros que non é un número ou que chega a un billón de euros: {{rows}}. Os seus importes non se suman ás casillas.",
   "report.cash_amount_too_large.hint":
     "Adoita ser un erro do ficheiro ou do tipo de cambio: ningún dividendo, xuro ou retención real chega a un billón de euros. Revisa esas filas no ficheiro do bróker e nos tipos de cambio, e declara o seu importe a man.",
+  "report.withholding_of_excluded_dividend":
+    "{{count}} retención(s) do ficheiro son dun dividendo que non se suma: {{rows}}. Tampouco se suman, para que non se desconten doutro dividendo.",
+  "report.withholding_of_excluded_dividend.hint":
+    "Cando declares a man ese dividendo, declara tamén a súa retención.",
   "report.non_finite_disposal":
     "{{count}} venda(s) teñen un importe que non é un número (NaN ou infinito) ou que pasa de 12 cifras enteiras en euros: {{rows}}. Ese importe non se suma ás casillas. O resto das operacións do ano si se suman.",
   "report.non_finite_disposal.hint":
