@@ -328,23 +328,32 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
         continue;
       }
       // A written zero amount with a tax is no dividend: the row only carries
-      // a tax (a late withholding, a refund). A 0 dividend took its own tax as
-      // its pair, and that tax then counted against the treaty cap of the
-      // country's other dividends with no income behind it. Its tax alone is
-      // booked below, as IBKR writes it, so the report joins it to a dividend
-      // of its ISIN within 7 days or leaves it out, as in Lightyear (#467). A
-      // written zero with no tax stays booked as the file writes it.
-      // Scalable writes a withholding negative ("-2,33"), so a positive tax on
-      // a written zero is money paid back, a refund. Read as a new
-      // withholding, 100 with -19 and then 0 with +5 gave a 0597 of 24 instead
-      // of 14. It is booked as a refund, which the report takes from a
-      // dividend of its ISIN within 7 days, never below 0, and it is named:
-      // with no dividend that close the report leaves it out. In a file that
-      // writes withholdings positive the row may be a late withholding: booked
-      // as a refund it can only raise the tax (#467). A tax of 0 is no refund:
-      // decimal.js counts 0 as positive, so the test is greaterThan(0). A zero
-      // or empty tax on a zero row is the file's written zero and stays
-      // booked with no word.
+      // a tax. A 0 dividend took its own tax as its pair, and that tax then
+      // counted against the treaty cap of the country's other dividends with
+      // no income behind it. A written zero with no tax stays booked as the
+      // file writes it.
+      // Scalable writes a withholding negative ("-2,33"). Booked alone as a
+      // late withholding, a negative tax on a written zero ("-5,00",
+      // "(5,00)") gave a credit with no income behind it, with no word: 100
+      // with -19 and then 0 with -5 gave a 0597 of 24, and a tax-only row of
+      // another US security raised the 0588. It is not booked, as in Trade
+      // Republic, and the row is named: the user adds a real late
+      // withholding by hand (#467).
+      if (zeroAmount && new Decimal(tax).lessThan(0)) {
+        unreadableIncome.push(cashIncomeRowText((fields[cols.type] ?? "").trim(), `${description || "—"} (${isin})`, currency || "EUR", tradeDate,
+          [unreadableCell(headers[cols.amount] ?? "amount", fields[cols.amount])], `${headers[cols.tax] ?? "tax"} ${tax}`));
+        continue;
+      }
+      // A positive tax on a written zero is money paid back, a refund. Read
+      // as a new withholding, 100 with -19 and then 0 with +5 gave a 0597 of
+      // 24 instead of 14. It is booked alone, as a refund, which the report
+      // takes from a dividend of its ISIN (dividends.ts matchWithholdings),
+      // never below 0, and it is named: with no dividend in reach the report
+      // leaves it out. In a file that writes withholdings positive the row
+      // may be a late withholding: booked as a refund it can only raise the
+      // tax (#467). A tax of 0 is no refund: decimal.js counts 0 as
+      // positive, so the test is greaterThan(0). A zero or empty tax on a
+      // zero row is the file's written zero and stays booked with no word.
       const taxNum = parseFloat(parseNumber(tax));
       const zeroRefund = zeroAmount && new Decimal(tax).greaterThan(0);
       if (zeroRefund) {

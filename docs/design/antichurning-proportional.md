@@ -1050,6 +1050,10 @@ práctico Renta 2025. The decisions, each pinned in
       be read ("abc", "+5,00 EUR") books nothing and
       `parser.cash_income_amount_unreadable` names it with both cells:
       before, the tax was read as 0 and the row dropped with no word.
+      One whose `tax` is negative (a withholding with no income) is not
+      booked and `parser.cash_income_amount_unreadable` names it, as in
+      Trade Republic: booked alone as a late withholding, it gave a 0597
+      or 0588 credit on 0 € of income.
       A Trade Republic dividend read from `original_amount` took its sign
       from that cell alone. When `amount` is a readable nonzero number of
       the other sign, or `original_amount` is 0, the row says two things:

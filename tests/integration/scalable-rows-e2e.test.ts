@@ -15,6 +15,8 @@
  *   was dropped with no word, even a sale or a dividend.
  * - A Distribution with a written 0 amount and a tax booked a 0 dividend that
  *   took its own tax, so the tax raised the 0588 of the country's other dividends.
+ *   Booked alone as a late withholding, a negative tax still gave a 0597 or
+ *   0588 credit with no income behind it, with no word.
  * - A reversed Distribution whose tax cell was empty or missing was booked
  *   with no refund, so the reversed dividend kept its whole withholding.
  * - A status that named an execution and a cancelled rest dropped the row
@@ -273,14 +275,22 @@ describe("Scalable round 3: rows booked against what the file says", () => {
     expect(sums(report([dist(MSFT, "100,00", "-10,00", "2025-06-01")], method))).toBe("div=100.00 sw=0.00 dtd=10.00");
   });
 
-  it.each(METHODS)("[%s] a Distribution of 0 with a tax books only the tax, which never pairs with itself", (method) => {
+  // A tax with no income is never a credit: the row books no withholding
+  // and is named, as in Trade Republic (#467).
+  it.each(METHODS)("[%s] a Distribution of 0 with a withholding books nothing and is named, so it never raises the 0588", (method) => {
     for (const date of ["2025-06-01", "2025-08-01"]) {
       const rows = [dist(MSFT, "100,00", "-10,00", "2025-06-01"), dist(GOOG, "0", "-3,00", date)];
-      expect(cash(parse(rows)), date).toEqual([`Dividends ${MSFT} 100`, `Withholding Tax ${MSFT} -10`, `Withholding Tax ${GOOG} -3`]);
-      expect(sums(report(rows, method)), date).toBe("div=100.00 sw=0.00 dtd=10.00");
+      const s = parse(rows);
+      expect(cash(s), date).toEqual([`Dividends ${MSFT} 100`, `Withholding Tax ${MSFT} -10`]);
+      expect(msg(s, "parser.cash_income_amount_unreadable"), date)
+        .toBe(`Distribution Div (${GOOG}) EUR ${date.replace(/-/g, "")} (tax -3) [amount: "0"]`);
+      const r = report(rows, method);
+      expect(sums(r), date).toBe("div=100.00 sw=0.00 dtd=10.00");
+      expect(r.messages.map((m) => m.id), date).toContain("parser.cash_income_amount_unreadable");
     }
-    // A Spanish tax with no dividend of its ISIN in reach is left out too.
-    expect(sums(report([dist(ES, "0,00", "-19,00", "2025-06-01")], method))).toBe("div=0.00 sw=0.00 dtd=0.00");
+    const alone = [dist(ES, "0,00", "-19,00", "2025-06-01")];
+    expect(msg(parse(alone), "parser.cash_income_amount_unreadable")).toBe(`Distribution Div (${ES}) EUR 20250601 (tax -19) [amount: "0,00"]`);
+    expect(sums(report(alone, method))).toBe("div=0.00 sw=0.00 dtd=0.00");
   });
 
   it("a written zero Distribution with no tax still books its zero, as the file says", () => {
@@ -418,10 +428,19 @@ describe("Scalable round 4: a Distribution of 0 with a positive tax is a refund,
     expect(r.messages.map((m) => m.id)).toContain(REFUND);
   });
 
-  it.each(METHODS)("[%s] control: a zero row with -5 stays a late withholding, with no word", (method) => {
-    const rows = [dist(ES, "100,00", "-19,00", "2025-06-01"), dist(ES, "0,00", "-5,00", "2025-06-03")];
-    expect(parse(rows).parserMessages).toBeUndefined();
-    expect(sums(report(rows, method))).toBe("div=100.00 sw=24.00 dtd=0.00");
+  // Booked as a late withholding, -5 on a zero row gave a 0597 of 24 with no
+  // word: a credit with no income behind it (#467).
+  it.each(METHODS)("[%s] a zero row with -5,00 or (5,00) books no withholding and is named: the 0597 stays 19, not 24", (method) => {
+    for (const tax of ["-5,00", "(5,00)"]) {
+      const rows = [dist(ES, "100,00", "-19,00", "2025-06-01"), dist(ES, "0,00", tax, "2025-06-03")];
+      const s = parse(rows);
+      expect(s.parserMessages?.map((m) => m.id), tax).toEqual(["parser.cash_income_amount_unreadable"]);
+      expect(msg(s, "parser.cash_income_amount_unreadable"), tax).toBe(`Distribution Div (${ES}) EUR 20250603 (tax -5) [amount: "0,00"]`);
+      expect(cash(s), tax).toEqual([`Dividends ${ES} 100`, `Withholding Tax ${ES} -19`]);
+      const r = report(rows, method);
+      expect(sums(r), tax).toBe("div=100.00 sw=19.00 dtd=0.00");
+      expect(r.messages.map((m) => m.id), tax).toContain("parser.cash_income_amount_unreadable");
+    }
   });
 
   // decimal.js counts 0 as positive, so a zero tax once read as a refund.
