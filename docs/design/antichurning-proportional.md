@@ -588,6 +588,11 @@ práctico Renta 2025. The decisions, each pinned in
       USD) is not booked and is named with those cells (it was booked in
       the Currency cell's currency). An empty Currency cell takes the
       currency in front of the amounts.
+      A split, merger or spin-off row with no ticker is a corporate-action
+      row with no security, named as not applied (it was dropped with no
+      word, so a split's later sale kept its pre-split cost and a cash
+      merger's money was lost). One that moves no shares and no money is
+      skipped. A reward or a custody fee with no ticker stays skipped.
     - Trading 212: a buy or sale with no readable Time or no ticker; an
       action that is not a buy, sale, dividend, interest, split or cash row
       and writes a share count. An unknown action with an empty share cell

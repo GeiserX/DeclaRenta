@@ -18,6 +18,8 @@
  *   empty statement with no word.
  * - The currency in front of an amount was ignored: "EUR 1500" with a
  *   Currency of USD was booked as 1500 USD.
+ * - A split, merger or spin-off with no ticker was dropped with no word: a
+ *   split's later sale kept its pre-split cost, a cash merger's money was lost.
  */
 import { describe, it, expect } from "vitest";
 import * as XLSX from "xlsx";
@@ -324,5 +326,55 @@ describe("Revolut amounts whose currency disagrees with the Currency column are 
     const d = await report([dividend("USD 110", "")], method);
     expect(d.dividends.grossIncome.toFixed(2)).toBe("121.00");
     expect((await parse([dividend("USD 110", "")])).cashTransactions[0]!.currency).toBe("USD");
+  });
+});
+
+describe("Revolut splits and other corporate actions with no ticker are kept and named, never dropped with no word", () => {
+  // Buy 10 AAPL at 100 USD, a split that adds 10 shares, sell 10 at 75 USD.
+  // Applied, the sale has a cost of 500 USD: a gain of 275 €.
+  const SPLIT = (ticker: string, date = "2025-03-01T10:00:00Z") => [date, ticker, "STOCK SPLIT", "10", "", "USD 0", "USD", "1.1"];
+  const SELL10 = ["2025-06-03T10:00:00Z", "AAPL", "SELL - MARKET", "10", "USD 75", "USD 750", "USD", "1.1"];
+
+  it.each(METHODS)("[%s] control: a split with its ticker is applied, a gain of 275 €", async (method) => {
+    const r = await report([BUY, SPLIT("AAPL"), SELL10], method);
+    expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("275.00");
+  });
+
+  it.each(METHODS)("[%s] a split with no ticker is named as not applied: the user is told the 275 € loss may be wrong", async (method) => {
+    const s = await parse([BUY, SPLIT(""), SELL10]);
+    expect(msg(s, "parser.corporate_action_not_applied")).toBe("— 20250301 [STOCK SPLIT: 10]");
+    expect(s.trades.filter((t) => t.corporateActionRow !== undefined).map((t) => [t.symbol, t.quantity, t.quantityUnknown]))
+      .toEqual([["", "0", true]]);
+    const r = await report([BUY, SPLIT(""), SELL10], method);
+    expect(r.messages.some((m) => m.id === "parser.corporate_action_not_applied")).toBe(true);
+    expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("-275.00");
+  });
+
+  it.each(METHODS)("[%s] a cash merger, a stock merger and a spin-off with no ticker are named; the merger's money is said to be missing", async (method) => {
+    for (const [type, qty, total] of [["MERGER - CASH", "10", "USD 1500"], ["MERGER - STOCK", "10", "USD 0"], ["SPINOFF", "5", "USD 0"]] as const) {
+      const row = ["2025-06-03T10:00:00Z", "", type, qty, "", total, "USD", "1.1"];
+      const s = await parse([BUY, row]);
+      expect(msg(s, "parser.corporate_action_not_applied"), type).toBe(`— 20250603 [${type}: ${qty}]`);
+      const r = await report([BUY, row], method);
+      expect(r.messages.find((m) => m.id === "parser.corporate_action_not_applied")?.hint, type).toContain("Añádela a mano");
+      expect(r.capitalGains.transmissionValue.toFixed(2), type).toBe("0.00");
+    }
+  });
+
+  it("a split with no ticker and no readable date is named with its date cell", async () => {
+    const s = await parse([BUY, SPLIT("", "abc")]);
+    expect(msg(s, "parser.corporate_action_not_applied")).toBe("— abc [STOCK SPLIT: 10]");
+  });
+
+  it("a merger with no ticker that moves no shares and no money, a reward and a custody fee with no ticker stay skipped", async () => {
+    for (const row of [
+      ["2025-06-03T10:00:00Z", "", "MERGER - CASH", "0", "", "USD 0", "USD", "1.1"],
+      ["2025-06-03T10:00:00Z", "", "REWARD", "1", "", "USD 10", "USD", "1.1"],
+      ["2025-06-03T10:00:00Z", "", "CUSTODY FEE", "", "", "USD -1", "USD", "1.1"],
+    ]) {
+      const s = await parse([BUY, row]);
+      expect(s.trades.map((t) => t.tradeID), row.join()).toEqual(["revolut-buy-20250203-AAPL-1"]);
+      expect(s.parserMessages, row.join()).toBeUndefined();
+    }
   });
 });

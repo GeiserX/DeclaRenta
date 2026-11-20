@@ -46,6 +46,7 @@ import {
   cashIncomeRowText,
   cashIncomeAmountUnreadableMessages,
   corporateActionTrade,
+  isCorporateActionType,
   isoDateCells,
   slashDateOrder,
   convertSlashDate,
@@ -552,6 +553,23 @@ function parseTransactionLog(
     // no word (#467).
     if (!ticker && TXN_TYPE_DIVIDEND.test(type)) {
       if (!totalAmountDec.isZero()) unidentifiedCash.push(`${type} ${totalRaw} ${isReadableTradeDate(tradeDate) ? tradeDate : dateStr || "—"}`);
+      continue;
+    }
+    // A split, merger, spin-off or other corporate action with no ticker
+    // still moves shares of some security, and a cash merger pays for them:
+    // it was dropped with no word, so a split's sale kept its pre-split cost
+    // (a 275 € gain became a 275 € loss) and a cash merger's money was lost
+    // (#467). It names no security, so it is kept as a corporate action not
+    // applied, as Freedom24 does, and makes no holding of unknown size. One
+    // that moves no shares and no money stays skipped, as with a ticker.
+    if (!ticker && (TXN_TYPE_SPLIT.test(type) || isCorporateActionType(type))) {
+      const qtyRead = readRevolutNumber(row[cols.quantity]).amount;
+      const noMoney = totalRaw === "" || totalRead?.isZero() === true;
+      if (!TXN_TYPE_SPLIT.test(type) && qtyRead?.isZero() === true && noMoney) continue;
+      trades.push(corporateActionTrade({
+        tradeID: `revolut-action-${tradeDate}--${i}`, symbol: "", isin: "", assetCategory: "STK", currency,
+        tradeDate: isReadableTradeDate(tradeDate) ? tradeDate : dateStr, exchange: "REVOLUT",
+      }, type, (row[cols.quantity] ?? "").trim().replace(/^[A-Z]{3}\s+/, "")));
       continue;
     }
     // Skip other rows without a ticker (e.g. REWARD, CUSTODY FEE): no trade.
