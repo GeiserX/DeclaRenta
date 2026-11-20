@@ -595,6 +595,23 @@ práctico Renta 2025. The decisions, each pinned in
       Lightyear and Scalable (`Fee`, `Tax`).
       Each leg of a `Stock split open` or `Stock split close` is a
       corporate-action row (above).
+      FIFO values a Trading 212 buy or sale at `No. of shares` ×
+      `Price / share`, and never reads the Total. A row with no readable or
+      nonzero price was valued from a Total in the instrument's currency,
+      but its price stayed 0, so a sale was a full loss with no word. The
+      price is now Total ÷ shares. With neither a price nor a Total, a sale
+      was booked at 0: a written zero in both cells is now a
+      corporate-action row, and any other an unreadable row named by both
+      cells. A buy or sale with an empty `Currency (Price / share)` (or a
+      row cut short) is an unreadable row named by that cell; it was booked
+      as euros. A dividend, interest or withholding with both currency
+      cells empty is not booked and is named by
+      `parser.cash_income_amount_unreadable`. `Dividend (Tax exempted)` is
+      a dividend; it was booked as a withholding. `Lending interest` is
+      interest (casilla 0027); it was dropped with no word. A withholding
+      keeps its sign when the file writes any withholding as negative, so a
+      positive one is a refund. The withholding of a dividend that is not
+      booked is not booked either, and is named with it.
     - Freedom24: a row with no readable date, no ticker, or an operation
       other than `buy` or `sell` after trimming (`sale`, `transfer`). Before,
       every operation that was not `sell` was booked as a buy (#468). In

@@ -11,9 +11,10 @@
  * Action types:
  * - Market buy / Limit buy / Stop buy → BUY trade
  * - Market sell / Limit sell / Stop sell → SELL trade
- * - Dividend (Ordinary) / Dividend (Dividend) → cash transaction (dividend)
- * - Dividend (Dividend tax) → cash transaction (Withholding Tax)
- * - Interest on cash → cash transaction (interest)
+ * - Dividend (Ordinary) / Dividend (Dividend) / Dividend (Tax exempted) → cash transaction (dividend)
+ * - Dividend (Dividend tax) → cash transaction (Withholding Tax); a positive
+ *   one in a file that writes withholdings negative is a refund
+ * - Interest on cash / Lending interest → cash transaction (interest)
  * - Deposit / Withdrawal / Currency conversion / Card debit / Spending cashback → skipped
  *
  * Limitations:
@@ -134,16 +135,24 @@ function isSellAction(action: string): boolean {
   return /sell/i.test(action);
 }
 
+/**
+ * A withholding row ("Dividend (Dividend tax)"). "Dividend (Tax exempted)" is
+ * a dividend paid with no tax withheld, never a withholding (#467).
+ */
 function isDividendTaxAction(action: string): boolean {
-  return /dividend.*tax/i.test(action);
+  return /dividend.*tax/i.test(action) && !/exempt/i.test(action);
 }
 
 function isDividendAction(action: string): boolean {
   return /dividend/i.test(action) && !isDividendTaxAction(action);
 }
 
+/**
+ * Interest on cash, and "Lending interest" (the pay for lending shares out,
+ * interest income under art. 25.2 LIRPF): it was dropped with no word (#467).
+ */
 function isInterestAction(action: string): boolean {
-  return /interest on cash/i.test(action);
+  return /interest on cash|lending interest/i.test(action);
 }
 
 /**
@@ -184,8 +193,22 @@ function parseTrading212Csv(lines: string[]): Statement {
   let unresolvedPriceSkipped = 0;
   // Dividend and withholding rows with no ticker and no ISIN (#467).
   const unidentifiedCash: string[] = [];
-  // Dividend and interest rows whose Total cannot be read (#467).
-  const unreadableIncome: string[] = [];
+  // Dividend, interest and withholding rows whose Total or currency cannot
+  // be read (#467). A dividend's `key` finds its withholdings below.
+  const unreadableIncome: { key?: string; type: string; security: string; currency: string; date: string; cells: string[] }[] = [];
+  const incomeKey = (isin: string, security: string, date: string): string => `${isin}|${security}|${date}`;
+  const currencyCells = (fields: string[]): string[] => [
+    unreadableCell(headers[cols.priceCurrency] ?? "Currency (Price / share)", fields[cols.priceCurrency]),
+    unreadableCell(headers[cols.totalCurrency] ?? "Currency (Total)", fields[cols.totalCurrency]),
+  ];
+  // A file that writes any withholding as a negative Total writes a
+  // withholding negative, so a positive one there is a refund or a reversal,
+  // which the engine nets (#438). A file that writes every withholding
+  // positive writes them as positive: each is a withholding (#467).
+  const withholdingsSigned = lines.slice(1).some((l) => {
+    const f = parseCsvLine(l.trim(), ",");
+    return isDividendTaxAction((f[cols.action] ?? "").trim()) && new Decimal(toFiniteDecimalString(f[cols.total] ?? "0")).isNegative();
+  });
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -202,12 +225,17 @@ function parseTrading212Csv(lines: string[]): Statement {
     // non-finite Decimal that would silently poison downstream tax totals.
     const sharesStr = toFiniteDecimalString(fields[cols.shares] ?? "0");
     const priceStr = toFiniteDecimalString(fields[cols.pricePerShare] ?? "0");
-    const rawCurrency = (fields[cols.priceCurrency] ?? "").trim() || "EUR";
+    // An empty currency cell is no EUR (#467): a buy or sale with no
+    // Currency (Price / share), and a cash row with neither currency cell, is
+    // not booked and is named below. A row that books nothing keeps "EUR".
+    const priceCurrencyCell = (fields[cols.priceCurrency] ?? "").trim();
+    const rawCurrency = priceCurrencyCell || "EUR";
     const { currency: priceCurrency, divisor: priceDivisor } = normalizeFractionalCurrency(rawCurrency);
     const currency = priceCurrency;
     // Currency (Total) is authoritative for cash transaction amounts: in EUR-primary accounts
     // the Total column holds the credited EUR amount, not the instrument's native currency.
-    const rawCashCurrency = (fields[cols.totalCurrency] ?? "").trim() || rawCurrency;
+    const cashCurrencyCell = (fields[cols.totalCurrency] ?? "").trim() || priceCurrencyCell;
+    const rawCashCurrency = cashCurrencyCell || rawCurrency;
     const { currency: cashCurrency, divisor: cashDivisor } = normalizeFractionalCurrency(rawCashCurrency);
     const totalStr = toFiniteDecimalString(fields[cols.total] ?? "0");
     const txId = (fields[cols.id] ?? "").trim();
@@ -273,10 +301,16 @@ function parseTrading212Csv(lines: string[]): Statement {
 
     // Withholding tax on dividend — must be checked before the generic dividend branch
     if (isDividendTaxAction(action)) {
-      const amountDec = new Decimal(totalStr).abs().div(cashDivisor);
+      const signedDec = new Decimal(totalStr).div(cashDivisor);
+      const amountDec = withholdingsSigned ? signedDec : signedDec.abs().neg();
       if (amountDec.isZero()) continue;
       if (!security) {
-        unidentifiedCash.push(`${action} -${amountDec.toString()} ${cashCurrency} ${tradeDate || "—"}`);
+        unidentifiedCash.push(`${action} ${amountDec.toString()} ${cashCurrency} ${tradeDate || "—"}`);
+        continue;
+      }
+      // With no currency it is no EUR: not booked, named (#467).
+      if (!cashCurrencyCell) {
+        unreadableIncome.push({ type: action, security, currency: "", date: tradeDate, cells: currencyCells(fields) });
         continue;
       }
 
@@ -289,19 +323,31 @@ function parseTrading212Csv(lines: string[]): Statement {
         currency: cashCurrency,
         dateTime: tradeDate,
         settleDate: tradeDate,
-        amount: amountDec.neg().toString(),
+        amount: amountDec.toString(),
         fxRateToBase: "1",
         type: "Withholding Tax",
       });
       continue;
     }
 
-    // A dividend or interest row whose Total cannot be read is no zero: it is
-    // not booked and is named, never dropped with no word (#467).
-    if ((isDividendAction(action) || isInterestAction(action)) && quantityUnreadable(fields[cols.total])) {
-      unreadableIncome.push(cashIncomeRowText(action, isDividendAction(action) ? security || "—" : "", cashCurrency, tradeDate,
-        [unreadableCell(headers[cols.total] ?? "Total", fields[cols.total])]));
-      continue;
+    // A dividend or interest row whose Total cannot be read is no zero, and
+    // one with no currency is no EUR: it is not booked and is named, never
+    // dropped with no word (#467). A written zero stays skipped. The
+    // withholdings of such a dividend are taken out and named with it below.
+    if (isDividendAction(action) || isInterestAction(action)) {
+      const totalUnreadable = quantityUnreadable(fields[cols.total]);
+      if (totalUnreadable || (!cashCurrencyCell && !new Decimal(totalStr).isZero())) {
+        const dividend = isDividendAction(action);
+        unreadableIncome.push({
+          ...(dividend ? { key: incomeKey(isin, security, tradeDate) } : {}),
+          type: action, security: dividend ? security || "—" : "", currency: cashCurrencyCell ? cashCurrency : "", date: tradeDate,
+          cells: [
+            ...(totalUnreadable ? [unreadableCell(headers[cols.total] ?? "Total", fields[cols.total])] : []),
+            ...(cashCurrencyCell ? [] : currencyCells(fields)),
+          ],
+        });
+        continue;
+      }
     }
 
     // Dividends
@@ -338,7 +384,7 @@ function parseTrading212Csv(lines: string[]): Statement {
         transactionID: `trading212-interest-${uniqueId}`,
         accountId: "",
         symbol: "CASH",
-        description: "Interest on cash",
+        description: action,
         isin: "",
         currency: cashCurrency,
         dateTime: tradeDate,
@@ -367,6 +413,16 @@ function parseTrading212Csv(lines: string[]): Statement {
       continue;
     }
 
+    // No price currency is no EUR (#467): a GBP sale was booked as euros.
+    if (!priceCurrencyCell) {
+      trades.push(unreadableTrade({
+        tradeID: `trading212-row-${uniqueId}`,
+        symbol: ticker, description: name, isin, assetCategory: "STK", currency, tradeDate, tradeTime,
+        buySell: sell ? "SELL" : "BUY", exchange: "TRADING212",
+      }, unreadableCell(headers[cols.priceCurrency] ?? "Currency (Price / share)", fields[cols.priceCurrency])));
+      continue;
+    }
+
     const priceDec = new Decimal(priceStr).div(priceDivisor);
     const totalDec = new Decimal(totalStr).abs().div(cashDivisor);
     if (priceDec.isZero() && !totalDec.isZero() && cashCurrency !== currency) {
@@ -383,9 +439,37 @@ function parseTrading212Csv(lines: string[]): Statement {
       }
       continue;
     }
+    // With neither a price nor a Total the row moves shares for no money it
+    // can read. Booked, a sale was a disposal at 0, a full loss (#467). A
+    // written zero in both cells is a corporate action not applied, as in
+    // Lightyear, Scalable, Flatex and DEGIRO; any other is an unreadable row
+    // named by both cells. Either books nothing and keeps the evidence.
+    if (priceDec.isZero() && totalDec.isZero()) {
+      const row = {
+        symbol: ticker, description: name, isin, assetCategory: "STK" as const, currency, tradeDate, tradeTime,
+        buySell: sell ? "SELL" as const : "BUY" as const, exchange: "TRADING212",
+      };
+      const priceCell = fields[cols.pricePerShare];
+      const totalCell = fields[cols.total];
+      const priceName = headers[cols.pricePerShare] ?? "Price / share";
+      const totalName = headers[cols.total] ?? "Total";
+      if (!quantityUnreadable(priceCell) && !quantityUnreadable(totalCell)) {
+        trades.push(corporateActionTrade({ ...row, tradeID: `trading212-action-${uniqueId}` },
+          `${priceName} ${priceCell!.trim()}, ${totalName} ${totalCell!.trim()}`, fields[cols.shares] ?? ""));
+      } else {
+        trades.push(unreadableTrade({ ...row, tradeID: `trading212-row-${uniqueId}` },
+          `${unreadableCell(priceName, priceCell)}, ${unreadableCell(totalName, totalCell)}`));
+      }
+      continue;
+    }
     const grossDec = priceDec.isZero()
       ? totalDec
       : qtyDec.times(priceDec);
+    // FIFO values a trade at quantity × tradePrice and never reads the Total,
+    // so a trade valued from its Total is priced Total ÷ shares, in the
+    // instrument's major unit as the Total is (#467). A price of "0" sold the
+    // shares at 0. A readable price keeps its value.
+    const tradePriceDec = priceDec.isZero() ? grossDec.div(qtyDec) : priceDec;
 
     // Fees and transaction taxes are part of the acquisition cost on a buy and
     // reduce the transmission value on a sell (Art. 35.1.b / 35.2 LIRPF). A fee in
@@ -423,7 +507,7 @@ function parseTrading212Csv(lines: string[]): Statement {
       tradeTime,
       settlementDate: tradeDate,
       quantity: sell ? qtyDec.neg().toString() : qtyDec.toString(),
-      tradePrice: priceDec.toString(),
+      tradePrice: tradePriceDec.toString(),
       tradeMoney: sell ? grossDec.toString() : grossDec.neg().toString(),
       proceeds: sell ? grossDec.toString() : "0",
       cost: sell ? "0" : grossDec.neg().toString(),
@@ -449,12 +533,24 @@ function parseTrading212Csv(lines: string[]): Statement {
     });
   }
 
+  // The withholdings of a dividend that is not booked (same security, same
+  // day) are not booked either: a deduction for income the report does not
+  // count, which could pair with another dividend of the security. They are
+  // named with it.
+  const unreadableRows = unreadableIncome.map((row) => {
+    if (row.key === undefined) return cashIncomeRowText(row.type, row.security, row.currency, row.date, row.cells);
+    const withheld = cashTransactions.filter((c) => c.type === "Withholding Tax" && incomeKey(c.isin, c.symbol, c.dateTime) === row.key);
+    for (const w of withheld) cashTransactions.splice(cashTransactions.indexOf(w), 1);
+    const tax = withheld.map((w) => `${w.description} ${w.amount} ${w.currency}`).join(", ");
+    return cashIncomeRowText(row.type, row.security, row.currency, row.date, row.cells, tax);
+  });
+
   markUndatedTrades(trades, headers[cols.time] ?? "Time");
   parserMessages.push(
     ...tradeQuantityUnknownMessages("Trading 212", trades),
     ...dropUndatedCash("Trading 212", cashTransactions, headers[cols.time] ?? "Time"),
     ...cashRowsUnidentifiedMessages("Trading 212", unidentifiedCash),
-    ...cashIncomeAmountUnreadableMessages("Trading 212", unreadableIncome),
+    ...cashIncomeAmountUnreadableMessages("Trading 212", unreadableRows),
   );
 
   return {
