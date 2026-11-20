@@ -290,8 +290,14 @@ function parseLightyearCsv(lines: string[]): Statement {
       }
 
       const grossDec = new Decimal(grossAmount).abs();
-      // Gross dividend
-      cashTransactions.push({
+      // Gross dividend. A written zero Gross is no dividend: the row only
+      // carries a tax (a late withholding, a refund). A 0 dividend took its
+      // own tax as its pair, and that tax then counted against the treaty
+      // cap of the country's other dividends, with no dividend of its
+      // security in reach. Its tax alone is booked below, as IBKR writes it,
+      // so the report joins it to a dividend of its ISIN within 7 days or
+      // leaves it out (#467).
+      if (!grossDec.isZero()) cashTransactions.push({
         transactionID: `lightyear-${txType}-${reference || `${tradeDate}-${security}-${i}`}`,
         accountId: "",
         symbol: security,

@@ -11,6 +11,8 @@
  * - A conversion leg with no readable amount or currency was dropped with no
  *   word, or crashed the report.
  * - A negative Tax Amt. (a withholding refund) was booked as more withholding.
+ * - A tax-only dividend row (zero Gross) became a 0 dividend that anchored its
+ *   tax, so the tax counted against other dividends of the country.
  * - A row with an empty Type was dropped with no word.
  */
 import { describe, it, expect } from "vitest";
@@ -228,6 +230,30 @@ describe("Lightyear Tax Amt.: a refund lowers the withholding, never raises it",
   it("a negative Tax Amt. whose Net cannot be read lowers the withholding (the conservative reading)", () => {
     const s = parse(["15/01/2025,REF001,VWRL,IE00B3RBWM25,Distribution,,USD,,10,1,0,n/a,-1.50"]);
     expect(s.cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual(["Dividends 10", "Withholding Tax 1.5"]);
+  });
+});
+
+describe("Lightyear Tax Amt. on a dividend row with a zero Gross: a withholding with no dividend of its own", () => {
+  // MSFT 100 USD with 10 withheld: at 0.9 €/USD the deduction is 9 €.
+  const DIV10 = "10/05/2025 06:00:00,DD-9,MSFT,US5949181045,Dividend,,USD,,100.00,,,90.00,10.00";
+  const taxOnly = (date: string, ticker = "MSFT,US5949181045") => `${date} 06:00:00,DD-10,${ticker},Dividend,,USD,,0.00,,,-3.00,3.00`;
+
+  it.each(METHODS)("[%s] control: a tax-only row of the same security 2 days later joins that dividend", (method) => {
+    expect(report([DIV10], method).doubleTaxation.deduction.toString()).toBe("9");
+    expect(report([DIV10, taxOnly("12/05/2025")], method).doubleTaxation.deduction.toString()).toBe("11.7");
+  });
+
+  it.each(METHODS)("[%s] a tax-only row of another security, or out of the 7-day reach, never adds to another dividend's deduction", (method) => {
+    for (const row of [taxOnly("12/05/2025", "GOOG,US02079K1079"), taxOnly("20/06/2025")]) {
+      expect(report([DIV10, row], method).doubleTaxation.deduction.toString(), row).toBe("9");
+    }
+    const late = ["10/05/2024 06:00:00,DD-8,MSFT,US5949181045,Dividend,,USD,,100.00,,,90.00,10.00", DIV10, taxOnly("20/02/2025")];
+    expect(report(late, method).doubleTaxation.deduction.toString()).toBe("9");
+  });
+
+  it("a zero Gross books no dividend: only the withholding, which the report matches like any other", () => {
+    expect(parse([taxOnly("12/05/2025")]).cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual(["Withholding Tax -3"]);
+    expect(parse(["12/05/2025 06:00:00,DD-10,MSFT,US5949181045,Dividend,,USD,,0.00,,,0.00,0.00"]).cashTransactions).toEqual([]);
   });
 });
 
