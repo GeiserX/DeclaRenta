@@ -858,6 +858,10 @@ práctico Renta 2025. The decisions, each pinned in
       A Scalable trade `fee` keeps its sign too: Scalable writes a paid fee
       negative, so a positive one is a rebate. Booked by its absolute value,
       it lowered the gain.
+      Freedom24 writes a paid `commission` positive, so a negative one is a
+      rebate, and the parser negates the cell. Booked as −|commission|, a
+      rebate lowered the gain. A readable `amount` that shows a charge where
+      the commission says a rebate names the row.
     - DEGIRO: a row with no ISIN but a readable quantity or price, or an
       order id. When the product name has the shape of an option
       (`AAPL C200.00 20DEC24`) or a future (`FDAX MAR25`), the row is kept as

@@ -4804,3 +4804,40 @@ describe("#467 Freedom24 sweep 3: an isin cell that is no ISIN never joins two s
     expect(r.dividends.grossIncome.toFixed(2)).toBe("0.00");
   });
 });
+
+describe("#467 Freedom24 round 4: a commission keeps its sign, so a rebate never lowers the gain", () => {
+  // Buy 10 at 100 € and sell them at 150 €: 1500 − 1000 = 500 before the
+  // commission. Freedom24 writes a paid commission positive.
+  const BUY = { date: "2025-02-03 10:00:00", ticker: "AAPL.US", isin: "US0378331005", operation: "buy", p: "100", q: "10", curr_c: "EUR", commission: "0", amount: "-1000" };
+  const SELL = { ...BUY, date: "2025-09-03 10:00:00", operation: "sell", p: "150", amount: "1500" };
+  const f24 = (...trades: unknown[]): Statement => freedom24Parser.parse(JSON.stringify({
+    report: { trades: { detailed: trades }, corporate_actions: { detailed: [] }, cash_flows: { detailed: [] } },
+  }));
+  const gains = (r: TaxReport): string[] =>
+    [r.capitalGains.transmissionValue, r.capitalGains.acquisitionValue, r.capitalGains.netGainLoss].map((d) => d.toFixed(2));
+
+  it.each(METHODS)("[%s] control: a sale commission of 5 is a charge, and the gain is 495", (method) => {
+    const parsed = f24(BUY, { ...SELL, commission: "5", amount: "1495" });
+    expect(parsed.trades.map((t) => t.commission)).toEqual(["0", "-5"]);
+    expect(parsed.parserMessages).toBeUndefined();
+    expect(gains(run([[parsed, "Freedom24"]], 2025, method))).toEqual(["1495.00", "1000.00", "495.00"]);
+  });
+
+  it.each(METHODS)("[%s] a sale commission of -5 is a rebate: the gain is 505, not 495", (method) => {
+    const parsed = f24(BUY, { ...SELL, commission: "-5", amount: "1505" });
+    expect(parsed.trades.map((t) => t.commission)).toEqual(["0", "5"]);
+    expect(parsed.parserMessages).toBeUndefined();
+    expect(gains(run([[parsed, "Freedom24"]], 2025, method))).toEqual(["1505.00", "1000.00", "505.00"]);
+  });
+
+  it.each(METHODS)("[%s] a buy commission of -5 is a rebate: the cost is 995 and the gain 505", (method) => {
+    const parsed = f24({ ...BUY, commission: "-5", amount: "-995" }, SELL);
+    expect(gains(run([[parsed, "Freedom24"]], 2025, method))).toEqual(["1500.00", "995.00", "505.00"]);
+  });
+
+  it.each(METHODS)("[%s] an amount that shows a charge of 50 where the commission says a rebate of 50 names the row, never books a rebate", (method) => {
+    const parsed = f24(BUY, { ...SELL, commission: "-50", amount: "1450" });
+    expect(messageRows(parsed, "parser.trade_row_unreadable")).toBe('AAPL (US0378331005) 20250903 [q: "10", p: "150", commission: "-50", amount: "1450"]');
+    expect(gains(run([[parsed, "Freedom24"]], 2025, method))).toEqual(["0.00", "0.00", "0.00"]);
+  });
+});

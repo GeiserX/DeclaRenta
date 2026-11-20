@@ -286,16 +286,17 @@ function parseFreedom24(input: string): Statement {
     // the row is unreadable, named by its q, p, commission and amount
     // cells, never booked at p × q (#467). The tolerance (1 % and a cent)
     // covers a price written rounded. A missing or unreadable amount is no
-    // evidence, so the row is booked as before.
+    // evidence, so the row is booked as before. The commission is taken
+    // with its sign (a negative one is a rebate, below), so an amount that
+    // shows a charge where the commission says a rebate names the row.
     const amountValue = toFiniteDecimalString(text(t.amount), "", false);
     if (amountValue !== "") {
       const money = new Decimal(amountValue).abs();
       const value = qtyDec.times(priceValue);
-      const fee = commDec.abs();
       const tolerance = value.times("0.01").plus("0.01");
       const near = (expected: Decimal): boolean => money.minus(expected).abs().lessThanOrEqualTo(tolerance);
-      const withFee = near(isSell ? value.minus(fee) : value.plus(fee));
-      const withoutFee = near(value) && fee.lessThan(value);
+      const withFee = near(isSell ? value.minus(commDec) : value.plus(commDec));
+      const withoutFee = near(value) && commDec.abs().lessThan(value);
       if (!withFee && !withoutFee) {
         trades.push(unreadableTrade({
           tradeID: `freedom24-${tradeDate}-${i}`,
@@ -327,7 +328,11 @@ function parseFreedom24(input: string): Statement {
       openCloseIndicator: isSell ? "C" : "O",
       exchange: t.exchange || exchange,
       commissionCurrency: currency,
-      commission: commDec.isZero() ? "0" : commDec.abs().neg().toString(),
+      // Freedom24 writes a paid commission positive ("2.00", with a buy's
+      // amount of -1502.00), so a negative one is money paid back, a rebate,
+      // booked positive as commissionCost reads it. Booked as -|commission|,
+      // a rebate of 5 lowered the gain by 5 instead of raising it (#467).
+      commission: commDec.isZero() ? "0" : commDec.neg().toString(),
       taxes: "0",
       multiplier: "1",
     });
