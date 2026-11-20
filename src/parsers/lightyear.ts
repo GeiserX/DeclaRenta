@@ -378,10 +378,30 @@ function parseLightyearCsv(lines: string[]): Statement {
       // written with its sign). A Fee cell that is not blank but cannot be
       // read is no zero fee: the test cannot be made, so the row is a refund,
       // as with no readable Net (#467).
+      // A positive Tax Amt. was always withholding, even when the row's own
+      // Net said otherwise, so the deduction grew. With a readable Net and
+      // Fee it is withholding only when Net + Tax ≤ Gross − Fee (to the cent:
+      // the real export has a 0.01 rounding gap). When Net − Tax ≥ Gross −
+      // Fee the money came in: a refund written unsigned, booked as a
+      // negative one is. A Net that shows neither contradicts the tax: the
+      // dividend stays booked, the tax is not, and the row is named
+      // (parser.cash_income_amount_unreadable). With no readable Net or Fee
+      // a positive tax stays withholding (#467).
       const taxDec = new Decimal(taxAmount);
       const feeUnreadable = (fields[cols.fee] ?? "").trim() !== "" && quantityUnreadable(fields[cols.fee]);
-      const withheld = !taxDec.isNegative() || (!quantityUnreadable(fields[cols.netAmount]) && !feeUnreadable &&
-        new Decimal(netAmount).lessThanOrEqualTo(new Decimal(grossAmount).minus(new Decimal(fee).abs())));
+      const netReadable = !quantityUnreadable(fields[cols.netAmount]) && !feeUnreadable;
+      const grossLessFee = new Decimal(grossAmount).minus(new Decimal(fee).abs());
+      const netDec = new Decimal(netAmount);
+      const withheld = taxDec.isNegative()
+        ? netReadable && netDec.lessThanOrEqualTo(grossLessFee)
+        : !netReadable || netDec.plus(taxDec).lessThanOrEqualTo(grossLessFee.plus("0.01"));
+      if (!withheld && taxDec.isPositive() && netDec.minus(taxDec).lessThan(grossLessFee.minus("0.01"))) {
+        unreadableIncome.push(cashIncomeRowText(`${(fields[cols.type] ?? "").trim()} (${headers[cols.taxAmount] ?? "Tax Amt."})`, security, currency, tradeDate, [
+          unreadableCell(headers[cols.taxAmount] ?? "Tax Amt.", fields[cols.taxAmount]),
+          unreadableCell(headers[cols.netAmount] ?? "Net Amt.", fields[cols.netAmount]),
+        ]));
+        continue;
+      }
       if (!taxDec.isZero()) {
         cashTransactions.push({
           transactionID: `lightyear-tax-${reference || `${tradeDate}-${security}-${i}`}`,

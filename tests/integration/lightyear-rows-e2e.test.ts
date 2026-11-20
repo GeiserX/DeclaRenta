@@ -18,6 +18,8 @@
  * - A row with an empty Type was dropped with no word.
  * - A Buy with a negative Quantity, or a Sell with a negative Quantity and
  *   Gross (a reversal), was booked as one more purchase or sale.
+ * - A positive Tax Amt. was withholding even when the row's Net showed it
+ *   came in or was never taken.
  */
 import { describe, it, expect } from "vitest";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
@@ -379,5 +381,51 @@ describe("Lightyear Buy and Sell rows whose signs say the shares moved the other
       expect(r.capitalGains.netGainLoss.toString(), `${gross} ${net}`).toBe("-450");
       expect(named(r)).toBe('AAPL (US0378331005) 20250621 [Quantity: "-10.000000000"]');
     }
+  });
+});
+
+describe("Lightyear positive Tax Amt.: withholding only when the row's Net shows the money went out", () => {
+  // MSFT 100 USD with 10 withheld: at 0.9 €/USD the deduction is 9 €.
+  const DIV10 = "10/05/2025 06:00:00,DD-9,MSFT,US5949181045,Dividend,,USD,,100.00,,,90.00,10.00";
+  const div = (gross: string, net: string, tax: string, fee = "") =>
+    `12/05/2025 06:00:00,DD-10,MSFT,US5949181045,Dividend,,USD,,${gross},,${fee},${net},${tax}`;
+  const named = (r: TaxReport) => r.messages.find((m) => m.id === "parser.cash_income_amount_unreadable")?.context?.rows;
+
+  it.each(METHODS)("[%s] control: a withholding Net shows, to the cent, stays withholding", (method) => {
+    expect(report([DIV10], method).doubleTaxation.deduction.toString()).toBe("9");
+    expect(report([div("100.00", "85.00", "15.00")], method).doubleTaxation.deduction.toString()).toBe("13.5");
+    expect(report([div("100.00", "80.00", "15.00", "5.00")], method).doubleTaxation.deduction.toString()).toBe("13.5");
+    // The real export's GOOG row: Net is 0.01 off Gross − Tax.
+    const goog = report(["16/12/2025 06:02:35,DD-1,GOOG,US02079K1079,Dividend,,USD,,14.09,,,11.99,2.11"], method);
+    expect(goog.doubleTaxation.deduction.toString()).toBe("1.899");
+    for (const r of [goog, report([DIV10], method)]) expect(named(r)).toBeUndefined();
+  });
+
+  it.each(METHODS)("[%s] a refund written positive, with a Net that shows the money came in, lowers the withholding", (method) => {
+    expect(report([DIV10, div("0.00", "3.00", "-3.00")], method).doubleTaxation.deduction.toString()).toBe("6.3");
+    const r = report([DIV10, div("0.00", "3.00", "3.00")], method);
+    expect(r.doubleTaxation.deduction.toString()).toBe("6.3");
+    expect(named(r)).toBeUndefined();
+  });
+
+  it.each(METHODS)("[%s] a tax the row's Net never took books no withholding: the dividend stays, the tax is named", (method) => {
+    expect(report([div("100.00", "100.00", "0.00")], method).doubleTaxation.deduction.toString()).toBe("0");
+    const r = report([div("100.00", "100.00", "15.00")], method);
+    expect(r.doubleTaxation.deduction.toString()).toBe("0");
+    expect(r.dividends.grossIncome.toString()).toBe("90");
+    expect(named(r)).toBe('Dividend (Tax Amt.) MSFT USD 20250512 [Tax Amt.: "15.00", Net Amt.: "100.00"]');
+  });
+
+  it("with a Net or a Fee that cannot be read, a positive tax stays withholding", () => {
+    for (const [net, fee] of [["n/a", ""], ["", ""], ["85.00", "n/a"]] as const) {
+      const s = parse([div("100.00", net, "15.00", fee)]);
+      expect(s.cashTransactions.map((c) => `${c.type} ${c.amount}`), `${net} ${fee}`).toEqual(["Dividends 100", "Withholding Tax -15"]);
+      expect(s.parserMessages, `${net} ${fee}`).toBeUndefined();
+    }
+  });
+
+  it("a Distribution refund written positive next to its fee is booked as a refund", () => {
+    const s = parse(["01/12/2025 13:33:55,IN-5,MSFT,US5949181045,Distribution,,USD,,7.19,,0.36,7.03,0.20"]);
+    expect(s.cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual(["Dividends 7.19", "Withholding Tax 0.2"]);
   });
 });

@@ -966,7 +966,7 @@ describe("#467 a dividend with no ticker goes by its ISIN; with no security at a
   const gross = (s: Statement, broker: string, method: FxMethod): string => run([[s, broker]], 2025, method).dividends.grossIncome.toFixed(2);
 
   it.each(METHODS)("[%s] Lightyear and Trading 212: a USD 500 dividend with only an ISIN is 550.00 € (at 1.10)", (method) => {
-    const ly = lightyearParser.parse([LY_H, `15/05/2025 09:00:00,DV-1,,${AAPL},Dividend,,USD,,500,0.92,0,500,75`].join("\n"));
+    const ly = lightyearParser.parse([LY_H, `15/05/2025 09:00:00,DV-1,,${AAPL},Dividend,,USD,,500,0.92,0,425,75`].join("\n"));
     expect(ly.cashTransactions.map((c) => [c.type, c.symbol, c.isin])).toEqual([["Dividends", AAPL, AAPL], ["Withholding Tax", AAPL, AAPL]]);
     expect(gross(ly, "Lightyear", method)).toBe("550.00");
     const t212 = trading212Parser.parse([T212_H, `Dividend (Ordinary),2025-05-15 09:00:00,${AAPL},,Apple Inc,,,USD,0.92,,,500,USD,,d1`].join("\n"));
