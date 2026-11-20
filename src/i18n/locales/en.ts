@@ -1233,7 +1233,7 @@ const en: TranslationKeys = {
   "trade_republic.dividend_tax_refund":
     "Trade Republic: {{count}} dividend row(s) have an amount of 0 and a withholding refund (a positive tax): {{rows}}.",
   "trade_republic.dividend_tax_refund.hint":
-    "A row with an amount of 0 is no dividend. Its positive withholding (tax) is a refund. DeclaRenta subtracts it from the withholding of a dividend of the same security from 7 days before or after or, if there is none, from an earlier one of the same year. If there is none, it does not subtract it, and the withholding of that dividend counts in full: you would underpay. Take the final withholding from the Trade Republic tax report and correct box 0588 by hand in Renta Web, or box 0597 if the security is Spanish.",
+    "A row with an amount of 0 is no dividend. Its positive withholding (tax) is a refund. DeclaRenta subtracts it from the withholding of a dividend of the same security from 7 days before or after. If there is none, it subtracts it from an earlier dividend of the same year. A refund dated 1 to 7 January can also lower a dividend of the previous year. If there is no such dividend, DeclaRenta does not subtract it, and the withholding of that dividend counts in full: you would underpay. Take the final withholding from the Trade Republic tax report and correct box 0588 by hand in Renta Web, or box 0597 if the security is Spanish.",
   "trade_republic.trade_tax_positive":
     "Trade Republic: {{count}} buy(s) or sale(s) have a positive tax, and DeclaRenta does not count it: {{rows}}.",
   "trade_republic.trade_tax_positive.hint":
@@ -1249,7 +1249,7 @@ const en: TranslationKeys = {
   "scalable.dividend_tax_refund":
     "Scalable Capital: {{count}} dividend row(s) have an amount of 0 and a withholding refund (a positive tax): {{rows}}.",
   "scalable.dividend_tax_refund.hint":
-    "A row with an amount of 0 is no dividend. Scalable Capital writes a withholding (tax) as a negative number, so a positive one is a refund. DeclaRenta subtracts it from the withholding of a dividend of the same security from 7 days before or after or, if there is none, from an earlier one of the same year. If there is none, it does not subtract it, and the withholding of that dividend counts in full: you would underpay. Take the final withholding from the Scalable Capital tax report and correct box 0588 by hand in Renta Web, or box 0597 if the security is Spanish. If the row is a withholding charged later, DeclaRenta does not count it: add it by hand.",
+    "A row with an amount of 0 is no dividend. Scalable Capital writes a withholding (tax) as a negative number, so a positive one is a refund. DeclaRenta subtracts it from the withholding of a dividend of the same security from 7 days before or after. If there is none, it subtracts it from an earlier dividend of the same year. A refund dated 1 to 7 January can also lower a dividend of the previous year. If there is no such dividend, DeclaRenta does not subtract it, and the withholding of that dividend counts in full: you would underpay. Take the final withholding from the Scalable Capital tax report and correct box 0588 by hand in Renta Web, or box 0597 if the security is Spanish. If the row is a withholding charged later, DeclaRenta does not count it: add it by hand.",
   "parser.trading212.unresolved_price_skipped":
     "{{skipped}} operations without a price per share and with an amount in another currency were skipped.",
   "parser.trading212.unresolved_price_skipped.hint":

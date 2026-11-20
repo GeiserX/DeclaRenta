@@ -485,6 +485,48 @@ describe("Scalable round 4: a Distribution of 0 with a positive tax is a refund,
   });
 });
 
+describe("Scalable: the refund hint says where the report takes a refund (#467)", () => {
+  const ES = "ES0113900J37";
+  const dist = (amount: string, tax: string, date: string) =>
+    `${date};10:00;Executed;D${date};Div;Security;Distribution;${ES};0;0;${amount};0;${tax};EUR`;
+  const REFUND = "scalable.dividend_tax_refund";
+  const sw = (rows: string[], year: number, method: FxMethod): string => {
+    const merged = mergeStatement(createEmptyStatement(), parse(rows), "Scalable Capital");
+    const r = generateTaxReport(finalizeMergedStatement(merged), rates(), year, reportOptionsForMethod(method));
+    return r.dividends.spanishWithholding.toFixed(2);
+  };
+
+  it.each(METHODS)("[%s] control: a dividend of 1 December 2024 with 19 withheld gives a 2024 0597 of 19", (method) => {
+    expect(sw([dist("100,00", "-19,00", "2024-12-01")], 2024, method)).toBe("19.00");
+  });
+
+  it.each(METHODS)("[%s] a refund of 5 January lowers the dividend of 1 December: the 2024 0597 is 14", (method) => {
+    expect(sw([dist("100,00", "-19,00", "2024-12-01"), dist("0,00", "5,00", "2025-01-05")], 2024, method)).toBe("14.00");
+  });
+
+  it.each(METHODS)("[%s] a refund of 30 December lowers an earlier dividend of its year, not the one of 2 January", (method) => {
+    const rows = [dist("100,00", "-19,00", "2025-06-01"), dist("0,00", "5,00", "2025-12-30"), dist("100,00", "-19,00", "2026-01-02")];
+    expect(sw(rows, 2025, method)).toBe("14.00");
+    expect(sw(rows, 2026, method)).toBe("19.00");
+  });
+
+  it.each(METHODS)("[%s] a refund with no dividend to lower is not subtracted, and the row is named", (method) => {
+    const rows = [dist("0,00", "5,00", "2025-06-03")];
+    expect(msg(parse(rows), REFUND)).toBe(`Distribution Div (${ES}) EUR 20250603 [amount: "0,00", tax: "5,00"]`);
+    expect(sw(rows, 2025, method)).toBe("0.00");
+  });
+
+  it("the hint names the 7 days, an earlier dividend of the year and a refund of 1-7 January, in the five locales", () => {
+    const hint = parse([dist("0,00", "5,00", "2025-06-03")]).parserMessages!.find((m) => m.id === REFUND)!.hint;
+    expect(hint).toBe((es as Record<string, string>)[`${REFUND}.hint`]);
+    const january: [Record<string, string>, string][] = [[es, "1 al 7 de enero"], [en, "1 to 7 January"], [ca, "1 al 7 de gener"], [eu, "Urtarrilaren 1etik 7ra"], [gl, "1 ao 7 de xaneiro"]];
+    for (const [locale, words] of january) {
+      expect(locale[`${REFUND}.hint`], words).toContain(words);
+      expect(locale[`${REFUND}.hint`], words).toContain("7");
+    }
+  });
+});
+
 describe("Scalable round 4: a trade fee keeps its sign, so a rebate never lowers the gain (#467)", () => {
   // Buy 10 at 100 € and sell them at 150 €: 1500 − 1000 = 500 before fees.
   const buyFee = (fee: string) => `2025-02-03;09:15;Executed;U1;Apple;Security;Buy;US0378331005;10;100,00;-1000,00;${fee};0;EUR`;

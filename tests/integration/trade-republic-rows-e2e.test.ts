@@ -38,6 +38,11 @@ import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from ".
 import type { FxMethod, TaxSummary as TaxReport } from "../../src/types/tax.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { Statement } from "../../src/types/broker.js";
+import es from "../../src/i18n/locales/es.js";
+import en from "../../src/i18n/locales/en.js";
+import ca from "../../src/i18n/locales/ca.js";
+import eu from "../../src/i18n/locales/eu.js";
+import gl from "../../src/i18n/locales/gl.js";
 
 const METHODS: FxMethod[] = ["multidivisa", "tradicional-divisa", "monodivisa"];
 const ISIN = "ES0000004531";
@@ -481,6 +486,40 @@ describe("Trade Republic dividend of a written zero with a tax: a withholding wi
       const s = tr(ES_DIV({ amount: "0", tax }));
       expect(s.cashTransactions.map((c) => [c.type, c.amount]), tax).toEqual([["Dividends", "0"]]);
       expect(s.parserMessages, tax).toBeUndefined();
+    }
+  });
+});
+
+describe("Trade Republic: the refund hint says where the report takes a refund (#467)", () => {
+  const REFUND = "trade_republic.dividend_tax_refund";
+  const sw = (s: Statement, year: number, method: FxMethod): string => {
+    const statement = createEmptyStatement();
+    mergeStatement(statement, s, "Trade Republic");
+    return generateTaxReport(finalizeMergedStatement(statement), rates(), year, reportOptionsForMethod(method)).dividends.spanishWithholding.toFixed(2);
+  };
+
+  it.each(METHODS)("[%s] control: a dividend of 1 December 2024 with -19.00 gives a 2024 0597 of 19.00", (method) => {
+    expect(sw(tr(ES_DIV({ date: "2024-12-01", tax: "-19.00" })), 2024, method)).toBe("19.00");
+  });
+
+  it.each(METHODS)("[%s] a refund of 5 January lowers the dividend of 1 December: the 2024 0597 is 14.00", (method) => {
+    const s = tr(ES_DIV({ date: "2024-12-01", tax: "-19.00" }), ES_DIV({ date: "2025-01-05", amount: "0", tax: "5.00" }));
+    expect(sw(s, 2024, method)).toBe("14.00");
+  });
+
+  it.each(METHODS)("[%s] a refund of 30 December lowers an earlier dividend of its year, not the one of 2 January", (method) => {
+    const s = tr(ES_DIV({ date: "2025-06-01", tax: "-19.00" }), ES_DIV({ date: "2025-12-30", amount: "0", tax: "5.00" }), ES_DIV({ date: "2026-01-02", tax: "-19.00" }));
+    expect(sw(s, 2025, method)).toBe("14.00");
+    expect(sw(s, 2026, method)).toBe("19.00");
+  });
+
+  it("the hint names the 7 days, an earlier dividend of the year and a refund of 1-7 January, in the five locales", () => {
+    const hint = tr(ES_DIV({ amount: "0", tax: "5.00" })).parserMessages!.find((m) => m.id === REFUND)!.hint;
+    expect(hint).toBe((es as Record<string, string>)[`${REFUND}.hint`]);
+    const january: [Record<string, string>, string][] = [[es, "1 al 7 de enero"], [en, "1 to 7 January"], [ca, "1 al 7 de gener"], [eu, "Urtarrilaren 1etik 7ra"], [gl, "1 ao 7 de xaneiro"]];
+    for (const [locale, words] of january) {
+      expect(locale[`${REFUND}.hint`], words).toContain(words);
+      expect(locale[`${REFUND}.hint`], words).toContain("7");
     }
   });
 });

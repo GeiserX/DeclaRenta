@@ -1235,7 +1235,7 @@ const ca: TranslationKeys = {
   "trade_republic.dividend_tax_refund":
     "Trade Republic: {{count}} fila(es) de dividend porten import 0 i una devolució de retenció (tax positiu): {{rows}}.",
   "trade_republic.dividend_tax_refund.hint":
-    "Una fila amb import 0 no és un dividend. La seva retenció (tax) positiva és una devolució. DeclaRenta la resta de la retenció d'un dividend del mateix valor de 7 dies abans o després o, si no n'hi ha cap, d'un d'anterior del mateix any. Si no n'hi ha cap, no la resta, i la retenció d'aquest dividend compta sencera: així pagaries de menys. Pren la retenció final de l'informe fiscal de Trade Republic i corregeix a mà a Renta Web la casella 0588, o la 0597 si el valor és espanyol.",
+    "Una fila amb import 0 no és un dividend. La seva retenció (tax) positiva és una devolució. DeclaRenta la resta de la retenció d'un dividend del mateix valor de 7 dies abans o després. Si no n'hi ha cap, la resta d'un dividend anterior del mateix any. Una devolució de l'1 al 7 de gener també es pot restar d'un dividend de l'any anterior. Si no hi ha cap dividend així, DeclaRenta no la resta, i la retenció d'aquest dividend compta sencera: així pagaries de menys. Pren la retenció final de l'informe fiscal de Trade Republic i corregeix a mà a Renta Web la casella 0588, o la 0597 si el valor és espanyol.",
   "trade_republic.trade_tax_positive":
     "Trade Republic: {{count}} compra(es) o venda(es) porten un impost (tax) positiu, i DeclaRenta no el compta: {{rows}}.",
   "trade_republic.trade_tax_positive.hint":
@@ -1251,7 +1251,7 @@ const ca: TranslationKeys = {
   "scalable.dividend_tax_refund":
     "Scalable Capital: {{count}} fila(es) de dividend porten import 0 i una devolució de retenció (tax positiu): {{rows}}.",
   "scalable.dividend_tax_refund.hint":
-    "Una fila amb import 0 no és un dividend. Scalable Capital escriu la retenció (tax) en negatiu, així que una de positiva és una devolució. DeclaRenta la resta de la retenció d'un dividend del mateix valor de 7 dies abans o després o, si no n'hi ha cap, d'un d'anterior del mateix any. Si no n'hi ha cap, no la resta, i la retenció d'aquest dividend compta sencera: així pagaries de menys. Pren la retenció final de l'informe fiscal de Scalable Capital i corregeix a mà a Renta Web la casella 0588, o la 0597 si el valor és espanyol. Si la fila és una retenció cobrada més tard, DeclaRenta no la compta: afegeix-la a mà.",
+    "Una fila amb import 0 no és un dividend. Scalable Capital escriu la retenció (tax) en negatiu, així que una de positiva és una devolució. DeclaRenta la resta de la retenció d'un dividend del mateix valor de 7 dies abans o després. Si no n'hi ha cap, la resta d'un dividend anterior del mateix any. Una devolució de l'1 al 7 de gener també es pot restar d'un dividend de l'any anterior. Si no hi ha cap dividend així, DeclaRenta no la resta, i la retenció d'aquest dividend compta sencera: així pagaries de menys. Pren la retenció final de l'informe fiscal de Scalable Capital i corregeix a mà a Renta Web la casella 0588, o la 0597 si el valor és espanyol. Si la fila és una retenció cobrada més tard, DeclaRenta no la compta: afegeix-la a mà.",
   "parser.trading212.unresolved_price_skipped":
     "S'han omès {{skipped}} operacions sense preu per acció i amb import en una altra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":
