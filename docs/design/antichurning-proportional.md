@@ -637,7 +637,9 @@ práctico Renta 2025. The decisions, each pinned in
       booked is not booked either, and is named with it. It is the
       withholding of the same day and security, where the ISIN of one row
       matches the other's ISIN or ticker, so a row that writes no ISIN
-      still finds it.
+      still finds it. A dividend with no ticker and no ISIN takes the
+      withholdings of its day that no booked dividend of their own
+      security and day claims; a refund stays booked.
     - Freedom24: a row with no readable date, no ticker, or an operation
       other than `buy` or `sell` after trimming (`sale`, `transfer`). Before,
       every operation that was not `sell` was booked as a buy (#468). In

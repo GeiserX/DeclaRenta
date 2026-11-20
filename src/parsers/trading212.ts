@@ -48,6 +48,7 @@ import {
   corporateActionTrade,
   markUndatedTrades,
   dropUndatedCash,
+  isReadableDay,
   cashRowsUnidentifiedMessages,
   cashIncomeRowText,
   cashIncomeAmountUnreadableMessages,
@@ -214,8 +215,9 @@ function parseTrading212Csv(lines: string[]): Statement {
   // Total is in a currency that differs from the instrument's — we can derive
   // neither a per-share price nor usable trade money, so the row is unresolvable.
   let unresolvedPriceSkipped = 0;
-  // Dividend and withholding rows with no ticker and no ISIN (#467).
-  const unidentifiedCash: string[] = [];
+  // Dividend and withholding rows with no ticker and no ISIN (#467). A
+  // dividend's `date` finds its withholdings below.
+  const unidentifiedCash: { text: string; date?: string }[] = [];
   // Dividend, interest and withholding rows whose Total or currency cannot
   // be read (#467). A dividend's `held` (its ISIN, and its ticker or else its
   // ISIN) finds its withholdings below.
@@ -358,7 +360,7 @@ function parseTrading212Csv(lines: string[]): Statement {
         continue;
       }
       if (!security) {
-        unidentifiedCash.push(`${action} ${amountDec.toString()} ${cashCurrency} ${tradeDate || "—"}`);
+        unidentifiedCash.push({ text: `${action} ${amountDec.toString()} ${cashCurrency} ${tradeDate || "—"}` });
         continue;
       }
 
@@ -403,7 +405,7 @@ function parseTrading212Csv(lines: string[]): Statement {
       const amountDec = new Decimal(totalStr).abs().div(cashDivisor);
       if (amountDec.isZero()) continue;
       if (!security) {
-        unidentifiedCash.push(`${action} ${amountDec.toString()} ${cashCurrency} ${tradeDate || "—"}`);
+        unidentifiedCash.push({ text: `${action} ${amountDec.toString()} ${cashCurrency} ${tradeDate || "—"}`, date: tradeDate });
         continue;
       }
 
@@ -612,23 +614,36 @@ function parseTrading212Csv(lines: string[]): Statement {
     });
   }
 
-  // The withholdings of a dividend that is not booked (same security, same
-  // day) are not booked either: a deduction for income the report does not
-  // count, which could pair with another dividend of the security. They are
-  // named with it.
+  // The withholdings of a dividend that is not booked are not booked either:
+  // a deduction for income the report does not count, which the engine,
+  // pairing by ISIN within 7 days, gives to another dividend of the
+  // security. They are named with it. They are the withholdings of its
+  // security on its day. A dividend that names no security takes those of
+  // its day that no booked dividend of their own security and day claims
+  // (#467); a refund among them stays booked, which can only lower the
+  // deduction.
+  const claimed = (w: CashTransaction): boolean =>
+    cashTransactions.some((d) => d.type === "Dividends" && d.dateTime === w.dateTime && sameSecurity(d, w));
   const takeWithholdings = (held: Held, date: string): string => {
-    const withheld = cashTransactions.filter((c) => c.type === "Withholding Tax" && c.dateTime === date && sameSecurity(held, c));
+    const named = held.isin !== "" || held.symbol !== "";
+    const withheld = cashTransactions.filter((c) => c.type === "Withholding Tax" && c.dateTime === date && (named
+      ? sameSecurity(held, c)
+      : isReadableDay(date) && new Decimal(c.amount).isNegative() && !claimed(c)));
     for (const w of withheld) cashTransactions.splice(cashTransactions.indexOf(w), 1);
     return withheld.map((w) => `${w.description} ${w.amount} ${w.currency}`).join(", ");
   };
   const unreadableRows = unreadableIncome.map((row) => cashIncomeRowText(row.type, row.security, row.currency, row.date, row.cells,
     row.held === undefined ? "" : takeWithholdings(row.held, row.date)));
+  const unidentifiedRows = unidentifiedCash.map((row) => {
+    const tax = row.date === undefined ? "" : takeWithholdings({ isin: "", symbol: "" }, row.date);
+    return `${row.text}${tax ? ` (${tax})` : ""}`;
+  });
 
   markUndatedTrades(trades, headers[cols.time] ?? "Time");
   parserMessages.push(
     ...tradeQuantityUnknownMessages("Trading 212", trades),
     ...dropUndatedCash("Trading 212", cashTransactions, headers[cols.time] ?? "Time"),
-    ...cashRowsUnidentifiedMessages("Trading 212", unidentifiedCash),
+    ...cashRowsUnidentifiedMessages("Trading 212", unidentifiedRows),
     ...cashIncomeAmountUnreadableMessages("Trading 212", unreadableRows),
     ...cashRowsNotBookedMessages("Trading 212", notBookedCash),
   );

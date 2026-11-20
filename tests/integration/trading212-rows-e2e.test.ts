@@ -493,4 +493,30 @@ describe("Trading 212 dividends: the withholdings of a dividend not booked are n
       expect(numbers([...rows], method), tax).toEqual(["1100.00", "55.00"]);
     }
   });
+  // A dividend with no ticker and no ISIN names no security, so its
+  // withholdings are those of its day that no booked dividend of their own
+  // security and day claims.
+  it.each(METHODS)("[%s] a dividend that names no security takes the withholding of its day that no other dividend claims", (method) => {
+    for (const [first, named, id] of [
+      [div("15", "", "", "1000", "d1"), "Dividend (Ordinary) 1000 USD 20250515 (Withholding tax - AAPL -150 USD)", "parser.cash_row_unidentified"],
+      [div("15", "", "", "abc", "d1"), 'Dividend (Ordinary) — USD 20250515 (Withholding tax - AAPL -150 USD) [Total: "abc"]', "parser.cash_income_amount_unreadable"],
+    ] as const) {
+      const rows = [first, wht("15", AAPL, "AAPL", "-150", "w1"), ...other()];
+      const s = parse(rows);
+      expect(s.cashTransactions.map((c) => `${c.type} ${c.amount}`), named).toEqual(["Dividends 1000", "Withholding Tax -50"]);
+      expect(msg(s, id), named).toBe(named);
+      expect(numbers(rows, method), named).toEqual(["1100.00", "55.00"]);
+    }
+    // A refund on that day stays booked: taken out, the deduction would rise.
+    const refund = [div("15", "", "", "1000", "d1"), wht("15", AAPL, "AAPL", "20", "w3"), wht("15", AAPL, "AAPL", "-150", "w1"), ...other()];
+    expect(parse(refund).cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual(["Withholding Tax 20", "Dividends 1000", "Withholding Tax -50"]);
+  });
+
+  it.each(METHODS)("[%s] control: a withholding its own dividend claims on that day stays booked, and so does a refund of that day", (method) => {
+    const rows = [div("18", "", "", "1000", "d1"), ...other(), wht("18", AAPL, "AAPL", "20", "w3")];
+    const s = parse(rows);
+    expect(s.cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual(["Dividends 1000", "Withholding Tax -50", "Withholding Tax 20"]);
+    expect(msg(s, "parser.cash_row_unidentified")).toBe("Dividend (Ordinary) 1000 USD 20250518");
+    expect(numbers(rows, method)).toEqual(["1100.00", "33.00"]);
+  });
 });
