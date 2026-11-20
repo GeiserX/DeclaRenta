@@ -3239,6 +3239,34 @@ describe("#467 Flatex: a cash leg, income row, currency, Kurs or order number th
       expect(message(statement, FEE)).toBeUndefined();
       expect(gains(report(statement, method))).toEqual(["1194.10", "1005.90", "188.20"]);
     });
+
+    // Sweep 2: the leg of a third fill (3 at 100 €) is below the smallest
+    // fill, so it passed the limit and became the other fills' fee (317.70 €).
+    describe.each([
+      ["the Depot export does not list", []],
+      ["the Depot export writes with a Nominal of 0", [drow("01.03.2024", "0", `Ausführung ORDER Kauf ${ISIN} 333333`, "9103", "100,00")]],
+    ] as [string, string[]][])("a leg of a third fill %s", (_label, third) => {
+      it.each(METHODS)("[%s] gives the order no fee and names it: that leg is never the other fills' fee", (method) => {
+        const statement = merged(depot(fill("9101"), fill("9102"), ...third, SELL), konto(leg("8101"), leg("8102"), leg("8103", "-305,90"), legSell()));
+        expect(statement.trades.map((t) => t.commission)).toEqual(["0", "0", "-5.9"]);
+        expect(statement.parserMessages?.map((m) => [m.id, m.severity, m.context?.rows])).toEqual([
+          [FEE, "warning", `333333 ${ISIN} 20240301 [1000 EUR / -1317.7 EUR]`],
+        ]);
+        expect(gains(report(statement, method))).toEqual(["1194.10", "1000.00", "194.10"]);
+      });
+    });
+
+    it.each(METHODS)("[%s] one fill with the leg of a second fill gives no fee; a Storno and its rebooking still do", (method) => {
+      const one = merged(depot(drow("01.03.2024", "10", `Ausführung ORDER Kauf ${ISIN} 333333`, "9101", "100,00"), SELL),
+        konto(leg("8101", "-1005,90"), leg("8102"), legSell()));
+      expect(one.trades.map((t) => t.commission)).toEqual(["0", "-5.9"]);
+      expect(message(one, FEE)?.context?.rows).toBe(`333333 ${ISIN} 20240301 [1000 EUR / -1511.8 EUR]`);
+      expect(gains(report(one, method))).toEqual(["1194.10", "1000.00", "194.10"]);
+      const storno = leg("8103", "505,90");
+      const rebooked = merged(fills(), konto(leg("8101"), leg("8102"), storno, leg("8104"), legSell()));
+      expect(rebooked.parserMessages?.map((m) => m.id)).toEqual(["flatex.commission.multi_fill_prorated"]);
+      expect(gains(report(rebooked, method))).toEqual(["1194.10", "1011.80", "182.30"]);
+    });
   });
 
   // Round 1 of the merge sweep (#467): a fee was derived from legs and fills

@@ -722,8 +722,11 @@ práctico Renta 2025. The decisions, each pinned in
       combined leg for several fills splits the fee pro rata only when the
       fee is below the day's smallest fill: a missing or extra leg (one
       uploaded twice with no TA-Nr.) moves the fee by at least that fill's
-      value. A combined leg for fills of two days is no longer split, which
-      can only raise the tax.
+      value. A day with more legs than fills, once each Storno cancels a
+      leg, is never split: the extra leg can be that of a fill the Depot
+      export does not list or writes with a Nominal of 0, and below the
+      smallest fill it became the other fills' fee. A combined leg for fills
+      of two days is no longer split, which can only raise the tax.
     - Trade Republic: a buy or sale with no amount, or that names no
       security (crypto with no `symbol`, any other with no `symbol` and no
       `name`), named by that cell: under an empty symbol unrelated

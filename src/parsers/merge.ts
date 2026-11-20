@@ -237,8 +237,11 @@ function dateUndatedRowsAtUploadStart(statement: Statement): void {
  * readable, and the fee is not below zero (a buy pays at least its gross, a
  * sale gets at most its gross; one cent of rounding is allowed) and is below
  * the gross. A split fee is also below the day's smallest fill: a missing or
- * extra leg (a sale leg not exported, a leg uploaded twice with no TA-Nr.)
- * moves the fee by at least the value of the fill it belongs to. Otherwise
+ * extra leg of a fill of the day (a sale leg not exported, a leg uploaded
+ * twice with no TA-Nr.) moves the fee by at least that fill's value. A day
+ * with more legs than fills (net of Stornos) is never split: the extra leg
+ * may be that of a fill the Depot export does not list or writes with a
+ * Nominal of 0, and such a leg can be below the smallest fill. Otherwise
  * the fills keep a fee of 0 and `flatex.commission.not_recovered` names the
  * order: a leg with an empty amount made the whole trade a fee (a 1194 € gain
  * became a 1006 € loss), and a missing or extra leg a fee as large as a fill.
@@ -302,6 +305,21 @@ function legFee(legs: readonly OrderLeg[], side: Trade["buySell"], gross: Decima
   const signed = legs.reduce((sum, leg) => sum.plus(leg.netAmount), new Decimal(0));
   const fee = side === "SELL" ? gross.minus(signed) : signed.negated().minus(gross);
   return fee.greaterThan(FEE_ROUNDING.negated()) && fee.lessThan(limit) ? fee : undefined;
+}
+
+/**
+ * True when a day has more legs than fills once each Storno cancels the leg it
+ * reverses: a buy's legs are debits, a sale's credits, and a leg of the other
+ * sign is a Storno. One combined leg serves several fills, but no fill has two
+ * legs, so a surplus leg is the leg of a fill that is not among them (missing
+ * from the Depot export, or written with a Nominal of 0). Below the smallest
+ * fill it passed the fee limit and became the other fills' fee (#467). Were
+ * a fill ever to have two legs, the order would only lose its fee (named).
+ */
+function moreLegsThanFills(legs: readonly OrderLeg[], trades: readonly Trade[]): boolean {
+  const sign = trades[0]!.buySell === "SELL" ? 1 : -1;
+  const net = legs.reduce((count, leg) => count + new Decimal(leg.netAmount).cmp(0) * sign, 0);
+  return net > trades.length;
 }
 
 /** How `flatex.commission.not_recovered` names an order's fills and legs. */
@@ -434,7 +452,9 @@ function reconcileOrderLegs(statement: Statement): void {
       const gross = day.trades.reduce((sum, trade) => sum.plus(trade.tradeMoney), new Decimal(0));
       const smallest = Decimal.min(...day.trades.map((trade) => trade.tradeMoney));
       const sides = new Set(day.trades.map((trade) => trade.buySell));
-      const totalFee = sides.size === 1 ? legFee(day.legs, day.trades[0]!.buySell, gross, smallest) : undefined;
+      const totalFee = sides.size === 1 && !moreLegsThanFills(day.legs, day.trades)
+        ? legFee(day.legs, day.trades[0]!.buySell, gross, smallest)
+        : undefined;
       if (totalFee === undefined) {
         notRecovered.push(orderRow(orderKey, day.legs, day.trades));
         continue;
