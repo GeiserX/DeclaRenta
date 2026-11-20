@@ -429,3 +429,34 @@ describe("Trading 212 price: a negative price is never booked", () => {
     }
   });
 });
+
+describe("Trading 212 fees: two fees in two other currencies are never added as one", () => {
+  const HF2 = H.replace("Currency (Total),", "Currency (Total),Currency conversion fee,Currency (Currency conversion fee),Stamp duty reserve tax,Currency (Stamp duty reserve tax),");
+  const feeBuy = `Market buy,2025-01-10 10:00:00,${AAPL},AAPL,Apple,10,100,USD,1,,,1000,USD,,,,,,b1`;
+  const feeSell = (conv: string, convCcy: string, stamp: string, stampCcy: string) =>
+    `Market sell,2025-06-10 10:00:00,${AAPL},AAPL,Apple,10,150,USD,1,,,1500,USD,${conv},${convCcy},${stamp},${stampCcy},,s1`;
+  const fee = (sale: string) => { const t = parse([feeBuy, sale], HF2).trades[1]!; return `${t.commission} ${t.commissionCurrency} ${t.taxes}`; };
+  const gain = (sale: string, method: FxMethod) => report([feeBuy, sale], method, "1.10", HF2).capitalGains.netGainLoss.toFixed(2);
+
+  it.each(METHODS)("[%s] control: a 100 EUR fee alone gives 450 €, a 1 GBP or 100 GBP stamp duty alone 548.82 € or 432 €", (method) => {
+    expect(fee(feeSell("100", "EUR", "", ""))).toBe("-100 EUR 0");
+    expect(gain(feeSell("100", "EUR", "", ""), method)).toBe("450.00");
+    expect(gain(feeSell("", "", "1", "GBP"), method)).toBe("548.82");
+    expect(gain(feeSell("", "", "100", "GBP"), method)).toBe("432.00");
+  });
+
+  // Added as one, 100 EUR and 1 GBP were 101 GBP, and the gain fell 18 € with
+  // no word. The fee in a second other currency is not added, which can only
+  // raise the tax.
+  it.each(METHODS)("[%s] a second fee in a third currency is not added to the first", (method) => {
+    expect(fee(feeSell("100", "EUR", "1", "GBP"))).toBe("-100 EUR 0");
+    expect(gain(feeSell("100", "EUR", "1", "GBP"), method)).toBe("450.00");
+    expect(fee(feeSell("1", "EUR", "100", "GBP"))).toBe("-1 EUR 0");
+    expect(gain(feeSell("1", "EUR", "100", "GBP"), method)).toBe("549.00");
+  });
+
+  it("control: two fees in one other currency add up, and a fee in the instrument's currency stays in taxes", () => {
+    expect(fee(feeSell("1.5", "EUR", "1", "EUR"))).toBe("-2.5 EUR 0");
+    expect(fee(feeSell("1.5", "EUR", "1", "USD"))).toBe("-1.5 EUR -1");
+  });
+});

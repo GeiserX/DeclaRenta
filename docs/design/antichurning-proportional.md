@@ -626,7 +626,10 @@ práctico Renta 2025. The decisions, each pinned in
       readable price does not need the cell. A buy or sale with a negative
       `Price / share` is an unreadable row named by that cell; booked, a
       sale had negative proceeds. A fee with no currency of its
-      own takes `Currency (Total)`, and with neither it is not added. `Dividend (Tax exempted)` is
+      own takes `Currency (Total)`, and with neither it is not added. A
+      trade keeps one commission currency: a fee in a second currency
+      other than the instrument's is not added (100 EUR and 1 GBP were
+      booked as 101 GBP). `Dividend (Tax exempted)` is
       a dividend; it was booked as a withholding. `Lending interest` is
       interest (casilla 0027); it was dropped with no word. A withholding
       keeps its sign when the file writes any withholding as negative, so a

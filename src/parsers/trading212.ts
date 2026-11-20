@@ -552,9 +552,12 @@ function parseTrading212Csv(lines: string[]): Statement {
       const rawFeeCurrency = (fields[fee.currency] ?? "").trim() || cashCurrencyCell;
       if (!rawFeeCurrency) continue;
       const { currency: feeCurrency, divisor: feeDivisor } = normalizeFractionalCurrency(rawFeeCurrency);
+      // A trade has one commission currency: a fee in a second other
+      // currency is not added, which can only raise the tax. Added to the
+      // first, 100 EUR and 1 GBP were booked as 101 GBP (#467).
       if (feeCurrency === currency) {
         taxesDec = taxesDec.plus(amountDec.div(feeDivisor));
-      } else {
+      } else if (commissionDec.isZero() || feeCurrency === commissionCurrency) {
         commissionDec = commissionDec.plus(amountDec.div(feeDivisor));
         commissionCurrency = feeCurrency;
       }
