@@ -676,6 +676,11 @@ práctico Renta 2025. The decisions, each pinned in
       a comma ("1,000") is a trade of unknown quantity, never 1 share. The
       `tax_amount` of a negative dividend (a reversal) is a refund, so a
       reversed Spanish dividend no longer keeps its withholding in box 0597.
+      An `isin` cell is an ISIN only when it has the shape of one: a
+      placeholder ("-", "N/A", "null", "0") is no ISIN, so the ticker keys
+      the security. Before, every security with the same placeholder shared
+      one FIFO queue, so a sale took another stock's cost, and a split of
+      the sold security counted as another security's.
     - Lightyear and Scalable Capital: a buy or sale with no date, ticker or
       ISIN; a type that is not a buy or sale and moves shares. A split or
       corporate-action type is a corporate-action row (above). Scalable also

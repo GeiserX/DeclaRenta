@@ -4565,3 +4565,69 @@ describe("#467 Binance sweep 2: a date in another order and a Convert round trip
     expect(gains(run([[parsed, "Binance"]], 2025, "multidivisa"), "BTC")).toEqual(["1000.00"]);
   });
 });
+
+describe("#467 Freedom24 sweep 3: an isin cell that is no ISIN never joins two securities", () => {
+  // Buy 10 AAA at 150 USD, buy 10 BBB at 10 USD, sell the 10 BBB at 12 USD:
+  // a 17.60 € gain at 1.10. A placeholder in the isin cell ("-", "N/A") was
+  // the lot key of both, so the BBB sale took AAA's cost: a 1522.40 € loss.
+  const A_BUY = { date: "2024-03-15 09:30:00", ticker: "AAA.US", isin: "US0000000011", operation: "buy", p: "150.00", q: "10", curr_c: "USD", commission: "2.00", amount: "-1502.00", exchange: "NYSE" };
+  const B_BUY = { ...A_BUY, date: "2024-04-01 10:00:00", ticker: "BBB.US", isin: "US0000000022", p: "10.00", amount: "-102.00" };
+  const B_SELL = { ...B_BUY, date: "2024-09-20 14:00:00", operation: "sell", p: "12.00", amount: "118.00" };
+  const f24 = (trades: unknown[], ca: unknown[] = []): Statement => freedom24Parser.parse(JSON.stringify({
+    report: { trades: { detailed: trades }, corporate_actions: { detailed: ca }, cash_flows: { detailed: [] } },
+  }));
+  const gains = (r: TaxReport): string[] => [String(r.capitalGains.disposals.length), r.capitalGains.transmissionValue.toFixed(2),
+    r.capitalGains.acquisitionValue.toFixed(2), r.capitalGains.netGainLoss.toFixed(2)];
+  const GAIN = ["1", "129.80", "112.20", "17.60"];
+
+  it.each(METHODS)("[%s] control: two securities with their own ISINs, or with no ISIN, give the 17.60 € gain", (method) => {
+    for (const isin of [undefined, "", null]) {
+      const rows = isin === undefined ? [A_BUY, B_BUY, B_SELL] : [{ ...A_BUY, isin }, { ...B_BUY, isin }, { ...B_SELL, isin }];
+      const parsed = f24(rows);
+      expect(parsed.parserMessages).toBeUndefined();
+      expect(gains(run([[parsed, "Freedom24"]], 2024, method))).toEqual(GAIN);
+    }
+  });
+
+  describe.each(["-", "N/A", "n/a", "null", "0", "—", "NONE", " - "])("an isin cell %j on both securities", (isin) => {
+    it.each(METHODS)("[%s] keys each lot by its ticker: the BBB sale takes BBB's cost, 17.60 €, never a 1522.40 € loss", (method) => {
+      const parsed = f24([{ ...A_BUY, isin }, { ...B_BUY, isin }, { ...B_SELL, isin }]);
+      expect(parsed.trades.map((t) => [t.symbol, t.isin])).toEqual([["AAA", ""], ["BBB", ""], ["BBB", ""]]);
+      expect(parsed.parserMessages).toBeUndefined();
+      const r = run([[parsed, "Freedom24"]], 2024, method);
+      expect(gains(r)).toEqual(GAIN);
+      expect(r.messages.some((m) => m.id === "report.antichurning_window_past_data")).toBe(false);
+    });
+  });
+
+  it.each(METHODS)("[%s] an ISIN written in lower case is read as the ISIN", (method) => {
+    const parsed = f24([{ ...A_BUY, isin: " us0000000011 " }, { ...B_BUY, isin: "us0000000022" }, { ...B_SELL, isin: "US0000000022" }]);
+    expect(parsed.trades.map((t) => t.isin)).toEqual(["US0000000011", "US0000000022", "US0000000022"]);
+    expect(gains(run([[parsed, "Freedom24"]], 2024, method))).toEqual(GAIN);
+  });
+
+  it("a dividend and its withholding with a placeholder isin go by their ticker", () => {
+    const DIV = { date: "2024-06-15 00:00:00", ticker: "XXX.US", isin: "null", type_id: "dividend", amount: "10.00", tax_amount: "5.00", curr_c: "USD" };
+    const parsed = f24([], [DIV, { ...DIV, ticker: "YYY.US", amount: "1000.00", tax_amount: "0" }]);
+    expect(parsed.cashTransactions.map((c) => [c.type, c.symbol, c.isin])).toEqual([
+      ["Dividends", "XXX", ""], ["Withholding Tax", "XXX", ""], ["Dividends", "YYY", ""],
+    ]);
+    expect(parsed.cashTransactions.map((c) => c.description)).toEqual([" Dividend - XXX.US", " WHT - XXX.US", " Dividend - YYY.US"]);
+  });
+
+  it.each(METHODS)("[%s] a split of the sold security with a placeholder isin keeps the exception unverified, never applied to a security named \"-\"", (method) => {
+    const parsed = f24([], [{ date: "2024-12-02 00:00:00", ticker: "XYZ.EU", isin: "-", type_id: "split", amount: 0, curr_c: "EUR" }]);
+    expect(issueSale(parsed, "Freedom24", method)).toEqual({ blocked: "100.00", singlePurchase: "unverified" });
+    expect(parsed.trades.map((t) => [t.symbol, t.isin])).toEqual([["XYZ", ""]]);
+    expect(messageRows(parsed, "parser.corporate_action_not_applied")).toBe("XYZ 20241202 [split: —]");
+  });
+
+  it.each(METHODS)("[%s] a dividend with no ticker and a placeholder isin is named with its isin cell, never booked under \"N/A\"", (method) => {
+    const parsed = f24([], [{ date: "2024-06-15 00:00:00", ticker: "", isin: "N/A", type_id: "dividend", amount: "100.00", tax_amount: "15.00", curr_c: "USD" }]);
+    expect(parsed.cashTransactions).toEqual([]);
+    expect(messageRows(parsed, "parser.cash_row_unidentified")).toBe('dividend 100.00 USD (tax_amount 15.00) 20240615 [isin: "N/A"]');
+    const r = run([[parsed, "Freedom24"]], 2024, method);
+    expect(r.messages.find((m) => m.id === "parser.cash_row_unidentified")?.context?.rows).toBe(messageRows(parsed, "parser.cash_row_unidentified"));
+    expect(r.dividends.grossIncome.toFixed(2)).toBe("0.00");
+  });
+});

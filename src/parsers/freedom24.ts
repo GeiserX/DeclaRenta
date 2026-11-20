@@ -15,6 +15,7 @@ import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
+import { ISIN_SHAPE } from "../engine/antichurning-window.js";
 import {
   toFiniteDecimal,
   quantityUnknownTrade,
@@ -112,6 +113,18 @@ function currencyOf(val: unknown): string {
 }
 
 /**
+ * The ISIN an isin cell gives: trimmed, in upper case, and only when it has
+ * the shape of an ISIN. Any other cell ("-", "N/A", "null", "0") gives "",
+ * so the ticker keys the security, as IBKR does. As a lot key such a cell
+ * put every security that carries it in one pool, so the sale of one stock
+ * took another stock's cost (#467).
+ */
+function isinOf(val: unknown): string {
+  const code = typeof val === "string" ? val.trim().toUpperCase() : "";
+  return ISIN_SHAPE.test(code) ? code : "";
+}
+
+/**
  * Words a cash_flows type of a deposit or a withdrawal is made of
  * ("deposit", "card_deposit", "Bank withdrawal").
  */
@@ -195,7 +208,7 @@ function parseFreedom24(input: string): Statement {
     const dateRaw = typeof t.date === "string" ? t.date.trim() : "";
     const tradeDate = convertFreedom24Date(dateRaw);
     const { symbol, exchange } = parseSymbol(ticker);
-    const isin = typeof t.isin === "string" ? t.isin.trim() : "";
+    const isin = isinOf(t.isin);
     const quantity = str(t.q);
     // The price is read, never passed on raw: a missing one became "0" (a
     // sale at 0, a full loss), and "" or "abc" stopped the report (#467).
@@ -331,7 +344,7 @@ function parseFreedom24(input: string): Statement {
     const typeId = typeIdText.toLowerCase();
 
     const ticker = typeof ca.ticker === "string" ? ca.ticker.trim() : "";
-    const isin = typeof ca.isin === "string" ? ca.isin.trim() : "";
+    const isin = isinOf(ca.isin);
     // A dividend with no readable date is booked with that date and taken
     // out, named with its amount, by dropUndatedCash below (#467).
     const dateRaw = typeof ca.date === "string" ? ca.date.trim() : "";
@@ -383,9 +396,11 @@ function parseFreedom24(input: string): Statement {
       ? ` [${unreadableCell("tax_amount", ca.tax_amount)}]`
       : toFiniteDecimal(taxAmount).isZero() ? "" : ` (tax_amount ${taxAmount})`;
     // A dividend with no ticker goes by its ISIN; with neither it is named,
-    // never dropped with no word (#467).
+    // never dropped with no word (#467). An isin cell that is no ISIN
+    // ("N/A") is shown, so the user sees why the row has none.
     if (!ticker && !isin) {
-      if (!amountReadable || !toFiniteDecimal(amount).isZero() || tax) unidentifiedCash.push(`${typeIdText} ${amountText} ${currency || `[${currencyCell}]`}${tax} ${tradeDate || "—"}`);
+      const isinCell = typeof ca.isin === "string" && ca.isin.trim() ? ` [${unreadableCell("isin", ca.isin)}]` : "";
+      if (!amountReadable || !toFiniteDecimal(amount).isZero() || tax) unidentifiedCash.push(`${typeIdText} ${amountText} ${currency || `[${currencyCell}]`}${tax} ${tradeDate || "—"}${isinCell}`);
       continue;
     }
     const security = ticker || isin;
