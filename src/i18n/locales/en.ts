@@ -1140,6 +1140,10 @@ const en: TranslationKeys = {
     "{{count}} Lightyear CSV row(s) with an unrecognized transaction type were skipped: {{types}}.",
   "lightyear.unknown_types.hint":
     "These movements are not included in the calculation. If they are stock splits, share transfers or other corporate actions, check them by hand: they can change the share count or the acquisition cost of later sales.",
+  "lightyear.income_shares_booked":
+    "Lightyear: {{count}} income row(s) come with shares. DeclaRenta counts them as bought on that day: {{rows}}.",
+  "lightyear.income_shares_booked.hint":
+    "They are dividend, distribution, interest or reward rows that write a number of shares. DeclaRenta adds their amount as income, as for the other rows. It also counts those shares as bought on that day for that same amount. So their later sale has a cost. If you sold that security at a loss 2 months before or after, this purchase can block the loss (the 2-month rule). Check it against the Lightyear statement. If the row gave you no new shares, that purchase does not exist. Then the cost of your sales and the blocked losses of that security may not be correct.",
   "coinbase.rewards_income_classification":
     '{{count}} "Rewards Income" item(s) from Coinbase were classified as investment income (savings tax base).',
   "coinbase.rewards_income_classification.hint":

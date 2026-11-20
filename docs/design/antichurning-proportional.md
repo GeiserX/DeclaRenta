@@ -690,6 +690,18 @@ práctico Renta 2025. The decisions, each pinned in
       evidence for this rule, and the FX engine books every CASH trade it
       gets. The first stopped the report, the second was dropped with no
       word.
+      A Lightyear Dividend, Distribution, Interest or Reward row that names
+      a security and writes a share count gave shares too (a share reward,
+      a dividend paid in shares). It was booked as income only, so the
+      shares had no lot: a loss sale before them was not blocked, and their
+      later sale had no cost. The income stays booked, and the shares are
+      now a purchase of that day at the value taxed as income (Gross for a
+      dividend, Net else Gross for interest and rewards), named in
+      `lightyear.income_shares_booked` so the user checks them. A share
+      count or a value that cannot be read, a negative count, or no date,
+      ticker or `CCY` makes an unreadable row named by its cell; a zero
+      value is a corporate-action row, as for a Buy. A written zero count,
+      or none (the real export), moves no shares.
     - Flatex: the side comes from the text (Kauf, Verkauf), never from the
       Nominal's sign alone (#468). A row with neither word is unreadable, so
       a Depotübertrag Ausgang is no sale and an Einbuchung no repurchase. A

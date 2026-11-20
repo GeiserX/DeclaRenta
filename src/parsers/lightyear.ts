@@ -43,6 +43,7 @@ import {
   corporateActionTrade,
   isCorporateActionType,
   markUndatedTrades,
+  isReadableDay,
   dropUndatedCash,
   cashRowsUnidentifiedMessages,
   cashIncomeRowText,
@@ -197,6 +198,8 @@ function parseLightyearCsv(lines: string[]): Statement {
   // leg is no anti-churning evidence, and the FX engine books every CASH
   // trade it is given, in its currency.
   const unreadableConversions: Trade[] = [];
+  // Income rows whose shares are booked as a purchase (#467).
+  const incomeShareRows: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -263,6 +266,60 @@ function parseLightyearCsv(lines: string[]): Statement {
         continue;
       }
     }
+    // A Dividend, Distribution, Interest or Reward row that names a security
+    // and writes a share count gave shares too (a share reward, a dividend
+    // paid in shares). Booked as income only, the shares had no lot: a loss
+    // sale before them was not blocked, and their later sale had no cost.
+    // The income stays booked as it is. The shares are a purchase of that
+    // day at the value taxed as income (`value`, in CCY), named in
+    // lightyear.income_shares_booked so the user checks them. A share count
+    // or a value that cannot be read, a negative count, or no date, ticker
+    // or CCY keeps the row as one that books nothing, named by its cell; a
+    // zero value moves shares for no money, a corporate action not applied,
+    // as for a Buy. A written zero count, or none, moves no shares (#467).
+    const incomeShares = (value: Decimal | undefined, valueCell: string): void => {
+      if (!namesSecurity || quantityEmpty || movesNoShares) return;
+      const row = {
+        tradeID: `lightyear-${txType}-shares-${reference || `${tradeDate}-${ticker || isin}-${i}`}`,
+        symbol: ticker, isin, assetCategory: "STK" as const, currency, tradeDate, tradeTime, buySell: "BUY" as const, exchange: "LIGHTYEAR",
+      };
+      const qtyDec = new Decimal(quantityStr);
+      const cell = !isReadableDay(tradeDate) ? unreadableCell(headers[cols.date] ?? "Date", dateRaw)
+        : !ticker ? unreadableCell(headers[cols.ticker] ?? "Ticker", ticker)
+        : !(fields[cols.ccy] ?? "").trim() ? unreadableCell(headers[cols.ccy] ?? "CCY", fields[cols.ccy])
+        : quantityUnreadable(fields[cols.quantity]) || qtyDec.isNegative() ? unreadableCell(headers[cols.quantity] ?? "Quantity", fields[cols.quantity])
+        : value === undefined ? valueCell
+        : undefined;
+      if (cell !== undefined) {
+        trades.push(unreadableTrade(row, cell));
+        return;
+      }
+      const typeText = (fields[cols.type] ?? "").trim();
+      if (value!.isZero()) {
+        trades.push(corporateActionTrade(row, typeText, fields[cols.quantity] ?? ""));
+        return;
+      }
+      trades.push({
+        ...row,
+        accountId: "",
+        description: `${typeText} ${ticker}`,
+        settlementDate: tradeDate,
+        quantity: qtyDec.toString(),
+        tradePrice: value!.div(qtyDec).toString(),
+        tradeMoney: value!.neg().toString(),
+        proceeds: "0",
+        cost: value!.neg().toString(),
+        fifoPnlRealized: "0",
+        fxRateToBase: "1",
+        openCloseIndicator: "O",
+        commissionCurrency: currency,
+        commission: "0",
+        taxes: "0",
+        multiplier: "1",
+      });
+      incomeShareRows.push(`${isin ? `${ticker} (${isin})` : ticker} ${tradeDate} [${typeText}: ${(fields[cols.quantity] ?? "").trim()}]`);
+    };
+
     // Any other row with no readable date goes on with that date: a dividend
     // or income row is taken out and named by dropUndatedCash, a conversion is
     // kept and named by markUndatedTrades (#467).
@@ -279,8 +336,9 @@ function parseLightyearCsv(lines: string[]): Statement {
       // withholding are not booked, and the row is named (#467).
       if (quantityUnreadable(fields[cols.grossAmount])) {
         const tax = new Decimal(taxAmount).isZero() ? "" : `${headers[cols.taxAmount] ?? "Tax Amt."} ${taxAmount}`;
-        unreadableIncome.push(cashIncomeRowText((fields[cols.type] ?? "").trim(), security || "—", currency, tradeDate,
-          [unreadableCell(headers[cols.grossAmount] ?? "Gross Amount", fields[cols.grossAmount])], tax));
+        const grossCell = unreadableCell(headers[cols.grossAmount] ?? "Gross Amount", fields[cols.grossAmount]);
+        unreadableIncome.push(cashIncomeRowText((fields[cols.type] ?? "").trim(), security || "—", currency, tradeDate, [grossCell], tax));
+        incomeShares(undefined, grossCell);
         continue;
       }
       if (!security) {
@@ -290,6 +348,7 @@ function parseLightyearCsv(lines: string[]): Statement {
       }
 
       const grossDec = new Decimal(grossAmount).abs();
+      incomeShares(grossDec, "");
       // Gross dividend. A written zero Gross is no dividend: the row only
       // carries a tax (a late withholding, a refund). A 0 dividend took its
       // own tax as its pair, and that tax then counted against the treaty
@@ -347,14 +406,17 @@ function parseLightyearCsv(lines: string[]): Statement {
       // Net Amt., else Gross Amount. With neither readable the row is not
       // booked as 0 or dropped with no word: it is named (#467).
       if (quantityUnreadable(fields[cols.netAmount]) && quantityUnreadable(fields[cols.grossAmount])) {
-        unreadableIncome.push(cashIncomeRowText((fields[cols.type] ?? "").trim(), ticker, currency, tradeDate, [
+        const cells = [
           unreadableCell(headers[cols.netAmount] ?? "Net Amt.", fields[cols.netAmount]),
           unreadableCell(headers[cols.grossAmount] ?? "Gross Amount", fields[cols.grossAmount]),
-        ]));
+        ];
+        unreadableIncome.push(cashIncomeRowText((fields[cols.type] ?? "").trim(), ticker, currency, tradeDate, cells));
+        incomeShares(undefined, cells.join(", "));
         continue;
       }
       const amountRaw = new Decimal(netAmount);
       const amountDec = amountRaw.isZero() ? new Decimal(grossAmount) : amountRaw;
+      incomeShares(amountDec.abs(), "");
 
       if (amountDec.isZero()) continue;
       cashTransactions.push({
@@ -542,6 +604,17 @@ function parseLightyearCsv(lines: string[]): Statement {
       message: `Se ha(n) omitido ${unknownCount} fila(s) del CSV de Lightyear con un tipo de movimiento no reconocido: ${types}.`,
       hint: "Estos movimientos no se han incluido en el cálculo. Si son desdoblamientos (splits), traspasos de acciones u otras operaciones societarias, revísalos a mano: pueden cambiar el número de acciones o el coste de adquisición de ventas posteriores.",
       context: { count: String(unknownCount), types },
+    });
+  }
+  if (incomeShareRows.length > 0) {
+    const count = String(incomeShareRows.length);
+    const rows = incomeShareRows.join("; ");
+    parserMessages.push({
+      id: "lightyear.income_shares_booked",
+      severity: "warning",
+      message: `Lightyear: ${count} fila(s) de ingreso traen acciones. DeclaRenta las cuenta como compradas ese día: ${rows}.`,
+      hint: "Son filas de dividendo, distribución, interés o recompensa que traen un número de acciones. DeclaRenta suma su importe como ingreso, igual que en las demás filas. Además, cuenta esas acciones como compradas ese día por ese mismo importe. Así su venta posterior tiene coste. Si vendiste ese valor con pérdidas 2 meses antes o después, esa compra puede bloquear la pérdida (regla de los 2 meses). Compruébalo con el extracto de Lightyear. Si la fila no te dio acciones nuevas, esa compra no existe. Entonces el coste de tus ventas y las pérdidas bloqueadas de ese valor pueden no ser correctos.",
+      context: { count, rows },
     });
   }
   markUndatedTrades(trades, headers[cols.date] ?? "Date");

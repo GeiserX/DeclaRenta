@@ -13,6 +13,8 @@
  * - A negative Tax Amt. (a withholding refund) was booked as more withholding.
  * - A tax-only dividend row (zero Gross) became a 0 dividend that anchored its
  *   tax, so the tax counted against other dividends of the country.
+ * - An income row that names a security and writes a share count was booked
+ *   as income only: the shares had no lot and blocked no loss.
  * - A row with an empty Type was dropped with no word.
  */
 import { describe, it, expect } from "vitest";
@@ -264,6 +266,57 @@ describe("Lightyear Tax Amt. on a dividend row with a zero Gross: a withholding 
   it("a zero Gross books no dividend: only the withholding, which the report matches like any other", () => {
     expect(parse([taxOnly("12/05/2025")]).cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual(["Withholding Tax -3"]);
     expect(parse(["12/05/2025 06:00:00,DD-10,MSFT,US5949181045,Dividend,,USD,,0.00,,,0.00,0.00"]).cashTransactions).toEqual([]);
+  });
+});
+
+describe("Lightyear income rows that give shares: the shares are bought at the value taxed as income", () => {
+  // Buy 10 AAPL at 200 USD, sell them at 150 USD on 20/06/2025: a loss of 450.9 €.
+  // One more AAPL share within 2 months blocks a tenth of it: 45.09 €.
+  const B = "15/03/2025 10:30:00,OR-1,AAPL,US0378331005,Buy,10,USD,200.00,2000.00,,0,2000.00,";
+  const S = "20/06/2025 14:22:11,OR-2,AAPL,US0378331005,Sell,10.000000000,USD,150.00,1500.00,,1.00,1499.00,";
+  const LATE = "01/12/2025 10:00:00,OR-9,MSFT,US5949181045,Buy,1,USD,400.00,400.00,,0,400.00,";
+  const income = (type: string, quantity = "1.000000000") =>
+    `01/07/2025 10:00:00,RW-1,AAPL,US0378331005,${type},${quantity},USD,150.00,150.00,,,150.00,`;
+  const booked = (s: Statement) => s.parserMessages?.find((m) => m.id === "lightyear.income_shares_booked")?.context?.rows;
+
+  it.each(METHODS)("[%s] control: a Buy of 1 AAPL after the loss sale blocks 45.09 €", (method) => {
+    const r = report([B, S, "01/07/2025 10:00:00,OR-3,AAPL,US0378331005,Buy,1.000000000,USD,150.00,150.00,,,150.00,", LATE], method);
+    expect(r.capitalGains.netGainLoss.toString()).toBe("-450.9");
+    expect(r.capitalGains.blockedLosses.toString()).toBe("45.09");
+  });
+
+  it.each(METHODS)("[%s] a Reward or Dividend row of 1 AAPL keeps its income and buys the share: the loss is blocked and the row named", (method) => {
+    const reward = report([B, S, income("Reward"), LATE], method);
+    expect(reward.capitalGains.blockedLosses.toString()).toBe("45.09");
+    expect(reward.interest.earned.toString()).toBe("135");
+    expect(reward.messages.some((m) => m.id === "lightyear.income_shares_booked")).toBe(true);
+    const dividend = report([B, S, income("Dividend"), LATE], method);
+    expect(dividend.capitalGains.blockedLosses.toString()).toBe("45.09");
+    expect(dividend.dividends.grossIncome.toString()).toBe("135");
+  });
+
+  it.each(METHODS)("[%s] a later sale of the reward share has its cost: the value taxed as income", (method) => {
+    const sale = "01/09/2025 10:00:00,OR-4,AAPL,US0378331005,Sell,1,USD,160.00,160.00,,0,160.00,";
+    const r = report([income("Reward"), sale], method);
+    expect(r.capitalGains.acquisitionValue.toString()).toBe("135");
+    expect(r.capitalGains.transmissionValue.toString()).toBe("144");
+  });
+
+  it("the shares are named with the row, and a share count that cannot be read keeps the row as evidence", () => {
+    const s = parse([income("Reward")]);
+    expect(booked(s)).toBe("AAPL (US0378331005) 20250701 [Reward: 1.000000000]");
+    expect(s.trades.map((t) => `${t.buySell} ${t.quantity} ${t.tradePrice} ${t.cost}`)).toEqual(["BUY 1 150 -150"]);
+    const abc = parse([income("Reward", "abc")]);
+    expect(unreadableRows(abc)).toBe('AAPL (US0378331005) 20250701 [Quantity: "abc"]');
+    expect(abc.cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual(["Broker Interest Received 150"]);
+  });
+
+  it("an income row with no share count, or a written zero, moves no shares", () => {
+    for (const q of ["", "0"]) {
+      const s = parse([income("Reward", q), income("Dividend", q)]);
+      expect(s.trades, q).toEqual([]);
+      expect(s.parserMessages, q).toBeUndefined();
+    }
   });
 });
 

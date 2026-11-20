@@ -1144,6 +1144,10 @@ const eu: TranslationKeys = {
     "Lightyear-en CSVko {{count}} errenkada baztertu dira, mugimendu mota ezezaguna dutelako: {{types}}.",
   "lightyear.unknown_types.hint":
     "Mugimendu horiek ez dira kalkuluan sartu. Akzio-zatiketak (splits), akzio-transferentziak edo beste eragiketa korporatibo batzuk badira, berrikusi eskuz: geroko salmenten akzio kopurua edo eskuratze-kostua alda dezakete.",
+  "lightyear.income_shares_booked":
+    "Lightyear: diru-sarrerako {{count}} errenkadak akzioak dakartzate. DeclaRentak egun horretan erositakotzat hartzen ditu: {{rows}}.",
+  "lightyear.income_shares_booked.hint":
+    "Akzio kopuru bat dakarten dibidendu, banaketa, interes edo sari errenkadak dira. DeclaRentak haien zenbatekoa diru-sarrera gisa batzen du, beste errenkadetan bezala. Gainera, akzio horiek egun horretan erositakotzat hartzen ditu, zenbateko berberarekin. Horrela, haien geroko salmentak kostua du. Balio hori galerekin saldu bazenuen 2 hilabete lehenago edo geroago, erosketa horrek galera blokea dezake (2 hilabeteko araua). Egiaztatu Lightyear-en laburpenarekin. Errenkadak akzio berririk eman ez bazizun, erosketa hori ez dago. Orduan, zure salmenten kostua eta balio horren galera blokeatuak baliteke zuzenak ez izatea.",
   "coinbase.rewards_income_classification":
     'Coinbase-ren "Rewards Income" motako {{count}} diru-sarrera kapital higigarriaren etekin gisa sailkatu dira (aurrezki-oinarria).',
   "coinbase.rewards_income_classification.hint":

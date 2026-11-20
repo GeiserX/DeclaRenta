@@ -1142,6 +1142,10 @@ const gl: TranslationKeys = {
     "Omitíronse {{count}} fila(s) do CSV de Lightyear cun tipo de movemento non recoñecido: {{types}}.",
   "lightyear.unknown_types.hint":
     "Estes movementos non se incluíron no cálculo. Se son desdobramentos (splits), traspasos de accións ou outras operacións societarias, revísaos á man: poden cambiar o número de accións ou o custo de adquisición de vendas posteriores.",
+  "lightyear.income_shares_booked":
+    "Lightyear: {{count}} fila(s) de ingreso traen accións. DeclaRenta cóntaas como compradas ese día: {{rows}}.",
+  "lightyear.income_shares_booked.hint":
+    "Son filas de dividendo, distribución, xuro ou recompensa que traen un número de accións. DeclaRenta suma o seu importe como ingreso, igual que nas demais filas. Ademais, conta esas accións como compradas ese día por ese mesmo importe. Así a súa venda posterior ten custo. Se vendiches ese valor con perdas 2 meses antes ou despois, esa compra pode bloquear a perda (regra dos 2 meses). Compróbao co extracto de Lightyear. Se a fila non che deu accións novas, esa compra non existe. Entón o custo das túas vendas e as perdas bloqueadas dese valor poden non ser correctos.",
   "coinbase.rewards_income_classification":
     'Clasificáronse {{count}} ingreso(s) de tipo "Rewards Income" de Coinbase como rendementos do capital mobiliario (base do aforro).',
   "coinbase.rewards_income_classification.hint":
