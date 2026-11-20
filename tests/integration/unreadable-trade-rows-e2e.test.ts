@@ -3616,6 +3616,119 @@ describe("#467 Freedom24 sweep: price, currency, cash flows and description", ()
   });
 });
 
+// Round 11 (Freedom24 sweep 2, #467): the tax_amount of a reversed dividend
+// was booked as a second withholding (a reversed Spanish dividend kept 38 €
+// in box 0597 on 0 € of income); a cash_flows type that only contains
+// "deposit" or "withdraw" (deposit interest) was dropped with no word; a
+// trade's own amount that contradicts p × q (an option, a bond priced in %,
+// a price or commission of 1e400) was ignored; q was read with the decimal
+// comma guess, so "1,000" became 1 share.
+describe("#467 Freedom24 sweep 2: reversal withholding, cash-flow types, amount against p × q and quantity", () => {
+  const F24_BUY = { date: "2024-03-15 09:30:00", ticker: "ACME.US", isin: "US0000000001", operation: "buy", p: "150.00", q: "10", curr_c: "USD", commission: "2.00", amount: "-1502.00", exchange: "NYSE" };
+  const F24_SELL = { ...F24_BUY, date: "2024-09-20 14:00:00", operation: "sell", p: "175.00", amount: "1748.00" };
+  const SAN_DIV = { date: "2024-06-15 00:00:00", ticker: "SAN.MC", isin: "ES0113900J37", type_id: "dividend", amount: "100.00", tax_amount: "19.00", curr_c: "EUR", description: "SAN div" };
+  const SAN_REV = { ...SAN_DIV, date: "2024-06-20 00:00:00", amount: "-100.00" };
+  const f24 = (sections: { trades?: unknown[]; ca?: unknown[]; flows?: unknown[] }): Statement => freedom24Parser.parse(JSON.stringify({
+    report: { trades: { detailed: sections.trades ?? [] }, corporate_actions: { detailed: sections.ca ?? [] }, cash_flows: { detailed: sections.flows ?? [] } },
+  }));
+  const gains = (r: TaxReport): string[] => [r.capitalGains.transmissionValue.toFixed(2), r.capitalGains.netGainLoss.toFixed(2)];
+  const spanish = (r: TaxReport): string[] => [r.dividends.grossIncome.toFixed(2), r.dividends.spanishWithholding.toFixed(2)];
+
+  it.each(METHODS)("[%s] control: a Spanish dividend of 100 € with 19 € withheld", (method) => {
+    const parsed = f24({ ca: [SAN_DIV] });
+    expect(parsed.parserMessages).toBeUndefined();
+    expect(spanish(run([[parsed, "Freedom24"]], 2024, method))).toEqual(["100.00", "19.00"]);
+  });
+
+  it.each(METHODS)("[%s] a reversed dividend refunds its tax_amount, of either sign: box 0597 is 0, never 38", (method) => {
+    for (const tax of ["19.00", "-19.00", 19, -19]) {
+      const parsed = f24({ ca: [SAN_DIV, { ...SAN_REV, tax_amount: tax }] });
+      expect(parsed.cashTransactions.map((c) => [c.type, c.amount])).toEqual([
+        ["Dividends", "100.00"], ["Withholding Tax", "-19"], ["Dividends", "-100.00"], ["Withholding Tax", "19"],
+      ]);
+      expect(parsed.parserMessages).toBeUndefined();
+      expect(spanish(run([[parsed, "Freedom24"]], 2024, method))).toEqual(["0.00", "0.00"]);
+    }
+  });
+
+  it.each(METHODS)("[%s] a reversal with a written zero tax_amount refunds no withholding: the file's word", (method) => {
+    expect(spanish(run([[f24({ ca: [SAN_DIV, { ...SAN_REV, tax_amount: "0" }] }), "Freedom24"]], 2024, method))).toEqual(["0.00", "19.00"]);
+  });
+
+  it.each(METHODS)("[%s] a positive dividend books its tax_amount as withheld, of either sign", (method) => {
+    expect(spanish(run([[f24({ ca: [{ ...SAN_DIV, tax_amount: "-19.00" }] }), "Freedom24"]], 2024, method))).toEqual(["100.00", "19.00"]);
+  });
+
+  it.each(METHODS)("[%s] a cash_flows type that only contains deposit or withdraw is named, never dropped", (method) => {
+    const parsed = f24({ trades: [F24_BUY, F24_SELL], flows: [
+      { date: "2024-05-01", type_id: "deposit_interest", amount: "12.00", curr_c: "EUR" },
+      { date: "2024-05-02", type: "Interest on deposit", amount: "12.00", curr_c: "EUR" },
+      { date: "2024-05-03", type_id: "withdrawal_commission", amount: "-5.00", curr_c: "EUR" },
+      { date: "2024-05-04", type_id: "deposit", type: "dividend", amount: "12.00", curr_c: "EUR" },
+      { date: "2024-05-05", type_id: "depositInterest", amount: "3.00", curr_c: "EUR" },
+      { date: "2024-01-02", type_id: "deposit", amount: "5000", curr_c: "EUR" },
+      { date: "2024-01-03", type_id: "card_deposit", amount: "100", curr_c: "EUR" },
+      { date: "2024-01-04", type: "Bank withdrawal", amount: "-100", curr_c: "EUR" },
+      { date: "2024-01-05", type_id: "WITHDRAWALS", type: "withdrawal", amount: "-100", curr_c: "EUR" },
+    ] });
+    const rows = "deposit_interest 12.00 EUR 20240501; Interest on deposit 12.00 EUR 20240502; withdrawal_commission -5.00 EUR 20240503; deposit (dividend) 12.00 EUR 20240504; depositInterest 3.00 EUR 20240505";
+    expect(messageRows(parsed, "freedom24.cash_flow_not_read")).toBe(rows);
+    const r = run([[parsed, "Freedom24"]], 2024, method);
+    expect(r.messages.find((m) => m.id === "freedom24.cash_flow_not_read")?.context?.rows).toBe(rows);
+    expect(gains(r)).toEqual(["1922.80", "270.60"]);
+  });
+
+  it.each(METHODS)("[%s] control: the trade's amount equals p × q with or without its commission, so it is booked", (method) => {
+    for (const [buy, sell] of [["-1502.00", "1748.00"], ["-1500", "1750"], [-1502, 1748]] as const) {
+      const parsed = f24({ trades: [{ ...F24_BUY, amount: buy }, { ...F24_SELL, amount: sell }] });
+      expect(parsed.parserMessages).toBeUndefined();
+      expect(gains(run([[parsed, "Freedom24"]], 2024, method))).toEqual(["1922.80", "270.60"]);
+    }
+    for (const amount of [undefined, null, "", "n/a"]) {
+      const parsed = f24({ trades: [{ ...F24_BUY, amount }, { ...F24_SELL, amount }] });
+      expect(parsed.parserMessages).toBeUndefined();
+      expect(gains(run([[parsed, "Freedom24"]], 2024, method))).toEqual(["1922.80", "270.60"]);
+    }
+  });
+
+  const contradictions: [string, Record<string, unknown>, Record<string, unknown>, string, string][] = [
+    ["an option: q 10 at 1.50 per share, amount × 100", { p: "1.50", amount: "-1502.00" }, { p: "1.75", amount: "1748.00" },
+      'q: "10", p: "1.50", commission: "2.00", amount: "-1502.00"', 'q: "10", p: "1.75", commission: "2.00", amount: "1748.00"'],
+    ["a bond with p in % of face, amount × 10", { p: "150.00", amount: "-15002.00" }, { p: "175.00", amount: "17498.00" },
+      'q: "10", p: "150.00", commission: "2.00", amount: "-15002.00"', 'q: "10", p: "175.00", commission: "2.00", amount: "17498.00"'],
+    ["a price of 1e400", { p: "1e400" }, {}, 'q: "10", p: "1e400", commission: "2.00", amount: "-1502.00"', ""],
+    ["a commission of 1e400", { commission: "1e400" }, {}, 'q: "10", p: "150.00", commission: "1e400", amount: "-1502.00"', ""],
+  ];
+  describe.each(contradictions)("a trade whose amount contradicts p × q: %s", (_label, buy, sell, buyCell, sellCell) => {
+    it.each(METHODS)("[%s] is an unreadable row named by q, p, commission and amount, never booked at p × q", (method) => {
+      const parsed = f24({ trades: [{ ...F24_BUY, ...buy }, { ...F24_SELL, ...sell }] });
+      const named = [`ACME (US0000000001) 20240315 [${buyCell}]`, ...(sellCell ? [`ACME (US0000000001) 20240920 [${sellCell}]`] : [])];
+      expect(unreadableRows(parsed)).toBe(named.join("; "));
+      expect(parsed.parserMessages?.find((m) => m.id === "parser.trade_row_unreadable")?.hint).toContain("no cuadra con las demás celdas de la fila");
+      const r = run([[parsed, "Freedom24"]], 2024, method);
+      expect(r.messages.some((m) => m.id === "parser.trade_row_unreadable")).toBe(true);
+      expect(r.messages.some((m) => m.id === "report.non_finite_total")).toBe(false);
+      if (sellCell) expect(gains(r)).toEqual(["0.00", "0.00"]);
+      else expect(r.capitalGains.acquisitionValue.abs().lessThan(1e6)).toBe(true);
+    });
+  });
+
+  it.each(METHODS)("[%s] control: q 1000 is booked as 1000 shares", (method) => {
+    const parsed = f24({ trades: [{ ...F24_BUY, q: "1000", amount: "-150002.00" }, { ...F24_SELL, q: "1000", amount: "174998.00" }] });
+    expect(parsed.parserMessages).toBeUndefined();
+    expect(gains(run([[parsed, "Freedom24"]], 2024, method))).toEqual(["192497.80", "27495.60"]);
+  });
+
+  it.each(METHODS)("[%s] a q with a comma is a trade of unknown quantity, never 1 or 1.5 shares", (method) => {
+    for (const q of ["1,000", "1,5"]) {
+      const parsed = f24({ trades: [{ ...F24_BUY, q: "1000", amount: undefined }, { ...F24_SELL, q, amount: undefined }] });
+      expect(parsed.trades.map((t) => [t.buySell, t.quantity, t.quantityUnknown ?? false])).toEqual([["BUY", "1000", false], ["SELL", "0", true]]);
+      expect(parsed.parserMessages?.map((m) => m.id)).toEqual(["parser.trade_quantity_unknown"]);
+      expect(run([[parsed, "Freedom24"]], 2024, method).capitalGains.disposals).toEqual([]);
+    }
+  });
+});
+
 describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and airdrops", () => {
   const KR_H = `"txid","ordertxid","pair","time","type","ordertype","price","cost","fee","vol","margin","misc","ledgers"`;
   const KR_H_NOPRICE = `"txid","ordertxid","pair","time","type","ordertype","cost","fee","vol","margin","misc","ledgers"`;

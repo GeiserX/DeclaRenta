@@ -648,7 +648,16 @@ práctico Renta 2025. The decisions, each pinned in
       cells. " usd" is USD. Every `cash_flows` row that is not a deposit or
       a withdrawal is named by `freedom24.cash_flow_not_read` (type,
       amount, currency, date); before, every one was dropped with no word.
-      A written zero amount stays skipped.
+      A written zero amount stays skipped. A row is a deposit or a
+      withdrawal only when its `type_id` and `type` carry no other word:
+      `deposit_interest` or "Interest on deposit" is named. A buy or sale
+      whose readable `amount` is not p × q, with or without its commission
+      (1 % and a cent of tolerance), is an unreadable row named by its `q`,
+      `p`, `commission` and `amount` cells: an option, a bond priced in %
+      of face or a price of 1e400 was booked at p × q. A `q` written with
+      a comma ("1,000") is a trade of unknown quantity, never 1 share. The
+      `tax_amount` of a negative dividend (a reversal) is a refund, so a
+      reversed Spanish dividend no longer keeps its withholding in box 0597.
     - Lightyear and Scalable Capital: a buy or sale with no date, ticker or
       ISIN; a type that is not a buy or sale and moves shares. A split or
       corporate-action type is a corporate-action row (above). Scalable also

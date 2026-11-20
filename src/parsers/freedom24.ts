@@ -11,6 +11,7 @@
  * Ticker format: SYMBOL.EXCHANGE (e.g., SPY.US)
  */
 
+import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
@@ -110,6 +111,27 @@ function currencyOf(val: unknown): string {
   return /^[A-Z]{3}$/.test(code) ? code : "";
 }
 
+/**
+ * Words a cash_flows type of a deposit or a withdrawal is made of
+ * ("deposit", "card_deposit", "Bank withdrawal").
+ */
+const TRANSFER_WORDS = new Set([
+  "deposit", "deposits", "withdraw", "withdrawal", "withdrawals",
+  "card", "bank", "wire", "sepa", "swift", "transfer", "transfers", "incoming", "outgoing",
+  "in", "out", "to", "from", "by", "via", "of",
+]);
+
+/**
+ * Whether a cash_flows type (its type_id and type) is a deposit or a
+ * withdrawal and nothing else: it names one of them and has no other word.
+ * "deposit_interest", "Interest on deposit" or "withdrawal_commission" carry
+ * another word, so they are named, never dropped with no word (#467).
+ */
+function isTransfer(type: string): boolean {
+  const words = type.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().split(/[^a-z]+/).filter(Boolean);
+  return words.some((w) => /^(deposits?|withdraw(al|als)?)$/.test(w)) && words.every((w) => TRANSFER_WORDS.has(w));
+}
+
 function parseSymbol(ticker: string): { symbol: string; exchange: string } {
   const parts = ticker.split(".");
   if (parts.length >= 2) {
@@ -191,8 +213,11 @@ function parseFreedom24(input: string): Statement {
       : undefined;
     // An operation that is neither a buy nor a sale with a written zero
     // quantity moves no shares: skipped.
+    // q is read as written, like p: a comma is no decimal point, so "1,000"
+    // is no 1 share and "1,5" no 1.5 shares; such a row is a trade of unknown
+    // quantity (#467).
     const otherOperation = operation !== "buy" && operation !== "sell";
-    if (otherOperation && !quantityUnreadable(t.q) && toFiniteDecimal(quantity).isZero()) continue;
+    if (otherOperation && !quantityUnreadable(t.q, false) && toFiniteDecimal(quantity, "0", false).isZero()) continue;
     if (cell !== undefined) {
       trades.push(unreadableTrade({
         tradeID: `freedom24-${tradeDate}-${i}`,
@@ -203,11 +228,11 @@ function parseFreedom24(input: string): Statement {
       continue;
     }
 
-    const qtyDec = toFiniteDecimal(quantity).abs();
+    const qtyDec = toFiniteDecimal(quantity, "0", false).abs();
     if (qtyDec.isZero()) {
       // An empty or unreadable quantity is no "0": keep the buy or sell row as
       // a trade of unknown quantity for the anti-churning evidence (#453).
-      if (quantityUnreadable(t.q)) {
+      if (quantityUnreadable(t.q, false)) {
         trades.push(quantityUnknownTrade({
           tradeID: `freedom24-${tradeDate}-${i}`,
           symbol, description: ticker, isin, assetCategory: "STK", currency, tradeDate,
@@ -239,6 +264,34 @@ function parseFreedom24(input: string): Statement {
     }
 
     const commDec = toFiniteDecimal(commission);
+
+    // The row's own amount is the money the trade moved: p × q plus the
+    // commission on a buy, minus it on a sale, or p × q alone. FIFO books
+    // p × q and the commission, never the amount. When the amount is
+    // readable and contradicts them (an option whose amount is 100 × p × q,
+    // a bond priced in % of its face, a price or a commission of 1e400),
+    // the row is unreadable, named by its q, p, commission and amount
+    // cells, never booked at p × q (#467). The tolerance (1 % and a cent)
+    // covers a price written rounded. A missing or unreadable amount is no
+    // evidence, so the row is booked as before.
+    const amountValue = toFiniteDecimalString(text(t.amount), "", false);
+    if (amountValue !== "") {
+      const money = new Decimal(amountValue).abs();
+      const value = qtyDec.times(priceValue);
+      const fee = commDec.abs();
+      const tolerance = value.times("0.01").plus("0.01");
+      const near = (expected: Decimal): boolean => money.minus(expected).abs().lessThanOrEqualTo(tolerance);
+      const withFee = near(isSell ? value.minus(fee) : value.plus(fee));
+      const withoutFee = near(value) && fee.lessThan(value);
+      if (!withFee && !withoutFee) {
+        trades.push(unreadableTrade({
+          tradeID: `freedom24-${tradeDate}-${i}`,
+          symbol, description: ticker, isin, assetCategory: "STK", currency, tradeDate,
+          buySell: isSell ? "SELL" : "BUY", exchange: t.exchange || exchange,
+        }, [unreadableCell("q", t.q), unreadableCell("p", t.p), unreadableCell("commission", t.commission), unreadableCell("amount", t.amount)].join(", ")));
+        continue;
+      }
+    }
 
     trades.push({
       tradeID: `freedom24-${tradeDate}-${i}`,
@@ -385,7 +438,11 @@ function parseFreedom24(input: string): Statement {
         currency,
         dateTime: tradeDate,
         settleDate: tradeDate,
-        amount: taxDec.isPositive() ? taxDec.neg().toString() : taxDec.toString(),
+        // A reversed dividend (a negative amount) refunds its withholding,
+        // whatever sign the file gives its tax_amount: booked as withheld, a
+        // fully reversed Spanish dividend kept 38 € in box 0597 on 0 € of
+        // income (#467). Any other dividend books it as withheld.
+        amount: (new Decimal(amount).isNegative() ? taxDec.abs() : taxDec.abs().neg()).toString(),
         fxRateToBase: "1",
         type: "Withholding Tax",
       });
@@ -401,8 +458,10 @@ function parseFreedom24(input: string): Statement {
   if (Array.isArray(rawFlows)) {
     for (const row of rawFlows as unknown[]) {
       const flow: Freedom24CashFlow = typeof row === "object" && row !== null ? row : {};
-      const type = text(flow.type_id) || text(flow.type);
-      if (/deposit|withdraw/i.test(type)) continue;
+      const typeId = text(flow.type_id);
+      const typeName = text(flow.type);
+      if (isTransfer(`${typeId} ${typeName}`)) continue;
+      const type = typeId && typeName && typeId !== typeName ? `${typeId} (${typeName})` : typeId || typeName;
       const amount = text(flow.amount);
       const amountValue = toFiniteDecimalString(amount, "", false);
       if (amountValue !== "" && toFiniteDecimal(amountValue, "0", false).isZero()) continue;

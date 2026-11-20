@@ -143,7 +143,7 @@ La web muestra la misma guía de cada broker bajo «¿No se detectó tu broker?�
 
 **Formato:** JSON con arrays de `trades`, `corporate_actions` y `cash_flows`.
 
-**Datos extraídos:** Operaciones, dividendos y cupones con su retención. Las demás acciones corporativas no se aplican: DeclaRenta te avisa con la fila. Los flujos de caja (`cash_flows`) no se calculan. DeclaRenta te avisa con cada fila que no sea un ingreso o una retirada de dinero, como un interés o una comisión.
+**Datos extraídos:** Operaciones, dividendos y cupones con su retención. Las demás acciones corporativas no se aplican: DeclaRenta te avisa con la fila. Los flujos de caja (`cash_flows`) no se calculan. DeclaRenta te avisa con cada fila que no sea un ingreso o una retirada de dinero, como un interés o una comisión. Una fila como «deposit_interest» es un interés, no un ingreso de dinero. Si el importe (`amount`) de una operación no cuadra con el precio por la cantidad, DeclaRenta no la calcula y te avisa con la fila. Lo mismo pasa con una cantidad (`q`) escrita con coma.
 
 **Limitaciones:** El formato JSON de Freedom24 puede variar entre versiones. Si la estructura no coincide, el auto-detector no reconocerá el fichero.
 
