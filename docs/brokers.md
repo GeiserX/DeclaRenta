@@ -93,7 +93,7 @@ La web muestra la misma guía de cada broker bajo «¿No se detectó tu broker?�
 
 **Limitaciones:** Los informes de Scalable no incluyen posiciones abiertas para el Modelo 720. Necesitarás esa información por separado.
 
-DeclaRenta solo calcula las filas ejecutadas (`Executed`, `Ejecutada`, `Ausgeführt`). No cuenta las canceladas, rechazadas o pendientes. Si una fila trae otro estado, DeclaRenta no la calcula y te avisa con la fila. Un dividendo anulado (un importe negativo) resta el dividendo y su retención. Una fila de dividendo con importe 0 y una retención solo cuenta la retención. DeclaRenta la une a un dividendo del mismo valor de los 7 días cercanos. Si no hay ninguno, no la cuenta. Si la fila que anula un dividendo no trae la retención (la celda está vacía), DeclaRenta no resta esa fila y te avisa con ella.
+DeclaRenta solo calcula las filas ejecutadas (`Executed`, `Ejecutada`, `Ausgeführt`). No cuenta las canceladas, rechazadas o pendientes. Si una fila trae otro estado, DeclaRenta no la calcula y te avisa con la fila. Un dividendo anulado (un importe negativo) resta el dividendo y su retención. Una fila de dividendo con importe 0 y una retención solo cuenta la retención. DeclaRenta la une a un dividendo del mismo valor de los 7 días cercanos. Si no hay ninguno, no la cuenta. Si la fila que anula un dividendo no trae la retención (la celda está vacía), DeclaRenta no resta esa fila y te avisa con ella. Un estado que dice que la orden se ejecutó en parte («Partially cancelled», «Executed, remainder cancelled») no se calcula, y DeclaRenta te avisa con la fila.
 
 ### eToro
 

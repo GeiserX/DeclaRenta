@@ -17,6 +17,8 @@
  *   took its own tax, so the tax raised the 0588 of the country's other dividends.
  * - A reversed Distribution whose tax cell was empty or missing was booked
  *   with no refund, so the reversed dividend kept its whole withholding.
+ * - A status that named an execution and a cancelled rest dropped the row
+ *   with no word.
  */
 import { describe, it, expect } from "vitest";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
@@ -301,5 +303,25 @@ describe("Scalable round 3: rows booked against what the file says", () => {
     ];
     expect(parse(rows, header).parserMessages).toBeUndefined();
     expect(sums(report(rows, method, header))).toBe("div=0.00 sw=0.00 dtd=0.00");
+  });
+
+  it.each(METHODS)("[%s] a status that names an execution and a cancelled rest is named, never dropped", (method) => {
+    const withStatus = (row: string, status: string) => row.replace(";Executed;", `;${status};`);
+    const dividend = dist(MSFT, "100,00", "-15,00", "2025-06-01", "Microsoft");
+    for (const status of ["Partially cancelled", "Teilweise ausgeführt, Rest storniert", "Executed, remainder cancelled", "Parcialmente cancelada"]) {
+      const s = parse([buy(), withStatus(sell(), status), withStatus(dividend, status)]);
+      expect(msg(s, "parser.trade_row_unreadable"), status).toBe(`Apple (US0378331005) 20250903 [status: ${JSON.stringify(status)}]`);
+      expect(msg(s, "scalable.income_row_not_read"), status).toBe(
+        `Distribution Microsoft (${MSFT}) EUR 20250601 (tax -15) [status: ${JSON.stringify(status)}]`);
+      const r = report([buy(), withStatus(sell(), status), withStatus(dividend, status)], method);
+      expect(r.capitalGains.transmissionValue.toFixed(2), status).toBe("0.00");
+      expect(r.dividends.grossIncome.toFixed(2), status).toBe("0.00");
+      expect(r.messages.map((m) => m.id), status).toContain("parser.trade_row_unreadable");
+      expect(r.messages.map((m) => m.id), status).toContain("scalable.income_row_not_read");
+    }
+    // Control: a status that names no execution stays skipped with no word.
+    for (const status of ["Cancelled", "Storniert", "Suspended"]) {
+      expect(parse([buy(), withStatus(sell(), status), withStatus(dividend, status)]).parserMessages, status).toBeUndefined();
+    }
   });
 });

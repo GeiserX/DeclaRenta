@@ -105,6 +105,10 @@ const INTEREST_TYPES = ["interes", "zins"];
 const EXECUTED_STATUSES = new Set(["executed", "ejecutada", "ejecutado", "ausgeführt"]);
 const NOT_EXECUTED_STATUS =
   /cancel|reject|pend|expir|fail|storn|abgelehnt|abgebrochen|abgelaufen|fehlgeschlagen|ausstehend|anulad|rechaz|caducad|fallid/;
+// A status that also names an execution or a part ("Partially cancelled",
+// "Executed, remainder cancelled", "Teilweise ausgeführt, Rest storniert")
+// may have moved shares or money: it is a status not known, never skipped.
+const EXECUTED_IN_PART_STATUS = /execut|ausgef|ejecut|fill|partial|teilweise|parcial/;
 
 // ---------------------------------------------------------------------------
 // Parser
@@ -138,7 +142,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     // Only executed rows are booked; an empty status is read as executed.
     const statusText = (fields[cols.status] ?? "").trim();
     const status = statusText.toLowerCase();
-    if (NOT_EXECUTED_STATUS.test(status)) continue;
+    if (NOT_EXECUTED_STATUS.test(status) && !EXECUTED_IN_PART_STATUS.test(status)) continue;
     const statusCell = status && !EXECUTED_STATUSES.has(status)
       ? unreadableCell(headers[cols.status] ?? "status", statusText) : undefined;
 
