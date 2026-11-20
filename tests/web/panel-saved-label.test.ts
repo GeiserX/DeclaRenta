@@ -937,8 +937,8 @@ describe("Clear in each panel (#472 review)", () => {
 
   const ethInput = (p: HTMLElement) => [...p.querySelectorAll<HTMLInputElement>(".crypto-rate-input")].find((i) => i.dataset.currency === "ETH")!;
   const solInput = (p: HTMLElement) => [...p.querySelectorAll<HTMLInputElement>(".crypto-rate-input")].find((i) => i.dataset.currency !== "ETH")!;
-  const runLands = async (strip: Element | null) => {
-    await waitFor(() => (document.getElementById("results-split") !== strip ? true : null), "rerun after Clear");
+  const runLands = async (strip: Element | null, what = "rerun after Clear") => {
+    await waitFor(() => (document.getElementById("results-split") !== strip ? true : null), what);
     await new Promise((r) => setTimeout(r, 50));
   };
 
@@ -1015,8 +1015,11 @@ describe("Clear in each panel (#472 review)", () => {
     await runLands(strip);
     expect(windowPanel()).toBe(before);
     expect(windowSelect(before).value).toBe("auto");
+    const stripBeforeSave = document.getElementById("results-split");
     before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
     expect(JSON.parse(localStorage.getItem("declarenta_antichurning_windows")!)).toEqual({ [LSE2_ISIN]: 12 });
+    // The Save's run lands here, not in the next test's app.
+    await runLands(stripBeforeSave, "rerun after Save");
   });
 
   it("anti-churning window: a refused Clear leaves the selects as they were and does not rerun", async () => {
@@ -1041,8 +1044,10 @@ describe("Clear in each panel (#472 review)", () => {
     solInput(before).dispatchEvent(new Event("input", { bubbles: true }));
     await runLands(strip);
     expect(cryptoPanel()).toBe(before);
+    const stripBeforeSave = document.getElementById("results-split");
     before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
     expect((JSON.parse(localStorage.getItem("declarenta_manual_rates")!) as { currency: string }[]).map((e) => e.currency)).toEqual(["SOL"]);
+    await runLands(stripBeforeSave, "rerun after Save");
   });
 
   it("opening lots: Clear, then an added row while the rerun waits: the next Save does not restore the cleared lot", async () => {
