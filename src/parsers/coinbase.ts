@@ -136,10 +136,17 @@ function occurrenceKey(seen: Map<string, number>, content: string): string {
   return `${content}#${n}`;
 }
 
-/** A number cell as its value ("€40000.00" and "40000" are both "40000"); one that cannot be read, as written. */
+/**
+ * A number cell as its size ("€40000.00", "40000" and "-€40000.00" are all
+ * "40000"); one that cannot be read, as written. The sign is left out: V2 and
+ * V3 write a sale's and a convert's fee, and a convert's quantity, negative,
+ * where V1 writes them positive, and the parser books every one of them by
+ * its size. Kept, the sign gave the same sale two IDs in a V1 and a V3 export,
+ * so its loss was counted twice with no warning (#467).
+ */
 function cellValue(cell: string | undefined): string {
   const text = usCell(cell);
-  return quantityUnreadable(text) ? (cell ?? "").trim() : toFiniteDecimal(parseNumber(text!)).toString();
+  return quantityUnreadable(text) ? (cell ?? "").trim() : toFiniteDecimal(parseNumber(text!)).abs().toString();
 }
 
 // ---------------------------------------------------------------------------

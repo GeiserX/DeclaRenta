@@ -221,3 +221,42 @@ describe("#467 Coinbase round 4: a V1 and a V3 export of the same trades are fla
     expect(duplicates(s)).toBeUndefined();
   });
 });
+
+describe("#467 Coinbase round 5: a V3 export writes a sale's and a convert's fee (and a convert's quantity) negative, and is still flagged against a V1 export", () => {
+  // Buy 1 BTC at 40000 € and give it up at 30000 € in 2024: a 10200 € loss.
+  const buy1 = "2024-01-10T10:00:00Z,Buy,BTC,1,EUR,40000.00,40000.00,40100.00,100.00,Bought";
+  const buy3 = "aaa111,2024-01-10 10:00:00 UTC,Buy,BTC,1,EUR,€40000.00,€40000.00,€40100.00,€100.00,Bought 1 BTC for €40100.00";
+  const sell1 = "2024-03-15T10:00:00Z,Sell,BTC,1,EUR,30000.00,30000.00,29900.00,100.00,Sold";
+  const sell3 = "bbb222,2024-03-15 10:00:00 UTC,Sell,BTC,1,EUR,€30000.00,€30000.00,€29900.00,-€100.00,Sold 1 BTC for €29900.00";
+  const conv1 = "2024-03-15T10:00:00Z,Convert,BTC,1,EUR,30000.00,30000.00,29900.00,100.00,Converted 1 BTC to 10 ETH";
+  const conv3 = "ccc333,2024-03-15 10:00:00 UTC,Convert,BTC,-1.00000000,EUR,€30000.00,€30000.00,€29900.00,-€100.00,Converted 1 BTC to 10 ETH";
+  const net = (r: TaxReport): string => r.capitalGains.netGainLoss.toFixed(2);
+  const cases = [["a sale", sell1, sell3, 2], ["a convert", conv1, conv3, 3]] as const;
+
+  it.each(METHODS)("[%s] control: each export alone is a 10200 € loss and nothing is repeated", (method) => {
+    for (const [, v1, v3] of cases) {
+      for (const s of [merged(parse(H1, buy1, v1)), merged(parse(H3, buy3, v3))]) {
+        expect(duplicates(s), v3).toBeUndefined();
+        expect(net(report(s, method)), v3).toBe("-10200.00");
+      }
+    }
+  });
+
+  it.each(METHODS)("[%s] both exports give each trade the same ID, so every trade is flagged as repeated", (method) => {
+    for (const [what, v1, v3, n] of cases) {
+      const a = parse(H1, buy1, v1);
+      const b = parse(H3, buy3, v3);
+      expect(b.trades.map((t) => t.tradeID), what).toEqual(a.trades.map((t) => t.tradeID));
+      const s = merged(a, b);
+      expect(duplicates(s), what).toContain(`${n} operación(es) duplicada(s)`);
+      // The duplicate check warns and drops nothing.
+      expect(net(report(s, method)), what).toBe("-20400.00");
+    }
+  });
+
+  it("two V3 sales with their own IDs and the same cells in one file are two trades with two IDs, and nothing is flagged", () => {
+    const s = merged(parse(H3, buy3, buy3.replace("aaa111", "aaa112"), sell3, sell3.replace("bbb222", "bbb223")));
+    expect(new Set(s.trades.map((t) => t.tradeID)).size).toBe(4);
+    expect(duplicates(s)).toBeUndefined();
+  });
+});
