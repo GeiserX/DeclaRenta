@@ -468,10 +468,12 @@ describe("Trade Republic dividend of a written zero with a tax: a withholding wi
     expect([r.dividends.grossIncome.toFixed(2), r.dividends.spanishWithholding.toFixed(2)]).toEqual(["100.00", "14.00"]);
   });
 
-  it.each(METHODS)("[%s] a refund a month after its dividend is out of the report's 7 days: 0597 stays 19.00, and the row is named for the user to correct", (method) => {
+  // Past the 7 days, a refund still joins its dividend of the same year
+  // (pass 3c, #467): the 0597 falls to 14.00, as for a refund days on.
+  it.each(METHODS)("[%s] a refund a month after its dividend lowers 0597 to 14.00 in the same year, and the row is named", (method) => {
     const s = tr(ES_DIV({ tax: "-19.00" }), ES_DIV({ date: "2025-06-15", amount: "0", tax: "5.00" }));
     expect(rowsOf(s, "trade_republic.dividend_tax_refund")).toBe('DIVIDEND Iberia SA (ES0000001001) EUR 20250615 [amount: "0", tax: "5.00"]');
-    expect(report(s, method).dividends.spanishWithholding.toFixed(2)).toBe("19.00");
+    expect(report(s, method).dividends.spanishWithholding.toFixed(2)).toBe("14.00");
   });
 
   it("a written zero with no tax, or a tax of 0, stays as the file writes it, with no word", () => {

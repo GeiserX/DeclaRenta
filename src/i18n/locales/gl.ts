@@ -1235,7 +1235,7 @@ const gl: TranslationKeys = {
   "trade_republic.dividend_tax_refund":
     "Trade Republic: {{count}} fila(s) de dividendo traen importe 0 e unha devolución de retención (tax positivo): {{rows}}.",
   "trade_republic.dividend_tax_refund.hint":
-    "Unha fila con importe 0 non é un dividendo. A súa retención (tax) positiva é unha devolución. DeclaRenta réstaa da retención dun dividendo do mesmo valor de 7 días antes ou despois. Se non hai ningún, non a resta, e a retención dese dividendo conta enteira: así pagarías de menos. Toma a retención final do informe fiscal de Trade Republic e corrixe a man en Renta Web a casilla 0588, ou a 0597 se o valor é español.",
+    "Unha fila con importe 0 non é un dividendo. A súa retención (tax) positiva é unha devolución. DeclaRenta réstaa da retención dun dividendo do mesmo valor de 7 días antes ou despois ou, se non hai ningún, dun anterior do mesmo ano. Se non hai ningún, non a resta, e a retención dese dividendo conta enteira: así pagarías de menos. Toma a retención final do informe fiscal de Trade Republic e corrixe a man en Renta Web a casilla 0588, ou a 0597 se o valor é español.",
   "trade_republic.trade_tax_positive":
     "Trade Republic: {{count}} compra(s) ou venda(s) traen un imposto (tax) positivo, e DeclaRenta non o conta: {{rows}}.",
   "trade_republic.trade_tax_positive.hint":
@@ -1251,7 +1251,7 @@ const gl: TranslationKeys = {
   "scalable.dividend_tax_refund":
     "Scalable Capital: {{count}} fila(s) de dividendo traen importe 0 e unha devolución de retención (tax positivo): {{rows}}.",
   "scalable.dividend_tax_refund.hint":
-    "Unha fila con importe 0 non é un dividendo. Scalable Capital escribe a retención (tax) en negativo, así que unha positiva é unha devolución. DeclaRenta réstaa da retención dun dividendo do mesmo valor de 7 días antes ou despois. Se non hai ningún, non a resta, e a retención dese dividendo conta enteira: así pagarías de menos. Toma a retención final do informe fiscal de Scalable Capital e corrixe a man en Renta Web a casilla 0588, ou a 0597 se o valor é español. Se a fila é unha retención cobrada máis tarde, DeclaRenta non a conta: engádea a man.",
+    "Unha fila con importe 0 non é un dividendo. Scalable Capital escribe a retención (tax) en negativo, así que unha positiva é unha devolución. DeclaRenta réstaa da retención dun dividendo do mesmo valor de 7 días antes ou despois ou, se non hai ningún, dun anterior do mesmo ano. Se non hai ningún, non a resta, e a retención dese dividendo conta enteira: así pagarías de menos. Toma a retención final do informe fiscal de Scalable Capital e corrixe a man en Renta Web a casilla 0588, ou a 0597 se o valor é español. Se a fila é unha retención cobrada máis tarde, DeclaRenta non a conta: engádea a man.",
   "parser.trading212.unresolved_price_skipped":
     "Omitíronse {{skipped}} operacións sen prezo por acción e con importe noutra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":

@@ -406,11 +406,13 @@ describe("Scalable round 4: a Distribution of 0 with a positive tax is a refund,
     expect(sums(report(rows, method))).toBe("div=100.00 sw=0.00 dtd=10.00");
   });
 
-  it.each(METHODS)("[%s] a refund 60 days after its dividend is out of the report's 7 days: the 0597 stays 19, and the row is named", (method) => {
+  // Past the 7 days, a refund still joins its dividend of the same year
+  // (pass 3c, #467): the 0597 falls to 14, as for a refund two days on.
+  it.each(METHODS)("[%s] a refund 60 days after its dividend lowers the 0597 to 14 in the same year, and the row is named", (method) => {
     const rows = [dist(ES, "100,00", "-19,00", "2025-06-01"), dist(ES, "0,00", "5,00", "2025-08-01")];
     expect(msg(parse(rows), REFUND)).toBe(`Distribution Div (${ES}) EUR 20250801 [amount: "0,00", tax: "5,00"]`);
     const r = report(rows, method);
-    expect(sums(r)).toBe("div=100.00 sw=19.00 dtd=0.00");
+    expect(sums(r)).toBe("div=100.00 sw=14.00 dtd=0.00");
     expect(r.messages.map((m) => m.id)).toContain(REFUND);
   });
 

@@ -517,7 +517,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       id: "scalable.dividend_tax_refund",
       severity: "warning",
       message: `Scalable Capital: ${zeroDividendRefund.length} fila(s) de dividendo traen importe 0 y una devolución de retención (tax positivo): ${rows}.`,
-      hint: "Una fila con importe 0 no es un dividendo. Scalable Capital escribe la retención (tax) en negativo, así que una positiva es una devolución. DeclaRenta la resta de la retención de un dividendo del mismo valor de 7 días antes o después. Si no hay ninguno, no la resta, y la retención de ese dividendo cuenta entera: así pagarías de menos. Toma la retención final del informe fiscal de Scalable Capital y corrige a mano en Renta Web la casilla 0588, o la 0597 si el valor es español. Si la fila es una retención cobrada más tarde, DeclaRenta no la cuenta: añádela a mano.",
+      hint: "Una fila con importe 0 no es un dividendo. Scalable Capital escribe la retención (tax) en negativo, así que una positiva es una devolución. DeclaRenta la resta de la retención de un dividendo del mismo valor de 7 días antes o después o, si no hay ninguno, de uno anterior del mismo año. Si no hay ninguno, no la resta, y la retención de ese dividendo cuenta entera: así pagarías de menos. Toma la retención final del informe fiscal de Scalable Capital y corrige a mano en Renta Web la casilla 0588, o la 0597 si el valor es español. Si la fila es una retención cobrada más tarde, DeclaRenta no la cuenta: añádela a mano.",
       context: { count: String(zeroDividendRefund.length), rows },
     });
   }
