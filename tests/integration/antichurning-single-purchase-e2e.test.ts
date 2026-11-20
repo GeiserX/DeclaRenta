@@ -1862,14 +1862,18 @@ describe("(m) a buy or sale with a readable quantity but no readable price is ev
       }
     });
 
-    it("controls: a written price is a second purchase; a written zero price (rights) is kept, a row with no order id and no value is skipped", () => {
+    it("controls: a written price is a second purchase; a written zero price (rights) and a row with no order id and no value are kept, not applied", () => {
       // The readable row is booked as written: 5 shares at 9,00 EUR.
       expect(degiro("5", "9,00", "-45,00").trades.map((t) => [t.quantity, t.tradePrice, t.currency, t.quantityUnknown ?? false])).toEqual([["5", "9.00", "EUR", false]]);
       twoPurchases(report("DEGIRO", degiro("5", "9,00", "-45,00")));
       // A written zero price (rights) is kept as a row that books nothing (#467).
       expect(flags(degiro("5", "0", "0"))).toEqual([["BUY", "0", true]]);
-      expect(degiro("5", "", "", "").trades).toEqual([]);
+      // A readable quantity with a blank price, no order id and no value is
+      // still a purchase of unknown price: dropped, it hid a second purchase
+      // in the window, so the exception could be applied wrongly (#467).
+      expect(flags(degiro("5", "", "", ""))).toEqual([["BUY", "0", true]]);
       expectUnverified(report("DEGIRO", degiro("5", "0", "0")));
+      expectUnverified(report("DEGIRO", degiro("5", "", "", "")));
     });
   });
 
