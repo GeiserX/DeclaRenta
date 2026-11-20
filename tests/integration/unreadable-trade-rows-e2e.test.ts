@@ -3075,10 +3075,11 @@ describe("#467 eToro: a row or a sheet the parser cannot read is named, never bo
 
   it.each(METHODS)("[%s] control: a readable position gains 184 €, and a rate with a thousands separator is read as a number", async (method) => {
     expect(nums(report(await closed(), method))).toEqual(["0.00", "0.00", "0.00", "184.00"]);
-    const plain = nums(report(await closed({ "Open Rate": "1100", "Close Rate": "1234.56" }), method));
+    // Profit (USD) 5 × 134.56 = 672.80: with no FX column it confirms the dollar quote.
+    const plain = nums(report(await closed({ "Open Rate": "1100", "Close Rate": "1234.56", "Profit(USD)": "672.80" }), method));
     expect(plain).toEqual(["0.00", "0.00", "0.00", "618.98"]);
     for (const cell of ["1,234.56", "1.234,56", "$1234.56"]) {
-      expect(nums(report(await closed({ "Open Rate": "1100", "Close Rate": cell }), method))).toEqual(plain);
+      expect(nums(report(await closed({ "Open Rate": "1100", "Close Rate": cell, "Profit(USD)": "672.80" }), method))).toEqual(plain);
     }
   });
 
@@ -3286,6 +3287,45 @@ describe("#467 eToro sweep 3: FX rates of 1, CFD lots, quotes with no FX column 
     const parsed = await closed([shares(), cfd({ leverage: "1", type: "Stocks" })]);
     // The December sale takes the January lot at 200: 5 × 100 USD = 460 €.
     expect(gain(report(parsed, method))).toBe("460.00");
+  });
+
+  // Older English export with no FX rate columns: Open and Close Rate are in
+  // the instrument's quote, which the file does not name. Barclays in pence:
+  // 100 units, 180 → 170 pence, Amount 228.60 USD, Profit −12.70 USD.
+  const OLD_H = ["Action", "Amount", "Units", "Open Rate", "Close Rate", "Profit(USD)", "Open Date", "Close Date", "Type", "Leverage", "ISIN"];
+  const old = (action: string, amount: string, units: string, open: string, close: string, profit: string, isin = AAPL): string[] =>
+    [action, amount, units, open, close, profit, "01/02/2025 10:00:00", "15/06/2025 16:00:00", "Stocks", "1", isin];
+  const barclays = old("Buy Barclays", "228.60", "100", "180", "170", "-12.70", "GB0031348658");
+  const apple = old("Buy AAPL", "1000", "5", "200", "240", "200");
+  it.each(METHODS)("[%s] a quote whose Profit (USD) shows it is not in dollars is named, never a 1000 USD loss", async (method) => {
+    const parsed = await book("Closed Positions", [OLD_H, apple, barclays]);
+    const cells = 'Open Rate: "180", Close Rate: "170", Profit(USD): "-12.70"';
+    expect(unreadableRows(parsed)).toBe(`Barclays (GB0031348658) 20250201 [${cells}]; Barclays (GB0031348658) 20250615 [${cells}]`);
+    // Only the Apple gain is booked: 200 USD, 184 €.
+    expect(gain(report(parsed, method))).toBe("184.00");
+  });
+  describe.each([
+    ["SAP in EUR, Profit at 1.08", old("Buy SAP", "1080", "10", "100", "150", "540", "DE0007164600"), 'Open Rate: "100", Close Rate: "150", Profit(USD): "540"'],
+    ["a blank Profit", old("Buy AAPL", "1000", "5", "200", "240", ""), 'Open Rate: "200", Close Rate: "240", Profit(USD): ""'],
+    ["a Profit that is text", old("Buy AAPL", "1000", "5", "200", "240", "n/a"), 'Open Rate: "200", Close Rate: "240", Profit(USD): "n/a"'],
+  ] as [string, string[], string][])("with no FX rate column, %s", (_label, row, cells) => {
+    it.each(METHODS)("[%s] is kept unreadable, never booked at a quote the file does not confirm", async (method) => {
+      const parsed = await book("Closed Positions", [OLD_H, row]);
+      expect(unreadableRows(parsed)).toBe(`${row[0]!.slice(4)} (${row[10]!}) 20250201 [${cells}]; ${row[0]!.slice(4)} (${row[10]!}) 20250615 [${cells}]`);
+      expect(report(parsed, method).capitalGains.disposals).toEqual([]);
+    });
+  });
+  it.each(METHODS)("[%s] controls: with no FX rate column, a dollar quote its Profit confirms is booked, long, short or rounded", async (method) => {
+    for (const [row, expected] of [
+      [apple, "184.00"],
+      [old("Sell AAPL", "1000", "5", "240", "200", "200"), "184.00"],
+      // 3.3333 × 30 = 99.999 against a Profit of 100.00: rounding, not another currency.
+      [old("Buy AAPL", "500", "3.3333", "150", "180", "100.00"), "92.00"],
+    ] as [string[], string][]) {
+      const parsed = await book("Closed Positions", [OLD_H, row]);
+      expect(parsed.parserMessages).toBeUndefined();
+      expect(gain(report(parsed, method))).toBe(expected);
+    }
   });
 });
 

@@ -1018,6 +1018,12 @@ práctico Renta 2025. The decisions, each pinned in
       ISIN or name, open date and row), so each CFD closes only its own
       lot. Its description keeps the ISIN. The anti-churning rule never
       read CFDs.
+    - eToro: an export with no FX rate column booked every quote as
+      dollars, so a quote in pence became a loss about 80 times too large.
+      A row is now booked only when its `Profit(USD)` confirms the rates:
+      units × (close − open), the other way round for a short, within 1 USD
+      or 2%. Any other row, or one with no readable Profit, is kept as an
+      unreadable row named by its Open Rate, Close Rate and Profit cells.
     - eToro: an Account Activity row whose Type names staking was dropped
       with no word, because only interest was read. DeclaRenta does not
       import eToro crypto, so the reward is not booked and its value is not

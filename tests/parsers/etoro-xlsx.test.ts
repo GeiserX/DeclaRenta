@@ -190,7 +190,7 @@ describe("eToro XLSX parsing", () => {
       const data = buildEtoroWorkbook({
         closedPositions: [
           CLOSED_POSITIONS_HEADER,
-          ["Buy AAPL", "1000", "5", "180", "195", "82.50", "15/03/2025", "20/09/2025", "Stocks", "1", "US0378331005"],
+          ["Buy AAPL", "1000", "5.5", "180", "195", "82.50", "15/03/2025", "20/09/2025", "Stocks", "1", "US0378331005"],
         ],
       });
 

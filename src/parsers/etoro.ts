@@ -276,9 +276,10 @@ function parseClosedPositions(
     // or a euro at dollar parity on the open day has a rate of 1 at open, and
     // its close leg still needs the rate at close. Without an FX rate at close
     // column, a rate of 1 at open is a dollar row. Without any FX column the
-    // legs stay USD at their rates. An FX rate that cannot be read (blank,
-    // text, zero or negative), and a non-USD row with no FX rate at close
-    // column, makes the row unreadable below.
+    // legs are booked at their rates only when the row's Profit confirms that
+    // they are dollars (below). An FX rate that cannot be read (blank, text,
+    // zero or negative), and a non-USD row with no FX rate at close column,
+    // makes the row unreadable below.
     const fxRate = (col: number): Decimal | undefined => {
       if (col < 0 || quantityUnreadable(row[col])) return undefined;
       const rate = toFiniteDecimal(row[col] ?? "");
@@ -326,9 +327,32 @@ function parseClosedPositions(
     // or at close for a non-USD instrument, cannot be read (#467).
     const unreadableRate = ([[openRateCol, "Open Rate"], [closeRateCol, "Close Rate"]] as const)
       .find(([col]) => quantityUnreadable(row[col]));
-    if (unreadableRate !== undefined || fxOpen === undefined || fxClose === undefined) {
-      const [col, name] = unreadableRate ?? (fxOpen === undefined ? [fxOpenCol, "FX rate at open (USD)"] : [fxCloseCol, "FX rate at close (USD)"]);
-      const rateCell = unreadableCell(headers[col] ?? name, row[col]);
+    // With no FX rate column the file does not say the rates are in dollars:
+    // the older export writes a pence or Hong Kong dollar quote the same way
+    // (#467). Barclays, 100 units from 180 to 170 pence, became a 1000 USD
+    // loss for eToro's 12.70. The row's own Profit (USD) is in dollars: the
+    // rates are dollars when units × (close − open), the other way round for
+    // a short, matches it within 1 USD or 2%, which rounding never passes. A
+    // row they do not match, or with no readable Profit, is kept unreadable.
+    const profitCell = profitCol >= 0 ? row[profitCol] : undefined;
+    const quoteConfirmed = (): boolean => {
+      if (quantityUnreadable(profitCell)) return false;
+      const move = toFiniteDecimal(row[closeRateCol] ?? "").minus(toFiniteDecimal(row[openRateCol] ?? ""));
+      const expected = toFiniteDecimal(units).abs().mul(direction === "SELL" ? move.neg() : move);
+      const stated = toFiniteDecimal(profitCell ?? "");
+      const gap = expected.minus(stated).abs();
+      return gap.lessThanOrEqualTo(1) || gap.lessThanOrEqualTo(Decimal.max(expected.abs(), stated.abs()).mul("0.02"));
+    };
+    const quoteUnconfirmed = unreadableRate === undefined && fxOpenCol < 0 && !quoteConfirmed();
+    if (unreadableRate !== undefined || fxOpen === undefined || fxClose === undefined || quoteUnconfirmed) {
+      let rateCell: string;
+      if (quoteUnconfirmed) {
+        rateCell = [unreadableCell(headers[openRateCol] ?? "Open Rate", row[openRateCol]), unreadableCell(headers[closeRateCol] ?? "Close Rate", row[closeRateCol]),
+          unreadableCell(headers[profitCol] ?? "Profit(USD)", profitCell)].join(", ");
+      } else {
+        const [col, name] = unreadableRate ?? (fxOpen === undefined ? [fxOpenCol, "FX rate at open (USD)"] : [fxCloseCol, "FX rate at close (USD)"]);
+        rateCell = unreadableCell(headers[col] ?? name, row[col]);
+      }
       const leg = { symbol, isin, assetCategory: assetCat, currency, exchange: "ETORO" } as const;
       trades.push(
         unreadableTrade({ ...leg, tradeID: `etoro-open-${openDate}-${symbol}-${i}`, tradeDate: openDate, buySell: direction }, rateCell),
