@@ -177,6 +177,28 @@ describe("a sale left out releases the principal of its own shares (fx-fifo, Cod
     expect(message(r, "report.trade_out_of_range")).toBeUndefined();
     expect(r.fxGains.netGainLoss.toString()).toBe("0");
   });
+
+  for (const method of ["multidivisa", "tradicional-divisa"] as const) {
+    it(`a sale left out in a same-day round trip leaves the next sale's profit alone (${method})`, () => {
+      // No dollars held. On 5 March (0.80 €) 10 XYZ are bought for 100 USD
+      // and sold at a price no broker writes, then 10 more are bought for
+      // 100 USD and sold for 120 USD. The 20 USD profit goes back to euros on
+      // 2 May at 0.90 €: a gain of 2 €. A trap: the left-out sale left its
+      // 100 borrowed dollars as a debt for the day, the second sale's profit
+      // paid it, and the gain read 0 € with a false fx.missing_prior_lots.
+      const rr = rateMap({ USD: "0.90" }, { "2025-03-05": { USD: "0.80" } });
+      const r = generateTaxReport(statement([
+        stock("2025-03-05", "BUY", "10", "10"),
+        stock("2025-03-05", "SELL", "10", "1e25"),
+        stock("2025-03-05", "BUY", "10", "10"),
+        stock("2025-03-05", "SELL", "10", "12"),
+        conversion("2025-05-02", "20", "toEur"),
+      ]), rr, 2025, reportOptionsForMethod(method));
+      expect(message(r, "report.trade_out_of_range")?.context?.rows).toBe("XYZ (05/03/2025)");
+      expect(r.fxGains.netGainLoss.toString()).toBe("2");
+      expect(message(r, "fx.missing_prior_lots")).toBeUndefined();
+    });
+  }
 });
 
 describe("a loss the boxes count blocks like any other (wash-sale, CodeRabbit 4634270118)", () => {

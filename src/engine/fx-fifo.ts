@@ -2949,8 +2949,12 @@ export class FxFifoEngine {
       // return is lost principal now, not a debt. A trap: as a same-day debt,
       // a later round trip's profit that day paid it, 200 real dollars left
       // the pool, and the final conversion opened a loan nothing repaid (D2:
-      // 80 on a true 50, in both methods).
-      if (this.loan.has(event.currency)) this.discardUntracked(event, lost);
+      // 80 on a true 50, in both methods). A retired sale (`retire`) owes
+      // nothing either: it books no currency effect, so what its buy borrowed
+      // leaves now, as when it was bought another day. A trap: as a debt, a
+      // later sale's profit that day paid it, and 20 USD of profit converted
+      // later read a gain of 0 € on a true 2 € (and a false missing lot).
+      if (this.loan.has(event.currency) || event.retire) this.discardUntracked(event, lost);
       else this.debts.push({ np, sale: event, qty: lost, ...(p.buyRate !== undefined ? { buyRate: p.buyRate } : {}) });
     }
   }
@@ -3094,9 +3098,11 @@ export class FxFifoEngine {
     this.record("discard", sale, {
       quantityFcy: qty,
       rate: null,
-      note: this.traditionalFx
-        ? "principal perdido en la venta, sin origen rastreado: sin diferencia de cambio"
-        : "principal perdido en la venta — sin efecto de divisa (nunca convertido a EUR)",
+      note: sale.retire
+        ? RETIRED_NOTE
+        : this.traditionalFx
+          ? "principal perdido en la venta, sin origen rastreado: sin diferencia de cambio"
+          : "principal perdido en la venta — sin efecto de divisa (nunca convertido a EUR)",
     });
     if (this.traditionalFx) {
       this.tradStats.uncovered.push({
