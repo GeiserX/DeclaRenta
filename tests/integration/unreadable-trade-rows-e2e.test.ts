@@ -3196,6 +3196,62 @@ describe("#467 eToro: a row or a sheet the parser cannot read is named, never bo
   });
 });
 
+describe("#467 eToro sweep 3: FX rates of 1, CFD lots, quotes with no FX column and formatted number cells", () => {
+  // Realistic rate: 1 USD = 0.92 EUR, through 2026 (a CFD closed next year).
+  const usdRates = (): EcbRateMap => {
+    const map: EcbRateMap = new Map();
+    for (let t = Date.UTC(2024, 0, 1); t <= Date.UTC(2026, 11, 31); t += 86_400_000) {
+      map.set(new Date(t).toISOString().slice(0, 10), new Map([["USD", "0.92"]]));
+    }
+    return map;
+  };
+  const report = (parsed: Statement, method: FxMethod, year = 2025): TaxReport => {
+    const statement = createEmptyStatement();
+    mergeStatement(statement, parsed, "eToro");
+    return generateTaxReport(finalizeMergedStatement(statement), usdRates(), year, reportOptionsForMethod(method));
+  };
+  const gain = (r: TaxReport): string => new Decimal(r.capitalGains.netGainLoss).toFixed(2);
+  const prices = (s: Statement): string[][] => s.trades.map((t) => [t.quantity, t.tradePrice]);
+  const workbook = (sheets: [string, XLSX.WorkSheet][]): Promise<Statement> => {
+    const wb = XLSX.utils.book_new();
+    for (const [name, sheet] of sheets) XLSX.utils.book_append_sheet(wb, sheet, name);
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Uint8Array;
+    return parseEtoroXlsx(new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength));
+  };
+  const book = (sheet: string, rows: (string | number)[][]): Promise<Statement> => workbook([[sheet, XLSX.utils.aoa_to_sheet(rows)]]);
+
+  // Spanish export: Nestlé, quoted in CHF, 10 units, 100 → 100 CHF. eToro's
+  // FX rate is 1 at open (the franc at dollar parity) and 1.12 at close, so
+  // the legs are 100 and 112 USD: a 120 USD gain, 110.40 €.
+  const SP_H = ["ID de posición", "Acción", "Long / Short", "Importe", "Unidades", "Fecha de apertura", "Fecha de cierre", "Apalancamiento",
+    "Ganancias (USD)", "Ganancias (EUR)", "Tipo de cambio de apertura (USD)", "Tipo de cambio al cierre (USD)", "Tasa de apertura", "Tasa de cierre", "Tipo", "ISIN"];
+  const nestle = (fxOpen: string, fxClose: string): Promise<Statement> => book("Posiciones cerradas", [SP_H,
+    ["1", "Nestle (NESN.ZU)", "Long", "1000", "10", "01/02/2025 10:00:00", "15/06/2025 16:00:00", "1", "120", "100", fxOpen, fxClose, "100", "100", "Acciones", "CH0038863350"]]);
+  describe.each(["1", "1.0000"])("a position whose FX rate at open is %j and at close 1.12", (fxOpen) => {
+    it.each(METHODS)("[%s] values its close leg at the FX rate at close, never at its own quote as dollars", async (method) => {
+      const parsed = await nestle(fxOpen, "1.12");
+      expect(prices(parsed)).toEqual([["10", "100"], ["-10", "112"]]);
+      expect(parsed.parserMessages).toBeUndefined();
+      expect(gain(report(parsed, method))).toBe("110.40");
+    });
+  });
+  it.each(METHODS)("[%s] controls: 1.0001 at open converts both legs, and 1 at open and at close keeps the dollar quote", async (method) => {
+    const near = await nestle("1.0001", "1.12");
+    expect(prices(near)).toEqual([["10", "100.01"], ["-10", "112"]]);
+    expect(gain(report(near, method))).toBe("110.31");
+    const usd = await nestle("1", "1");
+    expect(prices(usd)).toEqual([["10", "100"], ["-10", "100"]]);
+    expect(gain(report(usd, method))).toBe("0.00");
+  });
+  describe.each(["abc", "", "0"])("a position whose FX rate at open is 1 and at close %j", (fxClose) => {
+    it.each(METHODS)("[%s] is kept unreadable and named by that cell, never booked as dollars", async (method) => {
+      const parsed = await nestle("1", fxClose);
+      expect(unreadableRows(parsed)).toBe(`Nestle (NESN.ZU) (CH0038863350) 20250201 [Tipo de cambio al cierre (USD): ${JSON.stringify(fxClose)}]; Nestle (NESN.ZU) (CH0038863350) 20250615 [Tipo de cambio al cierre (USD): ${JSON.stringify(fxClose)}]`);
+      expect(report(parsed, method).capitalGains.disposals).toEqual([]);
+    });
+  });
+});
+
 describe("#467 Flatex: a cash leg, income row, currency, Kurs or order number the parser cannot read is named, never booked as a fee, as 0, as euros or a crash", () => {
   // Realistic rate: 1 USD = 0.92 EUR.
   const realRates = (): EcbRateMap => {

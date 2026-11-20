@@ -1005,6 +1005,11 @@ práctico Renta 2025. The decisions, each pinned in
       converts the dollars to euros, as for any USD trade. A non-USD row
       whose FX rate at close cannot be read, or that has no such column, is
       kept as an unreadable row named by that cell.
+    - eToro: a row is in dollars only when both FX rates are 1. A row
+      with 1 at open read no FX rate at close, so a franc or euro quote at
+      dollar parity on the open day booked its close leg unconverted (a
+      120 USD gain became 0). With 1 at open, an FX rate at close that
+      cannot be read now makes the row unreadable too.
     - eToro: an Account Activity row whose Type names staking was dropped
       with no word, because only interest was read. DeclaRenta does not
       import eToro crypto, so the reward is not booked and its value is not

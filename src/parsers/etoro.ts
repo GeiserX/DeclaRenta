@@ -270,17 +270,20 @@ function parseClosedPositions(
     // quote is not in dollars, never which currency it is in, so every leg is
     // booked in USD, the account's currency: rate × FX rate at open, and rate ×
     // FX rate at close (#467). Labelled EUR, a pence quote booked an 85-times
-    // larger loss. Without an FX column the legs stay USD at their rates.
-    // An FX rate that cannot be read (blank, text, zero or negative), and a
-    // non-USD row with no readable FX rate at close, makes the row unreadable
-    // below.
+    // larger loss. A row is in dollars only when both FX rates are 1: a franc
+    // or a euro at dollar parity on the open day has a rate of 1 at open, and
+    // its close leg still needs the rate at close. Without an FX rate at close
+    // column, a rate of 1 at open is a dollar row. Without any FX column the
+    // legs stay USD at their rates. An FX rate that cannot be read (blank,
+    // text, zero or negative), and a non-USD row with no FX rate at close
+    // column, makes the row unreadable below.
     const fxRate = (col: number): Decimal | undefined => {
       if (col < 0 || quantityUnreadable(row[col])) return undefined;
       const rate = toFiniteDecimal(row[col] ?? "");
       return rate.greaterThan(0) ? rate : undefined;
     };
     const fxOpen = fxOpenCol >= 0 ? fxRate(fxOpenCol) : new Decimal(1);
-    const fxClose = fxOpen === undefined || fxOpen.eq(1) ? fxOpen : fxRate(fxCloseCol);
+    const fxClose = fxOpenCol >= 0 && fxCloseCol >= 0 ? fxRate(fxCloseCol) : fxOpen?.eq(1) ? fxOpen : undefined;
     const currency = "USD";
     // The profit in dollars, the legs' currency.
     const profitRaw = profitCol >= 0 ? (row[profitCol] ?? "0").trim()
@@ -333,8 +336,9 @@ function parseClosedPositions(
     }
     // Readable rates, normalized ("1,234.56" and "1.234,56" are 1234.56), in
     // dollars at eToro's FX rates when the quote is not in dollars.
-    const openRate = fxOpen.eq(1) ? parseNumber(row[openRateCol] ?? "") : toFiniteDecimal(row[openRateCol] ?? "").mul(fxOpen).toString();
-    const closeRate = fxOpen.eq(1) ? parseNumber(row[closeRateCol] ?? "") : toFiniteDecimal(row[closeRateCol] ?? "").mul(fxClose).toString();
+    const dollars = fxOpen.eq(1) && fxClose.eq(1);
+    const openRate = dollars ? parseNumber(row[openRateCol] ?? "") : toFiniteDecimal(row[openRateCol] ?? "").mul(fxOpen).toString();
+    const closeRate = dollars ? parseNumber(row[closeRateCol] ?? "") : toFiniteDecimal(row[closeRateCol] ?? "").mul(fxClose).toString();
 
     // eToro closed positions represent a round-trip: buy then sell
     // We create both the opening buy and the closing sell
