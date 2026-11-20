@@ -1047,6 +1047,10 @@ const eu: TranslationKeys = {
     "Flatex: {{count}} eragiketak ez dute komisio kalkulaturik, haien kutxa-idazpenak eragiketarekin bat ez datozelako: {{rows}}.",
   "flatex.commission.not_recovered.hint":
     "Errenkada bakoitzak aginduaren zenbakia, balorea eta data ditu. Kortxete artean daude eragiketaren zenbatekoa eta haren kutxa-idazpenen batura. Zenbateko bat irakurri ezin bada, haren gelaxka dago. Baliteke kutxa-idazpen bat falta izatea edo bat soberan egotea. Baliteke idazpen baten zenbatekoa edo data irakurri ezin izatea, edo haren data eragiketarena ez izatea. Baliteke, halaber, aginduaren exekuzio bat irakurri ezin izatea. DeclaRentak 0an uzten du komisio hori. Ez dio erosketen kostuari gehitzen, eta ez dio salmenten balioari kentzen. Kontsultatu komisioa Flatex-eko aginduaren likidazioan. Kendu nahi baduzu, gehitu eskuz Renta Web-en.",
+  "flatex.order_leg_without_fill":
+    "Flatex: {{count}} erosketa- edo salmenta-agindu Kontoumsätze CSVan daude, baina ez igotako Depotumsätze CSV batean ere, eta ez dira kalkulatzen: {{rows}}.",
+  "flatex.order_leg_without_fill.hint":
+    "DeclaRentak Flatexeko erosketak eta salmentak Depotumsätze CSVtik bakarrik irakurtzen ditu. Kontoumsätze CSVak agindu bakoitzaren dirua bakarrik dakar. Errenkada bakoitzak aginduaren zenbakia, balorea eta data ditu. Kortxete artean dago erosketa (Kauf) edo salmenta (Verkauf) den, eta haren kutxa-idazpenen batura. Zenbateko bat irakurri ezin bada, haren gelaxka dago. Deskargatu Flatexetik data horietako Depotumsätze CSVa, eta igo ezazu Kontoumsätze CSVarekin batera. Hura gabe, salmenta bat falta daiteke zure aitorpenean, edo erosketa baten kostua.",
   "flatex.depot.storno_cancelled":
     "Flatex: Storno batekin baliogabetutako {{count}} exekuzio ez dira kalkulatzen: {{rows}}.",
   "flatex.depot.storno_cancelled.hint":

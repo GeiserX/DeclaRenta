@@ -785,6 +785,14 @@ práctico Renta 2025. The decisions, each pinned in
       export does not list or writes with a Nominal of 0, and below the
       smallest fill it became the other fills' fee. A combined leg for fills
       of two days is no longer split, which can only raise the tax.
+      An order whose legs have no fill in the upload (a Depot export that
+      ends earlier, or none) is a purchase or a sale the report does not
+      have: it was dropped with no word. It books nothing, and
+      `flatex.order_leg_without_fill` (warning) names it by number, ISIN,
+      first day, the side its text names and the sum of its legs, and asks
+      for the Depot export of those dates. Legs that net to 0 (a Storno and
+      the leg it reverses) move nothing and are not named; an order with a
+      fill the parser keeps unreadable is named by that fill.
     - Trade Republic: a buy or sale with no amount, or that names no
       security (crypto with no `symbol`, any other with no `symbol` and no
       `name`), named by that cell: under an empty symbol unrelated

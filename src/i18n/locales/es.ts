@@ -1082,6 +1082,10 @@ const es = {
     "Flatex: {{count}} operación(es) no tienen la comisión calculada, porque sus apuntes de caja no cuadran con la operación: {{rows}}.",
   "flatex.commission.not_recovered.hint":
     "Cada fila trae el número de orden, el valor y la fecha. Entre corchetes va el importe de la operación y la suma de sus apuntes de caja. Si un importe no se puede leer, va su celda. Puede faltar un apunte o sobrar uno. Un apunte puede tener un importe o una fecha que no se puede leer, o una fecha que no es la de la operación. También puede haber una ejecución de la orden que no se puede leer. DeclaRenta deja esa comisión en 0. No la suma al coste de las compras ni la resta del valor de las ventas. Consulta la comisión en la liquidación de la orden en Flatex. Si quieres deducirla, añádela a mano en Renta Web.",
+  "flatex.order_leg_without_fill":
+    "Flatex: {{count}} orden(es) de compra o venta están en el CSV de Kontoumsätze pero no en ningún CSV de Depotumsätze subido, y no se calculan: {{rows}}.",
+  "flatex.order_leg_without_fill.hint":
+    "DeclaRenta lee las compras y las ventas de Flatex solo del CSV de Depotumsätze. El de Kontoumsätze trae solo el dinero de cada orden. Cada fila trae el número de orden, el valor y la fecha. Entre corchetes va si es compra (Kauf) o venta (Verkauf) y la suma de sus apuntes de caja. Si un importe no se puede leer, va su celda. Descarga de Flatex el CSV de Depotumsätze de esas fechas y súbelo junto al de Kontoumsätze. Sin él, puede faltar una venta en tu declaración, o el coste de una compra.",
   "flatex.depot.storno_cancelled":
     "Flatex: {{count}} ejecución(es) anulada(s) con un Storno no se calculan: {{rows}}.",
   "flatex.depot.storno_cancelled.hint":

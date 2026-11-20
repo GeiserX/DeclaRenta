@@ -105,6 +105,12 @@ export interface OrderLeg {
   /** Booking number of the cash leg (Flatex TA-Nr.), used to drop the same leg uploaded twice. */
   bookingId?: string;
   /**
+   * The side the leg's text names, as the file writes it ("Kauf" or
+   * "Verkauf"; a Storno names the side it reverses). It names an order
+   * whose fill no uploaded Depot export has (#467).
+   */
+  side?: "Kauf" | "Verkauf";
+  /**
    * The cell of a leg whose amount or date cannot be read (`Betrag: "abc"`,
    * `Buchtag: ""`). A leg with no readable amount has `netAmount` "0". Its
    * order gets no fee (#467).

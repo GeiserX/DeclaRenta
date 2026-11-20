@@ -329,6 +329,25 @@ function moreLegsThanFills(legs: readonly OrderLeg[], trades: readonly Trade[]):
   return net > trades.length;
 }
 
+/**
+ * How `flatex.order_leg_without_fill` names an order whose legs no fill of
+ * the upload has: its number, ISIN, first day, and in brackets the side the
+ * text names with the legs' sum (or the cells that cannot be read).
+ * Undefined when the legs are readable and cancel each other (a Storno and
+ * the leg it reverses): they move nothing.
+ */
+function legsWithoutFillRow(orderKey: string, legs: readonly OrderLeg[]): string | undefined {
+  const sides = [...new Set(legs.flatMap((leg) => leg.side ?? []))];
+  const unreadable = legs.flatMap((leg) => leg.unreadableCell ?? []);
+  const sums = new Map<string, Decimal>();
+  for (const leg of legs) sums.set(leg.currency, (sums.get(leg.currency) ?? new Decimal(0)).plus(leg.netAmount));
+  if (unreadable.length === 0 && [...sums.values()].every((sum) => sum.isZero())) return undefined;
+  const amounts = unreadable.length > 0 ? unreadable.join(", ") : [...sums].map(([currency, sum]) => `${sum.toFixed()} ${currency}`).join(", ");
+  const day = legs.flatMap((leg) => readableDay(leg.tradeDate) ?? []).sort()[0] ?? "—";
+  const isin = legs.find((leg) => leg.isin)?.isin ?? "—";
+  return `${orderKey} ${isin} ${day} [${sides.length > 0 ? `${sides.join("/")}: ` : ""}${amounts}]`;
+}
+
 /** How `flatex.commission.not_recovered` names an order's fills and legs. */
 function orderRow(orderKey: string, legs: readonly OrderLeg[], trades: readonly Trade[]): string {
   const first = trades[0]!;
@@ -475,6 +494,18 @@ function reconcileOrderLegs(statement: Statement): void {
     if (prorated) proratedOrders++;
   }
 
+  // A leg whose order has no fill in the upload is a purchase or a sale the
+  // Depot export does not show (it ends earlier, or was not uploaded): it was
+  // dropped with no word, and with it the sale (#467). It books nothing and
+  // is named. Legs that cancel each other (a Storno and the leg it reverses)
+  // move nothing. An order with a fill the parser kept is named by that fill.
+  const withoutFill: string[] = [];
+  for (const [orderKey, legs] of legsByKey) {
+    if (tradesByKey.has(orderKey) || keptFillOrders.has(orderKey)) continue;
+    const row = legsWithoutFillRow(orderKey, legs);
+    if (row !== undefined) withoutFill.push(row);
+  }
+
   if (repeatedFills.size > 0) {
     statement.trades = statement.trades.filter((trade) => !repeatedFills.has(trade));
     addInfoMessage(statement, {
@@ -517,6 +548,18 @@ function reconcileOrderLegs(statement: Statement): void {
       severity: "warning",
       message: `Flatex: ${count} operación(es) no tienen la comisión calculada, porque sus apuntes de caja no cuadran con la operación: ${rows}.`,
       hint: "Cada fila trae el número de orden, el valor y la fecha. Entre corchetes va el importe de la operación y la suma de sus apuntes de caja. Si un importe no se puede leer, va su celda. Puede faltar un apunte o sobrar uno. Un apunte puede tener un importe o una fecha que no se puede leer, o una fecha que no es la de la operación. También puede haber una ejecución de la orden que no se puede leer. DeclaRenta deja esa comisión en 0. No la suma al coste de las compras ni la resta del valor de las ventas. Consulta la comisión en la liquidación de la orden en Flatex. Si quieres deducirla, añádela a mano en Renta Web.",
+      context: { count, rows },
+    });
+  }
+
+  if (withoutFill.length > 0) {
+    const count = String(withoutFill.length);
+    const rows = withoutFill.join("; ");
+    addInfoMessage(statement, {
+      id: "flatex.order_leg_without_fill",
+      severity: "warning",
+      message: `Flatex: ${count} orden(es) de compra o venta están en el CSV de Kontoumsätze pero no en ningún CSV de Depotumsätze subido, y no se calculan: ${rows}.`,
+      hint: "DeclaRenta lee las compras y las ventas de Flatex solo del CSV de Depotumsätze. El de Kontoumsätze trae solo el dinero de cada orden. Cada fila trae el número de orden, el valor y la fecha. Entre corchetes va si es compra (Kauf) o venta (Verkauf) y la suma de sus apuntes de caja. Si un importe no se puede leer, va su celda. Descarga de Flatex el CSV de Depotumsätze de esas fechas y súbelo junto al de Kontoumsätze. Sin él, puede faltar una venta en tu declaración, o el coste de una compra.",
       context: { count, rows },
     });
   }

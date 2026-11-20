@@ -477,6 +477,7 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
           currency: currency || "EUR",
           tradeDate,
           ...(bookingId ? { bookingId } : {}),
+          ...(SELL_RE.test(info) ? { side: "Verkauf" as const } : BUY_RE.test(info) ? { side: "Kauf" as const } : {}),
           ...(cells.length > 0 ? { unreadableCell: cells.join(", ") } : {}),
         });
       }

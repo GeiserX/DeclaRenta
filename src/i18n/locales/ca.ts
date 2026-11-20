@@ -1045,6 +1045,10 @@ const ca: TranslationKeys = {
     "Flatex: {{count}} operació(ns) no tenen la comissió calculada, perquè els seus apunts de caixa no quadren amb l'operació: {{rows}}.",
   "flatex.commission.not_recovered.hint":
     "Cada fila porta el número d'ordre, el valor i la data. Entre claudàtors hi ha l'import de l'operació i la suma dels seus apunts de caixa. Si un import no es pot llegir, hi ha la seva cel·la. Pot faltar un apunt o sobrar-ne un. Un apunt pot tenir un import o una data que no es pot llegir, o una data que no és la de l'operació. També hi pot haver una execució de l'ordre que no es pot llegir. DeclaRenta deixa aquesta comissió a 0. No la suma al cost de les compres ni la resta del valor de les vendes. Consulta la comissió a la liquidació de l'ordre a Flatex. Si la vols deduir, afegeix-la a mà a Renta Web.",
+  "flatex.order_leg_without_fill":
+    "Flatex: {{count}} ordre(s) de compra o venda són al CSV de Kontoumsätze però no a cap CSV de Depotumsätze pujat, i no es calculen: {{rows}}.",
+  "flatex.order_leg_without_fill.hint":
+    "DeclaRenta llegeix les compres i les vendes de Flatex només del CSV de Depotumsätze. El de Kontoumsätze porta només els diners de cada ordre. Cada fila porta el número d'ordre, el valor i la data. Entre claudàtors hi ha si és una compra (Kauf) o una venda (Verkauf) i la suma dels seus apunts de caixa. Si un import no es pot llegir, hi ha la seva cel·la. Descarrega de Flatex el CSV de Depotumsätze d'aquestes dates i puja'l amb el de Kontoumsätze. Sense ell, pot faltar una venda a la teva declaració, o el cost d'una compra.",
   "flatex.depot.storno_cancelled":
     "Flatex: {{count}} execució(ns) anul·lada(es) amb un Storno no es calculen: {{rows}}.",
   "flatex.depot.storno_cancelled.hint":

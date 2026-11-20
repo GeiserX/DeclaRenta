@@ -3664,6 +3664,53 @@ describe("#467 Flatex: a cash leg, income row, currency, Kurs or order number th
     });
   });
 
+  // Sweep 3: the Konto export shows each order by its cash leg. A leg whose
+  // order has no fill in the uploaded Depot export (a Depot export that ends
+  // earlier, or none) was dropped with no word, and with it the sale.
+  describe("an order the Kontoumsätze shows and no uploaded Depotumsätze has", () => {
+    const LEFT = "flatex.order_leg_without_fill";
+    const legSellB = krow("03.06.2024", `Ausführung ORDER Verkauf ${ISIN} 222222`, "8002", "1194,10");
+
+    it.each(METHODS)("[%s] a sale only the Konto export shows is named; the report keeps what the Depot export books", (method) => {
+      const control = merged(depot(BUY, SELL), konto(legBuy(), legSellB));
+      expect(control.parserMessages ?? []).toEqual([]);
+      expect(gains(report(control, method))).toEqual(["1194.10", "1005.90", "188.20"]);
+      const statement = merged(depot(BUY), konto(legBuy(), legSellB));
+      expect(statement.parserMessages?.map((m) => [m.id, m.severity, m.context?.rows])).toEqual([
+        [LEFT, "warning", `222222 ${ISIN} 20240603 [Verkauf: 1194.1 EUR]`],
+      ]);
+      expect(gains(report(statement, method))).toEqual(["0.00", "0.00", "0.00"]);
+    });
+
+    it.each(METHODS)("[%s] a Konto export uploaded alone names every order", (method) => {
+      const statement = merged(konto(legBuy(), legSellB));
+      expect(message(statement, LEFT)?.context?.rows).toBe(
+        `111111 ${ISIN} 20240301 [Kauf: -1005.9 EUR]; 222222 ${ISIN} 20240603 [Verkauf: 1194.1 EUR]`);
+      expect(message(statement, LEFT)?.context?.count).toBe("2");
+      expect(gains(report(statement, method))).toEqual(["0.00", "0.00", "0.00"]);
+    });
+
+    it.each(METHODS)("[%s] a leg and the Storno that cancels it move nothing: no message", (method) => {
+      const storno = krow("05.06.2024", `Storno Ausführung ORDER Verkauf ${ISIN} 222222`, "8003", "-1194,10");
+      const statement = merged(depot(BUY), konto(legBuy(), legSellB, storno));
+      expect(statement.parserMessages ?? []).toEqual([]);
+      expect(gains(report(statement, method))).toEqual(["0.00", "0.00", "0.00"]);
+    });
+
+    it.each(METHODS)("[%s] a leg with no fill whose Betrag cannot be read is named by that cell", (method) => {
+      const statement = merged(depot(BUY), konto(legBuy(), krow("03.06.2024", `Ausführung ORDER Verkauf ${ISIN} 222222`, "8002", "abc")));
+      expect(message(statement, LEFT)?.context?.rows).toBe(`222222 ${ISIN} 20240603 [Verkauf: Betrag: "abc"]`);
+      expect(gains(report(statement, method))).toEqual(["0.00", "0.00", "0.00"]);
+    });
+
+    it.each(METHODS)("[%s] an order whose fill the parser kept unreadable is named once, by that fill", (method) => {
+      const statement = merged(depot(BUY, SELL.replace(";EUR;", ";;")), konto(legBuy(), legSellB));
+      expect(message(statement, LEFT)).toBeUndefined();
+      expect(unreadableRows(statement)).toBe(`XYZ SA (${ISIN}) 20240603 [Kurs, divisa: ""]`);
+      expect(gains(report(statement, method))).toEqual(["0.00", "0.00", "0.00"]);
+    });
+  });
+
   // Sweep 3: Flatex corrects a fill with a Storno of it and a new fill of the
   // same order. The Storno was named, but the fill it cancels stayed booked,
   // so the loss was deducted twice.
@@ -3720,7 +3767,7 @@ describe("#467 Flatex: a cash leg, income row, currency, Kurs or order number th
   });
 
   it("the order warnings read in the five locales", () => {
-    for (const id of [FEE, "flatex.depot.storno_cancelled"]) {
+    for (const id of [FEE, "flatex.order_leg_without_fill", "flatex.depot.storno_cancelled"]) {
       for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
         expect(locale[id]).toContain("{{count}}");
         expect(locale[id]).toContain("{{rows}}");
