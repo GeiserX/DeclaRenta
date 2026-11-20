@@ -9,7 +9,7 @@ import Decimal from "decimal.js";
 import type { OpenPosition, CashBalance } from "../types/ibkr.js";
 import type { FifoDisposal, Lot } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { cashAverageOf, cashEndingOf, getQ4AverageRate, hasNoMarketValue, heldCashBalances, holdsNothing, isShortPosition, lookupPositionRate, positionValueOf, readPositionNumber } from "../engine/ecb.js";
+import { cashAverageOf, cashEndingOf, getQ4AverageRate, hasNoMarketValue, heldCashBalances, holdsNothing, isShortPosition, hasPrintableDigits, lookupPositionRate, positionValueOf, readPositionNumber } from "../engine/ecb.js";
 import { normalizeDate } from "../engine/dates.js";
 import { isClaveSubclave, isIsoCountryCode } from "./modelo720-validator.js";
 
@@ -93,14 +93,16 @@ export function fitsModelo720Quantity(quantity: Decimal): boolean {
  * The share count a D-6 (AFORIX) entry writes, or null when the holding has no
  * valid one: the export does not give it (`quantityUnknown`), it is no number,
  * or it does not fit the 720's «Número de valores» (`fitsModelo720Quantity`),
- * so the two forms never disagree on a holding. It lives here, not in d6.ts,
+ * so the two forms never disagree on a holding. A count with more than 20
+ * decimals (`hasPrintableDigits`) has none either: the entry writes the count
+ * in full, and "1e-1000000000" in full is a billion characters. It lives here, not in d6.ts,
  * because the web D-6 table needs it while it loads the D-6 generator lazily.
  * The guide, the JSON and the web table share it (#470).
  */
 export function d6ShareCount(p: Pick<OpenPosition, "quantity" | "quantityUnknown">): Decimal | null {
   if (p.quantityUnknown === true) return null;
   const quantity = readPositionNumber(p.quantity);
-  return quantity !== null && fitsModelo720Quantity(quantity) ? quantity : null;
+  return quantity !== null && fitsModelo720Quantity(quantity) && hasPrintableDigits(quantity) ? quantity : null;
 }
 
 /**
@@ -872,6 +874,8 @@ export interface UndatedExtinction {
  *   lot for (no history), so its acquisition date (415-422) is blank.
  * - `value`: the value at the extinction date is too big for valoración 1
  *   (`fitsModelo720Amount`), so the record writes 0 there (#470).
+ * A record can miss both the acquisition date and the value: the ISIN then
+ * comes twice, once per field, so the 0 is never left unexplained.
  */
 export function findUndatedExtinctions(
   positions: OpenPosition[],
@@ -883,8 +887,10 @@ export function findUndatedExtinctions(
   return written.map((s) => s.isin).flatMap((isin): UndatedExtinction[] => {
     const tranches = extinctionTranches(isin, config.year, disposals);
     if (tranches.length === 0) return [{ isin, missing: "extinctionDate" }];
-    if (tranches.some((t) => t.acquireDate === "")) return [{ isin, missing: "acquisitionDate" }];
-    return tranches.some((t) => !fitsModelo720Amount(t.valueEur)) ? [{ isin, missing: "value" }] : [];
+    const missing: UndatedExtinction[] = [];
+    if (tranches.some((t) => t.acquireDate === "")) missing.push({ isin, missing: "acquisitionDate" });
+    if (tranches.some((t) => !fitsModelo720Amount(t.valueEur))) missing.push({ isin, missing: "value" });
+    return missing;
   });
 }
 

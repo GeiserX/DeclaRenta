@@ -32,6 +32,7 @@ import type { Trade, CashTransaction, CorporateAction, OpenPosition, AssetCatego
 import type { TaxMessage } from "../types/tax.js";
 import { findColumn, parseNumber, toFiniteDecimal, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessages } from "./csv-utils.js";
 import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
+import { plainOrExponent } from "../engine/amount-range.js";
 
 type WorkSheet = import("xlsx").WorkSheet;
 
@@ -187,11 +188,11 @@ function parseTrades(
     const absFees = toFiniteDecimal(fees).abs();
 
     // Revolut reports per-trade cost/proceeds, compute price per unit
-    const buyPrice = absQty.greaterThan(0) ? absCost.div(absQty).toFixed(8) : "0";
-    const sellPrice = absQty.greaterThan(0) ? absProceeds.div(absQty).toFixed(8) : "0";
+    const buyPrice = absQty.greaterThan(0) ? plainOrExponent(absCost.div(absQty), 8) : "0";
+    const sellPrice = absQty.greaterThan(0) ? plainOrExponent(absProceeds.div(absQty), 8) : "0";
 
     // Assign full fee to SELL leg (consistent with eToro and IBKR patterns)
-    const feeStr = absFees.toFixed(2);
+    const feeStr = plainOrExponent(absFees, 2);
 
     // BUY leg (opening)
     trades.push({
@@ -564,8 +565,8 @@ function parseTransactionLog(
         currency: pos.currency,
         assetCategory: pos.assetCategory,
         quantity: pos.netQty.toString(),
-        costBasisMoney: pos.totalCost.toFixed(2),
-        costBasisPrice: costPerUnit.toFixed(8),
+        costBasisMoney: plainOrExponent(pos.totalCost, 2),
+        costBasisPrice: plainOrExponent(costPerUnit, 8),
         markPrice: "0",
         positionValue: "0",
         fifoPnlUnrealized: "0",

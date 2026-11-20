@@ -30,7 +30,7 @@ import { renderSection720 } from "../../src/web/section-720.js";
 import { renderSectionD6 } from "../../src/web/section-d6.js";
 import { renderSection721 } from "../../src/web/section-721.js";
 import { generateD6Report } from "../../src/generators/d6.js";
-import { buildModelo721Entries, generateModelo721 } from "../../src/generators/modelo721.js";
+import { buildModelo721Entries, findModelo721Omissions, generateModelo721 } from "../../src/generators/modelo721.js";
 import type { Statement } from "../../src/types/broker.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { FifoDisposal } from "../../src/types/tax.js";
@@ -234,6 +234,33 @@ describe("#470 a cancellation whose value does not fit valoración 1", () => {
     document.getElementById("m720-previous-clear")?.click();
   });
 
+  it("a sale with no history and a value too big names both fields to complete, in the web and the CLI order", async () => {
+    // CodeRabbit on 45c5712: a sale with no lot (no history) has a blank
+    // acquisition date, and proceeds of 1e13 € write 0 in valoración 1. Only
+    // the date was named, so the 0 had no explanation.
+    const noLots = { ...sale("1e13"), acquireDate: "2025-03-03", costBasisFcy: new Decimal(0), holdingPeriodDays: 0 };
+    const config = { ...cfg720, previousYearSecurities: previous };
+    expect(findUndatedExtinctions(flex(other).openPositions, config, [noLots])).toEqual([
+      { isin: ACME, missing: "acquisitionDate" },
+      { isin: ACME, missing: "value" },
+    ]);
+    const file2024 = generateModelo720(flex(stock("700", "70000", ACME, "EUR")).openPositions, new Map(), { ...cfg720, year: 2024 });
+    const store = new Map<string, string>([["declarenta_profile", JSON.stringify({ nif: "12345678Z", apellidos: "PEREZ", nombre: "JUAN", telefono: "600000000", year: 2025 })]]);
+    vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) });
+    document.body.innerHTML = `<div id="m720-content"></div>`;
+    renderSection720(flex(other), rateMap, undefined, [noLots]);
+    const input = document.getElementById("m720-previous-input") as HTMLInputElement;
+    Object.defineProperty(input, "files", { value: [new File([file2024], "modelo720_2024.txt")] });
+    const before = document.getElementById("m720-content")!.innerHTML;
+    input.dispatchEvent(new Event("change"));
+    for (let i = 0; i < 200 && document.getElementById("m720-content")!.innerHTML === before; i++) await new Promise((r) => setTimeout(r, 5));
+    expect([...document.querySelectorAll(".m720-sold li")].map((li) => li.textContent)).toEqual([
+      `${ACME}: ${t("m720.sold_no_acquisition")}`,
+      `${ACME}: ${t("m720.sold_value_too_large")}`,
+    ]);
+    document.getElementById("m720-previous-clear")?.click();
+  });
+
   it("the web names it, in the 5 locales", async () => {
     const texts = new Set<string>();
     for (const locale of ["es", "en", "ca", "eu", "gl"] as const) {
@@ -332,6 +359,51 @@ describe("#470 one rule for the share count: a count the 720 field cannot hold h
   });
 });
 
+describe("#470 a share count with more than 20 decimals has no valid share count in the D-6, and no screen expands it", () => {
+  // CodeRabbit on 45c5712: position="1e-1000000000" is a readable number, and
+  // `toFixed()` wrote it as a billion characters: the D-6 report and the web
+  // table ran out of memory. A count with more than 20 decimals is no share
+  // count a broker writes. The D-6 names it to declare by hand, and the
+  // holding stays held (no cancellation). Every quantity cell shows «—» for it.
+  const tinyCases = (process.env.D6_TINY_CASES ?? "1e-100000,1e-1000000000,0.000000000000000000001").split(",");
+  for (const position of tinyCases) {
+    it(`position="${position}": the D-6 counts it unvalued, names it, keeps it held, and writes no long count`, () => {
+      const d6 = generateD6Report(flex(stock(position, "70000") + other).openPositions, rateMap, 2025, "X", "12345678Z", [ACME]);
+      expect(d6.positions.map((p) => p.isin)).toEqual([OTHER]);
+      expect([d6.unvaluedCount, d6.unvalued]).toEqual([1, [{ isin: ACME, description: "ACME CORP" }]]);
+      expect(d6.cancelled).toEqual([]);
+      expect(d6.totalValueEur).toBe("59500.00");
+      expect(JSON.stringify(d6).length).toBeLessThan(20000);
+    });
+
+    it(`position="${position}": the web D-6 shows «—» for its count and value, and the unvalued banner`, () => {
+      useContainer("d6-content");
+      renderSectionD6(flex(stock(position, "70000") + other), rateMap);
+      const row = [...document.querySelectorAll("#d6-content tbody tr")].map((r) => [...r.querySelectorAll("td")].map((c) => c.textContent.trim())).find((r) => r[0] === ACME)!;
+      expect(row.at(-1)).toBe("—");
+      expect(row.join(" ").length).toBeLessThan(200);
+      expect(document.getElementById("d6-content")!.textContent).toContain("no se han podido valorar");
+    });
+
+    // The web cell bounds the printed length, not the decimals (`fmtQty`, 60
+    // digits in full): 21 decimals print in full, an absurd exponent is «—».
+    it(`a coin of ${position} units: the web 721 never shows a long number`, () => {
+      useContainer("m721-content");
+      renderSection721(flex(coin("60000").replace('position="1"', `position="${position}"`)), rateMap);
+      const row = [...document.querySelectorAll("#m721-content tbody tr")].map((r) => [...r.querySelectorAll("td")].map((c) => c.textContent.trim()))[0]!;
+      expect(row[2]).toBe(position === "0.000000000000000000001" ? "0,000000000000000000001" : "—");
+      expect(document.getElementById("m721-content")!.innerHTML.length).toBeLessThan(50000);
+    });
+  }
+
+  it("boundary: a count with 20 decimals is listed in full, as is 0.00000005", () => {
+    const fits = generateD6Report(flex(stock("0.00000000000000000001", "70000")).openPositions, rateMap, 2025, "X", "12345678Z");
+    expect([fits.unvaluedCount, fits.positions[0]!.sharesAtYearEnd]).toEqual([0, "0.00000000000000000001"]);
+    const tiny = generateD6Report(flex(stock("0.00000005", "70000")).openPositions, rateMap, 2025, "X", "12345678Z");
+    expect([tiny.unvaluedCount, tiny.positions[0]!.sharesAtYearEnd]).toEqual([0, "0.00000005"]);
+  });
+});
+
 describe("#470 the 721 library export writes numbers as the 720 does: digits in their width, never an exponent", () => {
   const cfg721 = { ...cfg720, declarationId: "7210000000001", allowPrototypeOutput: true };
   const entry = (valuationEur: string, quantity = "1") => ({
@@ -351,8 +423,64 @@ describe("#470 the 721 library export writes numbers as the 720 does: digits in 
     expect(() => generateModelo721([entry(value)], cfg721)).toThrow(/excede el campo/);
   });
 
-  it("a quantity past its 9 integer digits throws", () => {
-    expect(() => generateModelo721([entry("60000", "1e21")], cfg721)).toThrow(/excede el campo/);
+  // CodeRabbit on 45c5712: the acquisition cost skips the 720 fit, and numPad
+  // wrote the integer digits with toFixed(0) before its width check, one digit
+  // per exponent step. costBasisMoney="1e1000000000" ran out of memory. Now
+  // the size is compared first and the error stays short.
+  const hugeCases = (process.env.M721_HUGE_CASES ?? "1e100000,1e1000000000").split(",");
+  for (const cost of hugeCases) {
+    it(`an IBKR coin with costBasisMoney="${cost}" fails fast with a short error, never a long string`, () => {
+      const xml = coin("60000").replace('costBasisMoney="40000"', `costBasisMoney="${cost}"`);
+      const entries = buildModelo721Entries(flex(xml).openPositions, rateMap, "2025-12-31").positions.map((p) => p.entry);
+      let message = "";
+      try {
+        generateModelo721(entries, cfg721);
+      } catch (e) {
+        message = (e as Error).message;
+      }
+      expect(message).toMatch(/^Modelo 721: importe .* excede el campo de 13 dígitos enteros$/);
+      expect(message.length).toBeLessThan(100);
+    });
+  }
+
+  // The quantity field has 9 integer digits: 1e9 coins or more threw and
+  // failed the whole file, though a meme coin held by the billion is ordinary.
+  // As the 720 does with a count past its field (`quantity_too_large`), that
+  // coin is left out of the file and named for manual entry
+  // (`findModelo721Omissions`); every other record is the same, and the coin
+  // still counts toward the 50,000 € threshold.
+  const shib = (position: string, value: string) => coin(value)
+    .replace('symbol="BTC" description="BITCOIN"', 'symbol="SHIB" description="SHIBA INU"')
+    .replace('position="1"', `position="${position}"`);
+  const entriesOf = (xml: string) => buildModelo721Entries(flex(xml).openPositions, rateMap, "2025-12-31").positions.map((p) => p.entry);
+
+  for (const position of ["1000000000", "-1000000000", "1e21", ...hugeCases]) {
+    it(`a coin of ${position} units is left out and named; the file is the one without it`, () => {
+      const entries = entriesOf(coin("80000") + shib(position, "20000"));
+      expect(generateModelo721(entries, cfg721)).toBe(generateModelo721(entriesOf(coin("80000")), cfg721));
+      expect(findModelo721Omissions(entries)).toEqual([{ reason: "quantity_too_large", entry: entries[1] }]);
+    });
+  }
+
+  it("a coin left out still counts toward the threshold; the sums are those of the records written", () => {
+    // 25,500 € of BTC alone is below 50,000 €; with 34,000 € of SHIB it is not.
+    expect(generateModelo721(entriesOf(coin("30000")), cfg721)).toBe("");
+    const lines = generateModelo721(entriesOf(coin("30000") + shib("2000000000", "40000")), cfg721).split("\n");
+    expect(lines).toHaveLength(2);
+    expect(lines[0]!.slice(135, 144)).toBe("000000001");
+    expect(lines[0]!.slice(163, 180)).toBe("00000000002550000");
+    expect(lines[1]!.slice(131, 143).trim()).toBe("BTC");
+    // The only coin, left out: no file, and the omission names it.
+    const alone = entriesOf(shib("2000000000", "80000"));
+    expect(generateModelo721(alone, cfg721)).toBe("");
+    expect(findModelo721Omissions(alone).map((o) => o.entry.assetId)).toEqual(["SHIB"]);
+  });
+
+  it("boundary: 999,999,999.999 coins are written; 1,000,000,000 are left out", () => {
+    const fits = entriesOf(coin("80000") + shib("999999999.999", "20000"));
+    expect(findModelo721Omissions(fits)).toEqual([]);
+    expect(generateModelo721(fits, cfg721).split("\n")[2]!.slice(464, 476)).toBe("999999999999");
+    expect(findModelo721Omissions(entriesOf(shib("1000000000", "80000")))).toHaveLength(1);
   });
 });
 

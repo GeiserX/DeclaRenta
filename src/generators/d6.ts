@@ -139,7 +139,8 @@ export function generateD6Report(
         countryCode: p.isin.slice(0, 2).toUpperCase(),
         exchangeCode: exchangeFromIsin(p.isin, p.assetCategory),
         // toFixed, never toString: decimal.js writes 1e21 and above, and below
-        // 1e-7, in exponent form ("5e-8").
+        // 1e-7, in exponent form ("5e-8"). `d6ShareCount` keeps the count to 10
+        // integer digits and 20 decimals, so the string stays short.
         sharesAtYearEnd: shares.toFixed(),
         marketValueEur: valueEur.toFixed(2),
         currency: p.currency,

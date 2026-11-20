@@ -500,7 +500,7 @@ const eu: TranslationKeys = {
   "d6.brokers_without_holdings": "Igo dituzun {{brokers}}(r)en datuek ez dituzte abenduaren 31ko baloreak jasotzen, eta, beraz, ez dira hemen agertzen. Kontsultatu {{brokers}}(r)en urte amaierako laburpenean.",
   "d6.positions_title": "Aitortu beharreko posizioak",
   "d6.positions_unvalued":
-    "{{count}} posizio ezin izan dira eurotan baloratu edo ez dute titulu kopuru baliodunik, eta totaletik kanpo utzi dira. Arrazoia hauetako bat izan daiteke: ez dago merkatu-preziorik edo haien monetaren kanbio-tasarik ekitaldi-amaieran; titulu kopurua falta da, haren balioak berresten ez duen edo kontraesaten duen 0 bat da, edo 10 zifra oso baino gehiago ditu; balioa ez da zenbaki bat edo 12 zifra oso baino gehiago ditu eurotan; edo kantitateak eta balioak zeinu kontrakoak dituzte. Sartu eskuz, haien euro-balioarekin eta titulu kopuruarekin.",
+    "{{count}} posizio ezin izan dira eurotan baloratu edo ez dute titulu kopuru baliodunik, eta totaletik kanpo utzi dira. Arrazoia hauetako bat izan daiteke: ez dago merkatu-preziorik edo haien monetaren kanbio-tasarik ekitaldi-amaieran; titulu kopurua falta da, haren balioak berresten ez duen edo kontraesaten duen 0 bat da, edo 10 zifra oso baino gehiago edo 20 hamartar baino gehiago ditu; balioa ez da zenbaki bat edo 12 zifra oso baino gehiago ditu eurotan; edo kantitateak eta balioak zeinu kontrakoak dituzte. Sartu eskuz, haien euro-balioarekin eta titulu kopuruarekin.",
   "d6.quantity_unknown": "Fitxategiak ez du titulu kopuru baliodunik {{count}} posiziotarako (falta da, ezin da irakurri edo bere balioak berresten ez duen 0 bat da): {{holdings}}. Ez dira 0tzat hartzen: hartu kopurua brokerraren urte amaierako laburpenetik eta idatzi eskuz D-6an.",
   "d6.cancellations_title": "Baliogabetzeak",
   "d6.generate_btn": "D-6 gida sortu",
@@ -608,6 +608,7 @@ const eu: TranslationKeys = {
   "annex.title": "Eragiketen eranskina (Anexo C1)",
   "annex.subtitle": "Eragiketen banakako xehetasuna aktibo motaren arabera taldekatuta.",
   "annex.operations": "eragiketa",
+  "annex.not_counted": "ez da batzen",
   "annex.wash_blocked": "Berrerosketagatik blokeatutako galera: {{amount}} EUR (LIRPF 33.5 art.)",
   "annex.wash_dates": "Galera blokeatzen duten balio bereko erosketak: {{dates}}",
   "annex.wash_hint":
@@ -1036,8 +1037,20 @@ const eu: TranslationKeys = {
     "Balio ez-finitu bat (NaN/Infinitua) detektatu da kalkulatutako total batean; berrikusi inportatutako fitxategiak.",
   "report.non_finite_total.hint":
     "Litekeena da broker baten fitxategi batek zenbateko hondatu bat edo ustekabeko zenbaki-formatu bat izatea. Berrikusi jatorrizko eragiketak.",
+  "report.trade_out_of_range":
+    "Fitxategiko {{count}} eragiketak inongo brokerrek idazten ez duen kantitate, prezio, komisio edo zenbateko bat du (20 zifra oso baino gehiago, edo komaren ondoren 20 zero edo gehiago): {{rows}}. Haien zenbatekoak ez dira laukietan batzen.",
+  "report.trade_out_of_range.hint":
+    "Kantitatea irakur badaiteke, erosketak kosturik gabeko lotea sortzen du: hura erabiltzen duen salmentak bere eskualdatze-balioa batzen du, eta ez eskuratze-balioa; beraz, gehiago ordain dezakezu, inoiz ez gutxiago. Horrelako salmenta batek ez du bere emaitza batzen, eta horrelako dibidendu, interes edo atxikipen batek ez du bere zenbatekoa batzen. Berrikusi errenkada horiek brokerraren fitxategian eta adierazi haien emaitza eskuz.",
+  "report.cash_amount_too_large":
+    "Fitxategiko {{count}} kobrantza edo karguren euroko balioa ez da zenbaki bat, edo bilioi bat eurora iristen da: {{rows}}. Haien zenbatekoak ez dira laukietan batzen.",
+  "report.cash_amount_too_large.hint":
+    "Normalean fitxategiaren edo kanbio-tasaren akatsa da: benetako dibidendu, interes edo atxikipen batek ere ez du bilioi bat euro lortzen. Berrikusi errenkada horiek brokerraren fitxategian eta kanbio-tasetan, eta adierazi haien zenbatekoa eskuz.",
+  "report.withholding_of_excluded_dividend":
+    "Fitxategiko {{count}} atxikipen batzen ez den balore bereko dibidendu batetik 7 egun edo gutxiagora daude: {{rows}}. Dibidendu horrenak izan daitezke; beraz, haiek ere ez dira batzen. Horrela, beste dibidendu batek ez ditu kentzen.",
+  "report.withholding_of_excluded_dividend.hint":
+    "Dibidendu hori eskuz adierazten duzunean, adierazi harena den atxikipena ere. Horietako bat beste dibidendu batena bada, adierazi beste dibidendu horrekin.",
   "report.non_finite_disposal":
-    "{{count}} salmentak zenbaki ez den zenbateko bat du (NaN edo infinitua): {{rows}}. Zenbateko hori ez da laukietan batzen. Urteko gainerako eragiketak bai.",
+    "{{count}} salmentak zenbaki ez den zenbateko bat du (NaN edo infinitua) edo eurotan 12 zifra oso baino gehiago dituena: {{rows}}. Zenbateko hori ez da laukietan batzen. Urteko gainerako eragiketak bai.",
   "report.non_finite_disposal.hint":
     "Salmenta baten eskualdaketa-balioa falta bada, DeclaRentak ez du haren eskuratze-balioa ere batzen, ezerk justifikatzen ez duen galerarik ez sortzeko. Eskuratze-balioa falta bada, eskualdaketa-balioa batzen du. Berrikusi eragiketa horiek brokerraren fitxategian eta kanbio-tasetan, eta aitortu haien emaitza eskuz.",
   "flatex.lagerstellenwechsel.unmatched":

@@ -68,5 +68,6 @@ describe("CLI holdings warnings and unvalued names (#470)", () => {
     expect(res.stderr).toContain("Aviso: 3 posición(es) extranjera(s) sin valorar o sin número de títulos válido: SAP SA (DE0007164600), DBK SA (DE0005140008), ALV SA (DE0008404005).");
     expect(res.stderr).toContain("signos contrarios");
     expect(res.stderr).toContain("12 cifras enteras");
+    expect(res.stderr).toContain("o más de 20 decimales");
   }, 60_000);
 });

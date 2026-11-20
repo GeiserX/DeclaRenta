@@ -12,7 +12,10 @@
  *   - currency→ upper-cased AND stablecoin-normalized (USDT→USD) so the key
  *     matches how lookups resolve currencies; otherwise a hand-typed "USDT"
  *     would be stored under a key the lookup never queries.
- *   - eurPerUnit → validated with Decimal; non-finite or ≤0 entries dropped.
+ *   - eurPerUnit → validated with Decimal; non-finite or ≤0 entries dropped,
+ *     and so is a rate no price reaches (more than 20 integer digits, or below
+ *     10^-20, `numberTextOutOfRange`): decimal.js reads "1e1000000000" as
+ *     finite, and a sale valued with it ran the CLI out of memory (#470).
  */
 
 import Decimal from "decimal.js";
@@ -20,6 +23,7 @@ import type { EcbRateMap } from "../types/ecb.js";
 import type { ManualRateQuote } from "../types/tax.js";
 import { normalizeDate } from "./dates.js";
 import { normalizeCurrency } from "./ecb.js";
+import { numberTextOutOfRange } from "./amount-range.js";
 
 export type { ManualRateQuote };
 
@@ -61,6 +65,7 @@ export function normalizeManualQuote(
     return null;
   }
   if (!rate.isFinite() || rate.lessThanOrEqualTo(0)) return null;
+  if (numberTextOutOfRange(eurPerUnit)) return null;
 
   return {
     date: normalizeDate(quote.date),

@@ -26,7 +26,7 @@ import { FxFifoEngine } from "../engine/fx-fifo.js";
 import { loanCurrencies } from "../engine/fx-loan-gate.js";
 import { addMonths, detectWashSales, salesWithWindowPastData } from "../engine/wash-sale.js";
 import { collectIsinWindows, listAntichurningSecurities } from "../engine/antichurning-window.js";
-import { calculateDividends, matchWithholdings, withholdingCountry, withholdingEur, type WithholdingMatch } from "../engine/dividends.js";
+import { calculateDividends, matchWithholdings, withholdingCountry, withholdingEur, withholdingsInReach, type WithholdingMatch } from "../engine/dividends.js";
 import { collapseCorrections } from "../engine/cash-corrections.js";
 import { calculateDoubleTaxation } from "../engine/double-taxation.js";
 import { isEcbResolvable, lookupRateInMap } from "../engine/ecb.js";
@@ -35,6 +35,15 @@ import { buildManualRateMap } from "../engine/manual-rates.js";
 import { buildManualOpeningLotTrades, normalizeManualOpeningLot } from "../engine/manual-opening-lots.js";
 import { formatDateDmy, normalizeDate, parseDate } from "../engine/dates.js";
 import { finiteDisposalAmounts } from "./casillas.js";
+import {
+  cashOutOfRange,
+  corporateActionOutOfRange,
+  corporateActionQuantityOutOfRange,
+  isCountableAmount,
+  optionExerciseOutOfRange,
+  tradeOutOfRange,
+  tradeQuantityOutOfRange,
+} from "../engine/amount-range.js";
 
 const DATE_RE = /\b(\d{4})-\d{2}-\d{2}\b/;
 
@@ -708,6 +717,34 @@ function traditionalFxMessages(input: {
   return out;
 }
 
+const isDividendRow = (c: CashTransaction): boolean => c.type === "Dividends" || c.type === "Payment In Lieu Of Dividends";
+
+/**
+ * The withholding rows that may belong to a dividend the report leaves out:
+ * every row below 0 that a pass of the matcher could give it, whatever the row
+ * order (`withholdingsInReach`), among the rows the report matches
+ * (`collapseCorrections` on the rows it keeps plus the dividends it leaves
+ * out). The rows cannot tell whose such a row is, so it goes with the
+ * dividend left out: a kept dividend in reach can only deduct less, never
+ * more, and the warning names the row. A refund (above 0) always stays: it
+ * can only lower the deduction.
+ */
+function withholdingsOfExcluded(
+  rows: CashTransaction[],
+  excludedDividends: ReadonlySet<CashTransaction>,
+  outOfRange: ReadonlySet<CashTransaction>,
+  uncountable: ReadonlySet<CashTransaction>,
+): CashTransaction[] {
+  // A trap: the matcher's own pairing depends on the row order (pass 1 takes
+  // the first withholding in reach, not the nearest). In file order a kept
+  // 50 USD dividend four days earlier took the 15 USD withheld from a 9e15
+  // USD one; with the dividends left out listed first, or with the
+  // withholdings in another order than their dividends, a kept dividend took
+  // the 150 USD of the one left out. Box 0588 deducted tax never paid.
+  const kept = collapseCorrections(rows.filter((c) => excludedDividends.has(c) || (!outOfRange.has(c) && !uncountable.has(c))));
+  return withholdingsInReach(kept, excludedDividends);
+}
+
 /**
  * Generate a complete tax report from an IBKR Flex Statement.
  *
@@ -733,8 +770,85 @@ export function generateTaxReport(
   //    EUR via cross-leg inference or user manual quotes, injecting synthetic
   //    rates into a cloned map. Unresolvable trades are dropped (and surfaced)
   //    so the FIFO engine never throws on a non-fiat currency.
-  const valuation = resolveCryptoTradeValues(statement.trades, rateMap, manualRates);
+  //
+  // A trade with a number no broker writes (`tradeOutOfRange`: past 20
+  // integer digits, or not 0 and below 10^-20) is named below
+  // (`report.trade_out_of_range`) and counted nowhere, so no engine or
+  // formatter meets a number such as 1e1000000000 (#470). With a readable
+  // quantity it still moves its shares through FIFO, in their order, with
+  // amounts that are no number: a buy's lot has no cost, so a sale that takes
+  // it adds its proceeds and no cost (the user may overpay, never underpay),
+  // and a sale's result is left out (`finiteDisposalAmounts`). With no
+  // readable quantity it books nothing. The currency engine never sees it;
+  // the anti-churning evidence reads every trade, as for a trade of unknown
+  // quantity. A cash row (dividend, withholding, interest, reward) with such
+  // a number is named the same way and counted nowhere. A corporate action
+  // with one is named too and keeps its place (a split takes its ratio from
+  // the description), but its amount is no number: a cash buyout's sale is
+  // left out (`finiteDisposalAmounts`) and a scrip dividend's lot has no cost.
+  // An action whose quantity is out of range gets the quantity "0", so it
+  // moves no share: a cash buyout of 1e1000000000 shares booked a sale of
+  // that many and the web PDF ran out of memory. An option exercise with
+  // such a number books nothing in FIFO (`optionExerciseOutOfRange`) and is
+  // named here.
+  const outOfRangeCash = statement.cashTransactions.filter((c) => cashOutOfRange(c));
+  const readableCash = outOfRangeCash.length === 0
+    ? statement.cashTransactions
+    : statement.cashTransactions.filter((c) => !outOfRangeCash.includes(c));
+  const outOfRangeActions = statement.corporateActions.filter((ca) => corporateActionOutOfRange(ca));
+  const corporateActions = outOfRangeActions.length === 0
+    ? statement.corporateActions
+    : statement.corporateActions.map((ca) => (outOfRangeActions.includes(ca)
+        ? { ...ca, amount: "NaN", ...(corporateActionQuantityOutOfRange(ca) ? { quantity: "0" } : {}) }
+        : ca));
+  const outOfRangeExercises = (statement.optionExercises ?? []).filter((ex) => optionExerciseOutOfRange(ex));
+  const outOfRangeTrades = statement.trades.filter((tr) => tradeOutOfRange(tr));
+  const outOfRange = new Set<Trade>(outOfRangeTrades);
+  const countedTrades = outOfRange.size === 0 ? statement.trades : statement.trades.filter((tr) => !outOfRange.has(tr));
+  // The trades whose amounts are no number: a missing rate for their quote
+  // currency must not drop them, or a sale leaves its lot to a later one
+  // (`resolveCryptoTradeValues`, CodeRabbit on 10e1918).
+  const noValueTrades = new Set<Trade>();
+  const fifoInputTrades = outOfRange.size === 0
+    ? statement.trades
+    : statement.trades.flatMap((tr): Trade[] => {
+        if (!outOfRange.has(tr)) return [tr];
+        if (tradeQuantityOutOfRange(tr)) return [];
+        const noValue = { ...tr, tradePrice: "NaN", tradeMoney: "NaN", commission: "0", taxes: "0", multiplier: "1" };
+        noValueTrades.add(noValue);
+        return [noValue];
+      });
+  const valuation = resolveCryptoTradeValues(fifoInputTrades, rateMap, manualRates, noValueTrades);
   const resolvedRateMap = valuation.rateMap;
+  // A cash row the read range lets through but whose value in euros fails
+  // the counted bound (`isCountableAmount`: 1e12 € or more, or no number,
+  // e.g. from a rate of "Infinity"), as a sale's amount does: it is named
+  // (`report.cash_amount_too_large`) and counted nowhere, neither in a box
+  // nor in the currency engine. Before, a dividend of -9e15 dollars put
+  // -9,900,000,000,000,000.00 € in box 0029 with no message, and a value
+  // that was no number zeroed the whole box (`guardNonFiniteTotals`), the
+  // other rows' income included.
+  const uncountableCash = readableCash.filter((c) => {
+    let value: ReturnType<typeof valueIncomeEur>;
+    try {
+      value = valueIncomeEur(c, resolvedRateMap, manualRates);
+    } catch {
+      return false; // an amount that is no number: not this rule's concern
+    }
+    return value !== null && !isCountableAmount(value.amountEur);
+  });
+  // The withholding of a dividend left out (either rule above) goes with
+  // it, counted nowhere and named (`report.withholding_of_excluded_dividend`).
+  // A trap: left in the rows, the matcher paired it with the next dividend of
+  // the security within 7 days, and box 0588 deducted a tax that dividend
+  // never paid (CodeRabbit on 10e1918).
+  const excludedDividends = new Set([...outOfRangeCash, ...uncountableCash].filter(isDividendRow));
+  const withholdingsLeftOut = excludedDividends.size === 0
+    ? []
+    : withholdingsOfExcluded(statement.cashTransactions, excludedDividends, new Set(outOfRangeCash), new Set(uncountableCash));
+  const cashTransactions = uncountableCash.length === 0 && withholdingsLeftOut.length === 0
+    ? readableCash
+    : readableCash.filter((c) => !uncountableCash.includes(c) && !withholdingsLeftOut.includes(c));
 
   // 0c. Crypto reward income (staking, Simple Earn interest, airdrops, referral)
   //     establishes an acquisition lot at the EUR value taxed as income, so a
@@ -743,7 +857,7 @@ export function generateTaxReport(
   //     from the (now-augmented) rate map or a manual hint. Synthesize tax-neutral
   //     BUY trades (FIFO never taxes a BUY); they are EUR-denominated so they need
   //     no further valuation and go straight to the FIFO engine.
-  const rewardLots = synthesizeRewardLots(statement.cashTransactions, resolvedRateMap, manualRates);
+  const rewardLots = synthesizeRewardLots(cashTransactions, resolvedRateMap, manualRates);
   // 0d. User-supplied opening lots for transferred positions are modeled as
   //     synthetic BUY trades. This lets the normal FIFO pass consume multiple
   //     manual lots (different dates/prices) without a parallel cost-basis path.
@@ -770,7 +884,7 @@ export function generateTaxReport(
     traditionalCostBasis: traditionalCost,
     ...(options?.skipFx === true ? {} : { markLotCurrency: true }),
   });
-  fifoEngine.processTrades(resolvedTrades, resolvedRateMap, statement.corporateActions, statement.optionExercises);
+  fifoEngine.processTrades(resolvedTrades, resolvedRateMap, corporateActions, statement.optionExercises);
   // A cash buyout is a sale booked inside FIFO from a TC row; anti-churning must
   // see it too, or the bought-out shares still count as held (V3282-18 total exit).
   const washSaleTrades = [...statement.trades, ...manualOpeningLotTrades, ...fifoEngine.getCashBuyoutSales()];
@@ -780,12 +894,12 @@ export function generateTaxReport(
   // with later sales, so replay only the inputs dated up to 31 December.
   const yearEnd = `${year}-12-31`;
   const tradesToYearEnd = resolvedTrades.filter((t) => normalizeDate(t.tradeDate) <= yearEnd);
-  const actionsToYearEnd = statement.corporateActions.filter((ca) => normalizeDate(ca.dateTime.slice(0, 8)) <= yearEnd);
+  const actionsToYearEnd = corporateActions.filter((ca) => normalizeDate(ca.dateTime.slice(0, 8)) <= yearEnd);
   const exercisesToYearEnd = statement.optionExercises?.filter((ex) => normalizeDate(ex.date) <= yearEnd);
   let yearEndLots = fifoEngine.getRemainingLots();
   if (
     tradesToYearEnd.length < resolvedTrades.length ||
-    actionsToYearEnd.length < statement.corporateActions.length ||
+    actionsToYearEnd.length < corporateActions.length ||
     (exercisesToYearEnd?.length ?? 0) < (statement.optionExercises?.length ?? 0)
   ) {
     const yearEndEngine = new FifoEngine({ traditionalCostBasis: traditionalCost });
@@ -847,7 +961,7 @@ export function generateTaxReport(
   const allDisposals = detectWashSales(
     fifoEngine.getDisposals(),
     washSaleTrades,
-    statement.corporateActions,
+    corporateActions,
     fifoEngine.getSplitRatios(),
     fifoEngine.getRemainingLots(),
     { statements: accountStatements },
@@ -888,7 +1002,7 @@ export function generateTaxReport(
   // their own withholding and hand it to an in-year dividend of the same ISIN.
   // collapseCorrections pairs rows by exact date, so running it on every row
   // leaves the in-year rows unchanged.
-  const allCashTransactions = collapseCorrections(statement.cashTransactions);
+  const allCashTransactions = collapseCorrections(cashTransactions);
   const yearCashTransactions = allCashTransactions.filter((t) => t.dateTime.startsWith(yearStr));
   // Dividends are valued like interest: a currency with no ECB or manual rate
   // (e.g. IBKR's CNH) is skipped with a warning instead of aborting the report.
@@ -1013,7 +1127,7 @@ export function generateTaxReport(
     // Process broker auto-conversions (AFx/FXCONV) by default; the opt-out
     // (trackAutoConvert === false) restores the historical skip (issue #239).
     const trackAutoConvert = options?.trackAutoConvert !== false;
-    const tradeFxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap, trackAutoConvert);
+    const tradeFxEvents = FxFifoEngine.extractFxEvents(countedTrades, rateMap, trackAutoConvert);
     // The collapsed rows, the ones the income path reads (issue #439): a
     // reversed and re-credited dividend opens one lot, not three.
     // The rows it leaves out tell the loan gate which currencies' cash it
@@ -1030,7 +1144,7 @@ export function generateTaxReport(
     // NOT the year-filtered/titulares-split `disposals`. Neither emits a disposal;
     // only a later USD→EUR conversion realizes the deferred gain (Art. 14.2.e). FX
     // disposals are year-filtered below and split at splitFxDisposal.
-    const stockPurchaseFxEvents = FxFifoEngine.extractStockPurchaseFxEvents(statement.trades, rateMap, trackAutoConvert);
+    const stockPurchaseFxEvents = FxFifoEngine.extractStockPurchaseFxEvents(countedTrades, rateMap, trackAutoConvert);
     const manualOpeningLotFxEvents = FxFifoEngine.extractManualOpeningLotFxEvents(usableManualOpeningLots, rateMap);
     const stockProceedsFxEvents = traditionalFx
       ? FxFifoEngine.extractStockProceedsFxEvents(fifoEngine.getDisposals(), { traditionalFx: true })
@@ -1049,10 +1163,10 @@ export function generateTaxReport(
       cashBalances: statement.holdingsBySource
         ? statement.holdingsBySource.flatMap((s) => s.cashBalances)
         : (statement.cashBalances ?? []),
-      trades: statement.trades,
-      cashTransactions: statement.cashTransactions,
+      trades: countedTrades,
+      cashTransactions,
       omittedCash,
-      corporateActions: statement.corporateActions,
+      corporateActions,
       trackAutoConvert,
     });
     loanCcys = new Set(loan.keys());
@@ -1061,11 +1175,12 @@ export function generateTaxReport(
     // sale's gross), so the default's ledger must see that sale too (a trap:
     // the 5 USD such a commission cost stayed in the default's pool). The two
     // producers differ only in that filter, so every other currency keeps the
-    // default's own sales, in the same order.
+    // default's own sales, in the same order. A sale whose proceeds are no
+    // number (`retire`, proceeds 0) is in both: it retires its principal.
     const sales =
       traditionalFx || loan.size === 0
         ? stockProceedsFxEvents
-        : allSales.filter((e) => e.crossCurrency === true || (e.proceedsFcy ?? new Decimal(0)).greaterThan(0) || loan.has(e.currency));
+        : allSales.filter((e) => e.crossCurrency === true || e.retire === true || (e.proceedsFcy ?? new Decimal(0)).greaterThan(0) || loan.has(e.currency));
     const allFxEvents = [...tradeFxEvents, ...cashFxEvents, ...stockPurchaseFxEvents, ...manualOpeningLotFxEvents, ...sales];
     // «Tradicional con divisa» runs the same producers and engine in its own
     // mode; `new FxFifoEngine()` (no options) is the default, unchanged.
@@ -1178,7 +1293,7 @@ export function generateTaxReport(
   // rectificativa from 2024 on, a complementaria for 2023 and earlier (#458). Each box gets
   // its own message. This year's boxes never include it: the matcher gives a
   // late-posted row only to a dividend of its own year.
-  for (const { year: lateYear, spanish, amount } of priorYearWithholdingRefunds(statement.cashTransactions, year, resolvedRateMap, manualRates)) {
+  for (const { year: lateYear, spanish, amount } of priorYearWithholdingRefunds(cashTransactions, year, resolvedRateMap, manualRates)) {
     const ctx = { year: String(lateYear), reportYear: yearStr, amount: fmt2(splitInterestAmount(amount, titulares)) };
     allMessages.push(
       spanish
@@ -1512,9 +1627,52 @@ export function generateTaxReport(
     fxTransmissionValue,
     fxAcquisitionValue,
   });
-  // A sale or currency disposal with a non-finite amount: the totals above left
-  // that amount out alone (`finiteDisposalAmounts`). Name each one, so the
-  // user declares its result by hand; never silent (#469 review).
+  // A trade with a number no broker writes: counted nowhere (see the top).
+  const outOfRangeRows = [
+    ...outOfRangeTrades.map((tr) => `${tr.symbol || tr.isin} (${formatDateDmy(tr.tradeDate)})`),
+    ...outOfRangeCash.map((c) => `${c.symbol || c.isin || c.description} (${formatDateDmy(c.dateTime)})`),
+    ...outOfRangeActions.map((ca) => `${ca.symbol || ca.isin} (${formatDateDmy(ca.dateTime.slice(0, 8))})`),
+    ...outOfRangeExercises.map((ex) => `${ex.symbol || ex.underlyingSymbol} (${formatDateDmy(ex.date)})`),
+  ];
+  if (outOfRangeRows.length > 0) {
+    const count = String(outOfRangeRows.length);
+    const rows = outOfRangeRows.join(", ");
+    allMessages.push({
+      id: "report.trade_out_of_range",
+      severity: "error",
+      message: `${count} operación(es) del fichero tienen una cantidad, un precio, una comisión o un importe que ningún bróker escribe (más de 20 cifras enteras, o 20 ceros o más tras la coma): ${rows}. Sus importes no se suman a las casillas.`,
+      hint: "Si la cantidad se puede leer, la compra crea su lote sin coste: la venta que lo usa suma su valor de transmisión y no su valor de adquisición, así que puedes pagar de más, nunca de menos. Una venta así no suma su resultado, ni un dividendo, un interés o una retención así su importe. Revisa esas filas en el fichero del bróker y declara su resultado a mano.",
+      context: { count, rows },
+    });
+  }
+  // A cash row worth 1e12 € or more: counted nowhere (see `uncountableCash`).
+  if (uncountableCash.length > 0) {
+    const count = String(uncountableCash.length);
+    const rows = uncountableCash.map((c) => `${c.symbol || c.isin || c.description} (${formatDateDmy(c.dateTime)})`).join(", ");
+    allMessages.push({
+      id: "report.cash_amount_too_large",
+      severity: "error",
+      message: `${count} cobro(s) o cargo(s) del fichero tienen un valor en euros que no es un número o que llega a un billón de euros: ${rows}. Sus importes no se suman a las casillas.`,
+      hint: "Suele ser un error del fichero o del tipo de cambio: ningún dividendo, interés o retención real llega a un billón de euros. Revisa esas filas en el fichero del bróker y en los tipos de cambio, y declara su importe a mano.",
+      context: { count, rows },
+    });
+  }
+  // The withholding of a dividend left out: counted nowhere with it.
+  if (withholdingsLeftOut.length > 0) {
+    const count = String(withholdingsLeftOut.length);
+    const rows = withholdingsLeftOut.map((c) => `${c.symbol || c.isin || c.description} (${formatDateDmy(c.dateTime)})`).join(", ");
+    allMessages.push({
+      id: "report.withholding_of_excluded_dividend",
+      severity: "warning",
+      message: `${count} retención(es) del fichero están a 7 días o menos de un dividendo del mismo valor que no se suma: ${rows}. Pueden ser de ese dividendo, así que tampoco se suman. Así ningún otro dividendo las descuenta.`,
+      hint: "Cuando declares a mano ese dividendo, declara también la retención que sea suya. Si una de ellas es de otro dividendo, declárala con ese otro dividendo.",
+      context: { count, rows },
+    });
+  }
+  // A sale or currency disposal with a non-finite amount, or one past 12
+  // integer digits of euros: the totals above left that amount out alone
+  // (`finiteDisposalAmounts`). Name each one, so the user declares its result
+  // by hand; never silent (#469 review, #470).
   const poisonedRows = [
     ...disposals.filter((d) => finiteDisposalAmounts(d).excluded).map((d) => `${d.symbol || d.isin} (${formatDateDmy(d.sellDate)})`),
     ...fxDisposals.filter((d) => finiteDisposalAmounts(d).excluded).map((d) => `${d.currency} (${formatDateDmy(d.disposeDate)})`),
@@ -1525,7 +1683,7 @@ export function generateTaxReport(
     allMessages.push({
       id: "report.non_finite_disposal",
       severity: "error",
-      message: `${count} venta(s) tienen un importe que no es un número (NaN o infinito): ${rows}. Ese importe no se suma a las casillas. El resto de las operaciones del año sí se suman.`,
+      message: `${count} venta(s) tienen un importe que no es un número (NaN o infinito) o que pasa de 12 cifras enteras en euros: ${rows}. Ese importe no se suma a las casillas. El resto de las operaciones del año sí se suman.`,
       hint: "Si falta el valor de transmisión de una venta, DeclaRenta tampoco suma su valor de adquisición, para no crear una pérdida que nada justifica. Si falta el valor de adquisición, suma el de transmisión. Revisa esas operaciones en el fichero del bróker y en los tipos de cambio, y declara su resultado a mano.",
       context: { count, rows },
     });

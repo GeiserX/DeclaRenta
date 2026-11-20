@@ -30,6 +30,17 @@ describe("normalizeManualQuote", () => {
     expect(normalizeManualQuote({ currency: "SOL", date: "2025-04-10", eurPerUnit: "abc" })).toBeNull();
   });
 
+  it("rejects a rate no price reaches: more than 20 integer digits, or below 10^-20 (#470)", () => {
+    // decimal.js reads "1e1000000000" as finite: a sale valued with it ran
+    // the CLI out of memory. The read range of a broker's number applies.
+    for (const eurPerUnit of ["1e1000000000", "1e2000", "1e20", "100000000000000000000", "1e-21", "1e-1000000000"]) {
+      expect(normalizeManualQuote({ currency: "SOL", date: "2025-04-10", eurPerUnit }), eurPerUnit).toBeNull();
+    }
+    for (const eurPerUnit of ["99999999999999999999", "1e-20", "0.00000001", "142,50"]) {
+      expect(normalizeManualQuote({ currency: "SOL", date: "2025-04-10", eurPerUnit }), eurPerUnit).not.toBeNull();
+    }
+  });
+
   it("preserves a canonical dot-decimal string (no precision loss)", () => {
     const norm = normalizeManualQuote({ currency: "SOL", date: "2025-04-10", eurPerUnit: "40.1234567890123" });
     expect(norm!.eurPerUnit).toBe("40.1234567890123");

@@ -1,6 +1,7 @@
 import type { Statement } from "../types/broker.js";
 import Decimal from "decimal.js";
 import { formatDateDmy, isYearEndDate, normalizeDate } from "../engine/dates.js";
+import { plainOrExponent } from "../engine/amount-range.js";
 
 export function createEmptyStatement(): Statement {
   return {
@@ -272,7 +273,7 @@ function reconcileOrderLegs(statement: Statement): void {
         }
         const gross = new Decimal(trade.tradeMoney);
         const net = new Decimal(leg.netAmount).abs();
-        trade.commission = net.minus(gross).abs().negated().toFixed();
+        trade.commission = plainOrExponent(net.minus(gross).abs().negated());
         trade.commissionCurrency = leg.currency || trade.commissionCurrency || trade.currency;
       });
       continue;
@@ -289,7 +290,7 @@ function reconcileOrderLegs(statement: Statement): void {
     const gross = trades.reduce((sum, trade) => sum.plus(trade.tradeMoney), new Decimal(0));
     const totalFee = net.minus(gross).abs();
     for (const trade of trades) {
-      trade.commission = totalFee.mul(trade.tradeMoney).div(gross).abs().negated().toFixed();
+      trade.commission = plainOrExponent(totalFee.mul(trade.tradeMoney).div(gross).abs().negated());
       trade.commissionCurrency = legs[0]!.currency || trade.commissionCurrency || trade.currency;
     }
     proratedOrders++;

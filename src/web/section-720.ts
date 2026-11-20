@@ -380,18 +380,17 @@ export function renderSection720(
 
   // Securities last year's file declared that are no longer held: C records
   if (sold.length > 0) {
-    const undated = new Map(
-      findUndatedExtinctions(statement.openPositions, { year, ...previousConfig() }, disposals).map((u) => [u.isin, u.missing]),
-    );
+    // One line per field to complete: a sale can miss both its acquisition
+    // date and its value, and each needs its own note.
+    const undated = findUndatedExtinctions(statement.openPositions, { year, ...previousConfig() }, disposals);
     html += `<h3>${esc(t("m720.sold_title"))}</h3>
     <p class="muted">${esc(t("m720.sold_help"))}</p>
     <ul class="m720-sold">${sold.map((s) => {
-      const missing = undated.get(s.isin);
-      const note = missing === "extinctionDate"
+      const notes = undated.filter((u) => u.isin === s.isin).map((u) => u.missing === "extinctionDate"
         ? `: ${esc(t("m720.sold_no_date", { year: String(year) }))}`
-        : missing === "acquisitionDate" ? `: ${esc(t("m720.sold_no_acquisition"))}`
-          : missing === "value" ? `: ${esc(t("m720.sold_value_too_large"))}` : "";
-      return `<li><span class="mono">${esc(s.isin)}</span>${note}</li>`;
+        : u.missing === "acquisitionDate" ? `: ${esc(t("m720.sold_no_acquisition"))}`
+          : `: ${esc(t("m720.sold_value_too_large"))}`);
+      return (notes.length > 0 ? notes : [""]).map((note) => `<li><span class="mono">${esc(s.isin)}</span>${note}</li>`).join("");
     }).join("")}</ul>`;
   }
 

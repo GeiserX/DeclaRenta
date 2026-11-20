@@ -27,6 +27,7 @@ function disposal(assetCategory: string, proceeds: number, currency = "USD") {
     sellDate: "2025-06-15",
     gainLossEur: new Decimal(proceeds).times(0.1),
     proceedsEur: new Decimal(proceeds),
+    costBasisEur: new Decimal(proceeds).times(0.9),
   };
 }
 

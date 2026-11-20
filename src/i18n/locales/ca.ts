@@ -500,7 +500,7 @@ const ca: TranslationKeys = {
   "d6.brokers_without_holdings": "Les dades de {{brokers}} que has pujat no inclouen els teus valors a 31 de desembre, així que no apareixen aquí. Consulta'ls a l'extracte de final d'any de {{brokers}}.",
   "d6.positions_title": "Posicions a declarar",
   "d6.positions_unvalued":
-    "{{count}} posició(ns) no s'han pogut valorar en euros o no porten un nombre de títols vàlid, i s'han exclòs del total. El motiu pot ser un d'aquests: falta el preu de mercat o el tipus de canvi de la seva moneda al tancament de l'exercici; falta el nombre de títols, és un 0 que el seu valor no confirma o contradiu, o té més de 10 xifres enteres; el valor no és un número o té més de 12 xifres enteres en euros; o la quantitat i el valor tenen signes contraris. Inclou-les a mà amb el seu valor en euros i el seu nombre de títols.",
+    "{{count}} posició(ns) no s'han pogut valorar en euros o no porten un nombre de títols vàlid, i s'han exclòs del total. El motiu pot ser un d'aquests: falta el preu de mercat o el tipus de canvi de la seva moneda al tancament de l'exercici; falta el nombre de títols, és un 0 que el seu valor no confirma o contradiu, o té més de 10 xifres enteres o més de 20 decimals; el valor no és un número o té més de 12 xifres enteres en euros; o la quantitat i el valor tenen signes contraris. Inclou-les a mà amb el seu valor en euros i el seu nombre de títols.",
   "d6.quantity_unknown": "El fitxer no porta un nombre de títols vàlid per a {{count}} posició(ns) (falta, no es llegeix o és un 0 que el seu valor no confirma): {{holdings}}. No compten com a 0: pren el nombre de l'extracte de final d'any del bròker i escriu-lo a mà al D-6.",
   "d6.cancellations_title": "Cancel·lacions",
   "d6.generate_btn": "Generar guia D-6",
@@ -608,6 +608,7 @@ const ca: TranslationKeys = {
   "annex.title": "Annex d'operacions (Anexo C1)",
   "annex.subtitle": "Detall individual d'operacions agrupades per tipus d'actiu.",
   "annex.operations": "operaci\u00f3(ns)",
+  "annex.not_counted": "no es suma",
   "annex.wash_blocked": "Pèrdua bloquejada per recompra: {{amount}} EUR (art. 33.5 LIRPF)",
   "annex.wash_dates": "Compres del mateix valor que la bloquegen: {{dates}}",
   "annex.wash_hint":
@@ -1034,8 +1035,20 @@ const ca: TranslationKeys = {
     "S'ha detectat un valor no finit (NaN/Infinit) en un total calculat; revisa els fitxers importats.",
   "report.non_finite_total.hint":
     "És possible que un fitxer d'un bróker tingui un import corrupte o un format numèric inesperat. Revisa les operacions d'origen.",
+  "report.trade_out_of_range":
+    "{{count}} operació(ns) del fitxer tenen una quantitat, un preu, una comissió o un import que cap bròker no escriu (més de 20 xifres enteres, o 20 zeros o més després de la coma): {{rows}}. Els seus imports no es sumen a les caselles.",
+  "report.trade_out_of_range.hint":
+    "Si la quantitat es pot llegir, la compra crea el seu lot sense cost: la venda que el fa servir suma el seu valor de transmissió i no el seu valor d'adquisició, així que pots pagar de més, mai de menys. Una venda així no suma el seu resultat, ni un dividend, un interès o una retenció així el seu import. Revisa aquestes files al fitxer del bròker i declara'n el resultat a mà.",
+  "report.cash_amount_too_large":
+    "{{count}} cobrament(s) o càrrec(s) del fitxer tenen un valor en euros que no és un número o que arriba a un bilió d'euros: {{rows}}. Els seus imports no es sumen a les caselles.",
+  "report.cash_amount_too_large.hint":
+    "Sol ser un error del fitxer o del tipus de canvi: cap dividend, interès o retenció real no arriba a un bilió d'euros. Revisa aquestes files al fitxer del bròker i als tipus de canvi, i declara'n l'import a mà.",
+  "report.withholding_of_excluded_dividend":
+    "{{count}} retenció(ns) del fitxer són a 7 dies o menys d'un dividend del mateix valor que no es suma: {{rows}}. Poden ser d'aquest dividend, així que tampoc no es sumen. Així cap altre dividend no les descompta.",
+  "report.withholding_of_excluded_dividend.hint":
+    "Quan declaris a mà aquest dividend, declara també la retenció que sigui seva. Si alguna és d'un altre dividend, declara-la amb aquest altre dividend.",
   "report.non_finite_disposal":
-    "{{count}} venda(es) tenen un import que no és un número (NaN o infinit): {{rows}}. Aquest import no se suma a les caselles. La resta d'operacions de l'any sí que se sumen.",
+    "{{count}} venda(es) tenen un import que no és un número (NaN o infinit) o que passa de 12 xifres enteres en euros: {{rows}}. Aquest import no es suma a les caselles. La resta d'operacions de l'any sí que es sumen.",
   "report.non_finite_disposal.hint":
     "Si falta el valor de transmissió d'una venda, DeclaRenta tampoc no en suma el valor d'adquisició, per no crear una pèrdua que res no justifica. Si falta el valor d'adquisició, suma el de transmissió. Revisa aquestes operacions al fitxer del bròker i als tipus de canvi, i declara'n el resultat a mà.",
   "flatex.lagerstellenwechsel.unmatched":

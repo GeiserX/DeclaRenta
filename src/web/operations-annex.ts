@@ -13,6 +13,7 @@ import { washSaleRowAttr, renderWashSaleDetailRow } from "./wash-sale-row.js";
 import { symbolCell } from "./symbol-cell.js";
 import { showBrokerColumns } from "../generators/broker-columns.js";
 import { finiteDisposalAmounts } from "../generators/casillas.js";
+import { amountCell, costCell, countedResult } from "./disposal-cells.js";
 
 const OPTION_SCENARIO_LABELS: Record<string, TranslationKey> = {
   expiration: "option.expiration",
@@ -23,11 +24,6 @@ const OPTION_SCENARIO_LABELS: Record<string, TranslationKey> = {
 function optionScenarioLabel(scenario: string): string {
   const key = OPTION_SCENARIO_LABELS[scenario];
   return key ? t(key) : scenario;
-}
-
-/** An amount cell: «—» for a non-finite amount, which the boxes leave out (never "NaN"). */
-function amountCell(amount: Decimal): string {
-  return amount.isFinite() ? fmtEur(amount) : "—";
 }
 
 export function renderOperationsAnnex(report: TaxSummary): string {
@@ -95,7 +91,11 @@ export function renderOperationsAnnex(report: TaxSummary): string {
           <tbody>`;
 
     ops.forEach((d, i) => {
-      const cls = d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss";
+      // Each cell shows what the subtotal adds (`finiteDisposalAmounts`), so
+      // the column sums to it (disposal-cells.ts, shared with the drill-down
+      // and the operations table).
+      const result = countedResult(d);
+      const cls = result !== null && result.greaterThanOrEqualTo(0) ? "gain" : "loss";
       const blocked = washSaleRowAttr(d);
       const optionInfo = d.optionScenario
         ? ` <span class="option-badge">${esc(optionScenarioLabel(d.optionScenario))}${d.putCall ? ` ${d.putCall === "C" ? "Call" : "Put"}` : ""}${d.strike ? ` @${esc(d.strike)}` : ""}</span>`
@@ -113,9 +113,9 @@ export function renderOperationsAnnex(report: TaxSummary): string {
               <td>${esc(formatDate(d.acquireDate))}</td>
               <td>${esc(formatDate(d.sellDate))}</td>${brokerCells}
               <td>${fmtQty(d.quantity)}</td>
-              <td class="num">${amountCell(d.costBasisEur)}</td>
+              <td class="num">${costCell(d)}</td>
               <td class="num">${amountCell(d.proceedsEur)}</td>
-              <td class="num ${cls}">${d.gainLossEur.greaterThanOrEqualTo(0) ? "+" : ""}${amountCell(d.gainLossEur)}</td>
+              <td class="num ${cls}">${result === null ? "—" : `${result.greaterThanOrEqualTo(0) ? "+" : ""}${fmtEur(result)}`}</td>
             </tr>${renderWashSaleDetailRow(d, columnCount)}`;
     });
 

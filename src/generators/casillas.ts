@@ -28,6 +28,7 @@
  */
 
 import Decimal from "decimal.js";
+import { isCountableAmount } from "../engine/amount-range.js";
 import type { DividendEntry, FifoDisposal, IssuerDividendGroup, TaxSummary } from "../types/tax.js";
 
 /**
@@ -102,6 +103,11 @@ function emptyBlock(): CasillaBlock {
  * - result: proceeds minus cost of what was added, or `gainLossEur` itself when
  *   every amount is finite (byte-identical to before).
  *
+ * An amount past 12 integer digits of euros counts as missing too
+ * (`isCountableAmount`, the Modelo 720's valoración width): no real trade
+ * reaches it, and a cost of 1e2000 € made box 0331 and the net a
+ * 2000-digit loss with no warning (#470).
+ *
  * `excluded` marks a disposal that lost an amount: the report names it in the
  * error `report.non_finite_disposal`, so it is never silent. The report totals,
  * the casilla boxes and the web annex all read the amounts through this, so
@@ -113,12 +119,33 @@ export function finiteDisposalAmounts(d: Pick<FifoDisposal, "proceedsEur" | "cos
   gainLoss: Decimal;
   excluded: boolean;
 } {
-  if (d.proceedsEur.isFinite() && d.costBasisEur.isFinite() && d.gainLossEur.isFinite()) {
+  const proceedsCounted = isCountableAmount(d.proceedsEur);
+  const costCounted = isCountableAmount(d.costBasisEur);
+  if (proceedsCounted && costCounted && d.gainLossEur.isFinite()) {
     return { proceeds: d.proceedsEur, cost: d.costBasisEur, gainLoss: d.gainLossEur, excluded: false };
   }
-  const proceeds = d.proceedsEur.isFinite() ? d.proceedsEur : new Decimal(0);
-  const cost = d.proceedsEur.isFinite() && d.costBasisEur.isFinite() ? d.costBasisEur : new Decimal(0);
+  const proceeds = proceedsCounted ? d.proceedsEur : new Decimal(0);
+  const cost = proceedsCounted && costCounted ? d.costBasisEur : new Decimal(0);
   return { proceeds, cost, gainLoss: proceeds.minus(cost), excluded: true };
+}
+
+/**
+ * One sale's amounts as the boxes count them, for an output that lists every
+ * sale (the CLI JSON, the CSV, both PDFs): null where the boxes add nothing.
+ * The proceeds are null when they are left out, and then the cost and the
+ * result too (a cost with no proceeds is no loss); the cost alone is null
+ * when only it is left out, and the result is then the proceeds. Each column
+ * then adds up to its box, and no row prints «NaN» or a 2000-digit figure
+ * (#469, #470). Every amount of an ordinary sale is its own.
+ */
+export function countedDisposalAmounts(d: Pick<FifoDisposal, "proceedsEur" | "costBasisEur" | "gainLossEur">): {
+  proceeds: Decimal | null;
+  cost: Decimal | null;
+  gainLoss: Decimal | null;
+} {
+  if (!isCountableAmount(d.proceedsEur)) return { proceeds: null, cost: null, gainLoss: null };
+  const { gainLoss } = finiteDisposalAmounts(d);
+  return { proceeds: d.proceedsEur, cost: isCountableAmount(d.costBasisEur) ? d.costBasisEur : null, gainLoss };
 }
 
 function accumulate(block: CasillaBlock, d: FifoDisposal): void {

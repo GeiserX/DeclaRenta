@@ -500,7 +500,7 @@ const en: TranslationKeys = {
   "d6.brokers_without_holdings": "The {{brokers}} data you uploaded has no securities positions at 31 December, so they do not appear here. Look them up in the year-end statement from {{brokers}}.",
   "d6.positions_title": "Positions to declare",
   "d6.positions_unvalued":
-    "{{count}} position(s) could not be valued in euros or have no valid number of securities, and were excluded from the total. The reason can be one of these: no market price, or no exchange rate for their currency at year-end; no number of securities, a 0 that its value does not confirm or contradicts, or one with more than 10 integer digits; a value that is not a number or has more than 12 integer digits in euros; or a quantity and a value of opposite signs. Include them by hand with their euro value and their number of securities.",
+    "{{count}} position(s) could not be valued in euros or have no valid number of securities, and were excluded from the total. The reason can be one of these: no market price, or no exchange rate for their currency at year-end; no number of securities, a 0 that its value does not confirm or contradicts, or one with more than 10 integer digits or more than 20 decimals; a value that is not a number or has more than 12 integer digits in euros; or a quantity and a value of opposite signs. Include them by hand with their euro value and their number of securities.",
   "d6.quantity_unknown": "The file has no valid number of securities for {{count}} position(s) (missing, unreadable, or a 0 its value does not confirm): {{holdings}}. They do not count as 0: take the number from the broker's year-end statement and type it by hand in the D-6.",
   "d6.cancellations_title": "Cancellations",
   "d6.generate_btn": "Generate D-6 guide",
@@ -606,6 +606,7 @@ const en: TranslationKeys = {
   "annex.title": "Operations Annex (Anexo C1)",
   "annex.subtitle": "Individual operations detail grouped by asset type.",
   "annex.operations": "operation(s)",
+  "annex.not_counted": "not added",
   "annex.wash_blocked": "Loss blocked by repurchase: {{amount}} EUR (art. 33.5 LIRPF)",
   "annex.wash_dates": "Purchases of the same security that block it: {{dates}}",
   "annex.wash_hint":
@@ -1032,8 +1033,20 @@ const en: TranslationKeys = {
     "A non-finite value (NaN/Infinity) was detected in a calculated total; please review the imported files.",
   "report.non_finite_total.hint":
     "A broker file may have a corrupt amount or an unexpected number format. Review the source operations.",
+  "report.trade_out_of_range":
+    "{{count}} operation(s) in the file have a quantity, price, commission or amount that no broker writes (more than 20 integer digits, or 20 or more zeros after the decimal point): {{rows}}. Their amounts are not added to the boxes.",
+  "report.trade_out_of_range.hint":
+    "If the quantity can be read, the purchase creates its lot with no cost: the sale that uses it adds its transfer value and not its acquisition value, so you may pay more, never less. Such a sale does not add its result, and such a dividend, interest or withholding does not add its amount. Check those rows in the broker's file and declare their result by hand.",
+  "report.cash_amount_too_large":
+    "{{count}} cash row(s) in the file have a value in euros that is not a number or that reaches a trillion euros (10^12): {{rows}}. Their amounts are not added to the boxes.",
+  "report.cash_amount_too_large.hint":
+    "It is usually an error in the file or in the exchange rate: no real dividend, interest or withholding reaches a trillion euros. Check those rows in the broker's file and the exchange rates, and declare their amount by hand.",
+  "report.withholding_of_excluded_dividend":
+    "{{count}} withholding row(s) in the file are within 7 days of a dividend of the same security that is not added: {{rows}}. They may belong to that dividend, so they are not added either. This way no other dividend deducts them.",
+  "report.withholding_of_excluded_dividend.hint":
+    "When you declare that dividend by hand, declare the withholding that belongs to it too. If one of them belongs to another dividend, declare it with that other dividend.",
   "report.non_finite_disposal":
-    "{{count}} sale(s) have an amount that is not a number (NaN or infinity): {{rows}}. That amount is not added to the boxes. The other operations of the year are added.",
+    "{{count}} sale(s) have an amount that is not a number (NaN or infinity) or that has more than 12 integer digits in euros: {{rows}}. That amount is not added to the boxes. The other operations of the year are added.",
   "report.non_finite_disposal.hint":
     "If the transmission value of a sale is missing, DeclaRenta does not add its acquisition value either, so it creates no loss that nothing supports. If the acquisition value is missing, it adds the transmission value. Check those operations in the broker file and the exchange rates, and declare their result by hand.",
   "flatex.lagerstellenwechsel.unmatched":

@@ -182,15 +182,47 @@ function fixedWidthText(value: string, length: number, alignRight = false): stri
   return pad(sanitized, length, " ", alignRight);
 }
 
+/** The integer digits of the detail record's quantity field (464-475: 9 + 3 decimals). */
+const QUANTITY_INT_DIGITS = 9;
+
+/**
+ * A coin the 721 file leaves out for manual entry, as the 720 leaves out a
+ * count past «Número de valores» (`quantity_too_large`): 1e9 coins or more do
+ * not fit the quantity field's 9 integer digits. A meme coin held by the
+ * billion is ordinary, so the coin is named, never the whole file failed (#470).
+ */
+export interface Modelo721Omission {
+  reason: "quantity_too_large";
+  entry: Modelo721Entry;
+}
+
+function quantityTooLarge(entry: Modelo721Entry): boolean {
+  // Compared, never written: toFixed of 1e1000000000 runs out of memory.
+  return entry.quantity.abs().floor().greaterThanOrEqualTo(new Decimal(10).pow(QUANTITY_INT_DIGITS));
+}
+
+/**
+ * The coins `generateModelo721` leaves out of the file, each with its reason.
+ * The caller names them for manual entry. They still count toward the
+ * 50,000 € threshold.
+ */
+export function findModelo721Omissions(entries: Modelo721Entry[]): Modelo721Omission[] {
+  return entries.filter(quantityTooLarge).map((entry) => ({ reason: "quantity_too_large" as const, entry }));
+}
+
 function numPad(value: string, intLen: number, decLen: number): string {
   const dec = new Decimal(value).abs();
-  // toFixed, never toString: decimal.js writes 1e21 and above in exponent form
-  // ("1e+25"), which padded to the width carried no number. A value past the
-  // field fails fast, as the 720's numPad does, never shifting the record (#470).
-  const intDigits = dec.floor().toFixed(0);
-  if (intDigits.length > intLen) {
-    throw new Error(`Modelo 721: importe ${dec.toFixed()} excede el campo de ${intLen} dígitos enteros`);
+  // A value past the field fails fast, as the 720's numPad does, never shifting
+  // the record (#470). The size is compared before any digit is written:
+  // toFixed writes one digit per exponent step, so an acquisition cost of
+  // 1e1000000000 (no 720 fit guards it) ran out of memory. The error keeps the
+  // compact form ("1e+25").
+  if (dec.floor().greaterThanOrEqualTo(new Decimal(10).pow(intLen))) {
+    throw new Error(`Modelo 721: importe ${dec.toString()} excede el campo de ${intLen} dígitos enteros`);
   }
+  // toFixed, never toString: decimal.js writes 1e21 and above in exponent form
+  // ("1e+25"), which padded to the width carried no number.
+  const intDigits = dec.floor().toFixed(0);
   const intPart = intDigits.padStart(intLen, "0");
   const fracPart = dec.minus(dec.floor()).mul(new Decimal(10).pow(decLen)).floor().toFixed(0).padStart(decLen, "0");
   return intPart + fracPart;
@@ -199,9 +231,13 @@ function numPad(value: string, intLen: number, decLen: number): string {
 /**
  * Generate Modelo 721 stub (fixed-width prototype — real format is XML per Orden HFP/886/2023).
  *
+ * A coin whose count does not fit the quantity field is left out
+ * (`findModelo721Omissions` names it); it still counts toward the threshold,
+ * and the summary record sums only the detail records written.
+ *
  * @param entries - Crypto positions at year end
  * @param config - Taxpayer information
- * @returns Fixed-width text content, or empty string if below 50K threshold
+ * @returns Fixed-width text content, or empty string if below 50K threshold or every coin is left out
  */
 export function generateModelo721(
   entries: Modelo721Entry[],
@@ -217,8 +253,13 @@ export function generateModelo721(
     return "";
   }
 
-  const detailRecords = entries.map((e) => buildDetailRecord721(e, config));
-  const summaryRecord = buildSummaryRecord721(config, entries);
+  const written = entries.filter((e) => !quantityTooLarge(e));
+  if (written.length === 0) {
+    return "";
+  }
+
+  const detailRecords = written.map((e) => buildDetailRecord721(e, config));
+  const summaryRecord = buildSummaryRecord721(config, written);
 
   return [summaryRecord, ...detailRecords].join("\n");
 }
@@ -280,7 +321,7 @@ function buildDetailRecord721(
   record += entry.valuationEur.isNegative() ? "N" : " ";     // 448: Valuation sign
   record += numPad(entry.valuationEur.toString(), 13, 2);     // 449-462: Valuation value
   record += " ";                                              // 463: Reserved
-  record += numPad(entry.quantity.toString(), 9, 3);          // 464-475: Quantity
+  record += numPad(entry.quantity.toString(), QUANTITY_INT_DIGITS, 3); // 464-475: Quantity
   record += pad("", 1);                                       // 476: Reserved
   record += numPad("100", 3, 2);                              // 477-481: Ownership %
   record += pad("", 18);                                      // 483-500: Blank

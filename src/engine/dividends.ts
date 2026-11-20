@@ -73,6 +73,15 @@ const yearOf = (date: string): string => normalizeDate(date).slice(0, 4);
 /** Both rows come from one broker, or one of them names none (a single-broker file). */
 const sameBroker = (a: CashTransaction, b: CashTransaction): boolean =>
   !a.brokerSource || !b.brokerSource || a.brokerSource === b.brokerSource;
+/** IBKR posts a correction in next year's statement, dated on its dividend's day. */
+const isPostedLate = (w: CashTransaction): boolean => !!w.reportDate && yearOf(w.reportDate) > yearOf(w.dateTime);
+/**
+ * Withholding row `w` (dated `wTime`) may belong by date to dividend `div`
+ * (dated `divTime`): within 7 days, and in the dividend's own year when the
+ * row was posted late.
+ */
+const dateReaches = (w: CashTransaction, wTime: number, postedLate: boolean, div: CashTransaction, divTime: number): boolean =>
+  Math.abs(wTime - divTime) <= SEVEN_DAYS_MS && (!postedLate || yearOf(w.dateTime) === yearOf(div.dateTime));
 
 /**
  * Match every withholding row to the dividend it belongs to (issues #96, #438).
@@ -118,7 +127,7 @@ export function matchWithholdings(
   // next year's statement, dated on its dividend's day) belongs to a dividend
   // of its own year. Without this, a weekly payer's next dividend, in the new
   // year and within 7 days, would take it.
-  const postedLate = withholdings.map((w) => !!w.reportDate && yearOf(w.reportDate) > yearOf(w.dateTime));
+  const postedLate = withholdings.map(isPostedLate);
 
   // Parse each withholding date ONCE and index by ISIN. Original indices are
   // appended in ascending order, so scanning a bucket front-to-back and taking
@@ -135,8 +144,7 @@ export function matchWithholdings(
   /** Row `index` may belong to dividend `divIndex`: within 7 days, not a reversal, same year when posted late. */
   const reaches = (index: number, divIndex: number): boolean =>
     !isReversal[divIndex] &&
-    Math.abs(withholdingTimes[index]! - divTimes[divIndex]!) <= SEVEN_DAYS_MS &&
-    (!postedLate[index] || yearOf(withholdings[index]!.dateTime) === yearOf(dividends[divIndex]!.dateTime));
+    dateReaches(withholdings[index]!, withholdingTimes[index]!, postedLate[index]!, dividends[divIndex]!, divTimes[divIndex]!);
 
   /**
    * First unconsumed, non-refund withholding of the dividend's ISIN and broker
@@ -328,6 +336,36 @@ export function matchWithholdings(
   }
 
   return { dividends, withholdings, pair, parts };
+}
+
+/**
+ * Every withholding row below 0 that some pass of `matchWithholdings` could
+ * give to one of the dividends in `owners`, whatever the row order: the same
+ * ISIN (the same symbol when there is none), the same broker, and within reach
+ * (`reaches`: 7 days, the dividend's own year for a row posted late, never a
+ * reversal). Which row the matcher actually gives a dividend depends on the
+ * order of the rows (pass 1 takes the first row in reach, not the nearest),
+ * so this set is the one answer every order agrees on. A refund (above 0) is
+ * never in it. In file order.
+ */
+export function withholdingsInReach(cashTransactions: CashTransaction[], owners: ReadonlySet<CashTransaction>): CashTransaction[] {
+  const time = (t: CashTransaction): number => parseDate(normalizeDate(t.dateTime)).getTime();
+  const dividends = cashTransactions
+    .filter((d) => owners.has(d) && (d.type === "Dividends" || d.type === "Payment In Lieu Of Dividends") && !new Decimal(d.amount).isNegative())
+    .map((div) => ({ div, divTime: time(div) }));
+  if (dividends.length === 0) return [];
+  return cashTransactions.filter((w) => {
+    if (w.type !== "Withholding Tax" || !new Decimal(w.amount).lessThan(0)) return false;
+    const wTime = time(w);
+    const postedLate = isPostedLate(w);
+    return dividends.some(
+      ({ div, divTime }) =>
+        w.isin === div.isin &&
+        (div.isin !== "" || w.symbol === div.symbol) &&
+        sameBroker(w, div) &&
+        dateReaches(w, wTime, postedLate, div, divTime),
+    );
+  });
 }
 
 /**

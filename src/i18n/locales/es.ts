@@ -531,7 +531,7 @@ const es = {
   "d6.brokers_without_holdings": "Los datos de {{brokers}} que has subido no incluyen tus valores a 31 de diciembre, así que no aparecen aquí. Consúltalos en el extracto de fin de año de {{brokers}}.",
   "d6.positions_title": "Posiciones a declarar",
   "d6.positions_unvalued":
-    "{{count}} posición(es) no se han podido valorar en euros o no traen un número de títulos válido, y se han excluido del total. El motivo puede ser uno de estos: falta el precio de mercado o el tipo de cambio de su moneda al cierre del ejercicio; falta el número de títulos, es un 0 que su valor no confirma o contradice, o tiene más de 10 cifras enteras; el valor no es un número o tiene más de 12 cifras enteras en euros; o la cantidad y el valor tienen signos contrarios. Inclúyelas a mano con su valor en euros y su número de títulos.",
+    "{{count}} posición(es) no se han podido valorar en euros o no traen un número de títulos válido, y se han excluido del total. El motivo puede ser uno de estos: falta el precio de mercado o el tipo de cambio de su moneda al cierre del ejercicio; falta el número de títulos, es un 0 que su valor no confirma o contradice, o tiene más de 10 cifras enteras o más de 20 decimales; el valor no es un número o tiene más de 12 cifras enteras en euros; o la cantidad y el valor tienen signos contrarios. Inclúyelas a mano con su valor en euros y su número de títulos.",
   "d6.quantity_unknown": "El archivo no trae un número de títulos válido para {{count}} posición(es) (falta, no se lee o es un 0 que su valor no confirma): {{holdings}}. No cuentan como 0: toma el número del extracto de fin de año del bróker y escríbelo a mano en el D-6.",
   "d6.cancellations_title": "Cancelaciones",
   "d6.generate_btn": "Generar guía D-6",
@@ -641,6 +641,7 @@ const es = {
   "annex.title": "Anexo de operaciones (Anexo C1)",
   "annex.subtitle": "Detalle individual de operaciones agrupadas por tipo de activo.",
   "annex.operations": "operación(es)",
+  "annex.not_counted": "no se suma",
   "annex.wash_blocked": "Pérdida bloqueada por recompra: {{amount}} EUR (art. 33.5 LIRPF)",
   "annex.wash_dates": "Compras del mismo valor que la bloquean: {{dates}}",
   "annex.wash_hint":
@@ -1071,8 +1072,20 @@ const es = {
     "Se detectó un valor no finito (NaN/Infinito) en un total calculado; revise los archivos importados.",
   "report.non_finite_total.hint":
     "Es posible que un archivo de bróker tenga un importe corrupto o un formato numérico inesperado. Revise las operaciones de origen.",
+  "report.trade_out_of_range":
+    "{{count}} operación(es) del fichero tienen una cantidad, un precio, una comisión o un importe que ningún bróker escribe (más de 20 cifras enteras, o 20 ceros o más tras la coma): {{rows}}. Sus importes no se suman a las casillas.",
+  "report.trade_out_of_range.hint":
+    "Si la cantidad se puede leer, la compra crea su lote sin coste: la venta que lo usa suma su valor de transmisión y no su valor de adquisición, así que puedes pagar de más, nunca de menos. Una venta así no suma su resultado, ni un dividendo, un interés o una retención así su importe. Revisa esas filas en el fichero del bróker y declara su resultado a mano.",
+  "report.cash_amount_too_large":
+    "{{count}} cobro(s) o cargo(s) del fichero tienen un valor en euros que no es un número o que llega a un billón de euros: {{rows}}. Sus importes no se suman a las casillas.",
+  "report.cash_amount_too_large.hint":
+    "Suele ser un error del fichero o del tipo de cambio: ningún dividendo, interés o retención real llega a un billón de euros. Revisa esas filas en el fichero del bróker y en los tipos de cambio, y declara su importe a mano.",
+  "report.withholding_of_excluded_dividend":
+    "{{count}} retención(es) del fichero están a 7 días o menos de un dividendo del mismo valor que no se suma: {{rows}}. Pueden ser de ese dividendo, así que tampoco se suman. Así ningún otro dividendo las descuenta.",
+  "report.withholding_of_excluded_dividend.hint":
+    "Cuando declares a mano ese dividendo, declara también la retención que sea suya. Si una de ellas es de otro dividendo, declárala con ese otro dividendo.",
   "report.non_finite_disposal":
-    "{{count}} venta(s) tienen un importe que no es un número (NaN o infinito): {{rows}}. Ese importe no se suma a las casillas. El resto de las operaciones del año sí se suman.",
+    "{{count}} venta(s) tienen un importe que no es un número (NaN o infinito) o que pasa de 12 cifras enteras en euros: {{rows}}. Ese importe no se suma a las casillas. El resto de las operaciones del año sí se suman.",
   "report.non_finite_disposal.hint":
     "Si falta el valor de transmisión de una venta, DeclaRenta tampoco suma su valor de adquisición, para no crear una pérdida que nada justifica. Si falta el valor de adquisición, suma el de transmisión. Revisa esas operaciones en el fichero del bróker y en los tipos de cambio, y declara su resultado a mano.",
   "flatex.lagerstellenwechsel.unmatched":
