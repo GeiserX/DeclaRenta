@@ -1557,6 +1557,34 @@ describe("#467 a crypto buy or sale whose quantity, side or coin cannot be read 
     expect(lotsGain(shifted, method)).toEqual(["2400.00", "2000.00", "400.00"]);
   });
 
+  // The same at Kraken: read with its sign dropped, a buy of vol "-0.05"
+  // (coins going out) was one more lot of 0.05 with no word (#467). Kraken
+  // writes vol positive on both sides, so the row books nothing and is named.
+  const krLots = (vol: string, pair = "XBTEUR"): Statement => kraken(
+    `"T1","O1","${pair}","2025-02-01 10:00:00","buy","limit","40000.00","2000.00","1.00","${vol}","0.0","","L1"`,
+    `"T2","O2","XBTEUR","2025-03-01 10:00:00","buy","limit","40000.00","2000.00","0.00","0.05","0.0","","L2"`,
+    `"T3","O3","XBTEUR","2025-06-01 10:00:00","sell","limit","48000.00","2400.00","0.00","0.05","0.0","","L3"`,
+  );
+  const krGain = (parsed: Statement, method: FxMethod): string[] => {
+    const cg = run([[parsed, "Kraken"]], 2025, method).capitalGains;
+    return [cg.transmissionValue, cg.acquisitionValue, cg.netGainLoss].map((d) => d.toFixed(2));
+  };
+  it.each(METHODS)("[%s] control: a Kraken buy of vol 0.05 is the lot the sale takes, with no message", (method) => {
+    const parsed = krLots("0.05");
+    expect(parsed.parserMessages ?? []).toEqual([]);
+    expect(krGain(parsed, method)).toEqual(["2400.00", "2001.00", "399.00"]);
+  });
+  it.each(METHODS)("[%s] a Kraken buy of vol -0.05 books nothing and is named, never a lot of 0.05", (method) => {
+    const parsed = krLots("-0.05");
+    expect(unreadableRows(parsed)).toBe('BTC 20250201 [vol: "-0.05"]');
+    expect(parsed.trades.filter((t) => t.tradeDate === "20250201").map((t) => [t.buySell, t.quantityUnknown])).toEqual([["BUY", true]]);
+    expect(krGain(parsed, method)).toEqual(["2400.00", "2000.00", "400.00"]);
+  });
+  it("a crypto-quoted Kraken buy of a negative vol names both coins, and a vol of -0 stays a written zero", () => {
+    expect(unreadableRows(krLots("-0.05", "XETHXXBT"))).toBe('ETH 20250201 [vol: "-0.05"]; BTC 20250201 [vol: "-0.05"]');
+    expect(krLots("-0.0").parserMessages ?? []).toEqual([]);
+  });
+
   it("a crypto-quoted Binance row with no readable side or quantity names both coins", () => {
     expect(unreadableRows(binance("2025-03-01 10:00:00,ETHBTC,,0.05,1,0.05,0BTC"))).toBe('ETH 20250301 [Side: ""]; BTC 20250301 [Side: ""]');
     expect(unreadableRows(binance("2025-03-01 10:00:00,ETHBTC,SELL,0.05,,0.05,0BTC"))).toBe('ETH 20250301 [Executed: ""]; BTC 20250301 [Executed: ""]');

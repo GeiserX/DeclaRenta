@@ -318,7 +318,10 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     // zero too: FIFO values a trade at price × vol, so the sale went for 0 €
     // and a 6000 € gain became a 3000 € loss. It is kept as a trade that
     // books nothing for each coin it names, and named (#467).
-    const badCol = quantityUnreadable(fields[cols.vol]) ? "vol"
+    // Kraken writes vol positive on both sides. A buy of a negative vol says
+    // the coins went out, so it contradicts its side: read with its sign
+    // dropped it was one more lot, with no word (#467). It is named by vol.
+    const badCol = quantityUnreadable(fields[cols.vol]) || (type === "buy" && toFiniteDecimal(fields[cols.vol]!).lt(0)) ? "vol"
       : !isFiat(quote) && quantityUnreadable(fields[cols.cost]) ? "cost"
       : !priceUsable && !volDec.isZero() && (quantityUnreadable(fields[cols.cost]) || costDec.isZero()) ? "price"
       : "";
