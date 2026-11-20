@@ -20,6 +20,8 @@
  * - A status that named an execution and a cancelled rest dropped the row
  *   with no word.
  * - A Buy with a negative share count was booked as a second purchase.
+ * - A buy or sale whose amount contradicts shares × price (a bond quoted in %)
+ *   was booked at shares × price.
  */
 import { describe, it, expect } from "vitest";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
@@ -342,5 +344,25 @@ describe("Scalable round 3: rows booked against what the file says", () => {
     // The purchase it reverses is still booked, so the sale takes that lot
     // until the user corrects it, and the warning says which row to check.
     expect(r.capitalGains.acquisitionValue.toFixed(2)).toBe("2200.00");
+  });
+
+  it.each(METHODS)("[%s] a buy or sale whose amount contradicts shares × price is named, never booked at shares × price", (method) => {
+    const bond = (type: string, shares: string, price: string, amount: string, date: string, fee = "0") =>
+      `${date};10:00;Executed;${type}${date};Bund;Bond;${type};DE0001102580;${shares};${price};${amount};${fee};0;EUR`;
+    const control = [bond("Buy", "1000", "0,99", "-990,00", "2025-02-03"), bond("Sell", "-1000", "0,98", "980,00", "2025-09-03")];
+    expect(parse(control).parserMessages).toBeUndefined();
+    expect(report(control, method).capitalGains.netGainLoss.toFixed(2)).toBe("-10.00");
+    // A fee in or out of the amount, and a price written rounded, still agree.
+    const fee = [bond("Buy", "1000", "0,99", "-990,99", "2025-02-03", "-0,99"), bond("Sell", "-1000", "0,98", "979,01", "2025-09-03", "-0,99")];
+    expect(parse(fee).parserMessages).toBeUndefined();
+    expect(parse([bond("Buy", "3", "33,33", "-100,00", "2025-02-03")]).parserMessages).toBeUndefined();
+    const pct = [bond("Buy", "1000", "99,00", "-990,00", "2025-02-03"), bond("Sell", "-1000", "98,00", "980,00", "2025-09-03")];
+    const s = parse(pct);
+    expect(msg(s, "parser.trade_row_unreadable")).toBe(
+      'Bund (DE0001102580) 20250203 [shares: "1000", price: "99,00", amount: "-990,00"]; Bund (DE0001102580) 20250903 [shares: "-1000", price: "98,00", amount: "980,00"]');
+    const r = report(pct, method);
+    expect(r.capitalGains.transmissionValue.toFixed(2)).toBe("0.00");
+    expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("0.00");
+    expect(r.messages.map((m) => m.id)).toContain("parser.trade_row_unreadable");
   });
 });

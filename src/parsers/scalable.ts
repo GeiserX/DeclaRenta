@@ -419,6 +419,25 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
           unreadableCell(headers[cols.price] ?? "price", priceCell)));
         continue;
       }
+    } else if (!amountAbs.isZero()) {
+      // The amount is the money the trade moved: shares × price, with or
+      // without the fee and the tax. When it contradicts shares × price (a
+      // bond quoted in % of its face: 1000 at 99,00 for 990,00), FIFO would
+      // book a value 100 times too large: the row books nothing and is named
+      // by its shares, price and amount cells, as in Freedom24 (#467). The
+      // tolerance (1 % and a cent) covers a price written rounded. A zero or
+      // unreadable amount is no evidence, so the row is booked as before.
+      const value = new Decimal(parseNumber(shares)).abs().times(price);
+      const slack = value.times("0.01").plus("0.01").plus(new Decimal(fee).abs()).plus(new Decimal(tax).abs());
+      if (amountAbs.minus(value).abs().greaterThan(slack)) {
+        trades.push(unreadableTrade({
+          tradeID: reference || `scalable-row-${tradeDate}-${isin}-${i}`,
+          symbol: description, description, isin, assetCategory, currency: currency || "EUR", tradeDate, tradeTime,
+          buySell: isSell ? "SELL" : "BUY", exchange: "XETR",
+        }, [unreadableCell(headers[cols.shares] ?? "shares", fields[cols.shares]), unreadableCell(headers[cols.price] ?? "price", priceCell),
+          unreadableCell(headers[cols.amount] ?? "amount", fields[cols.amount])].join(", ")));
+        continue;
+      }
     }
     const tradePrice = priceReadable && !new Decimal(price).isZero() ? price : amountAbs.div(new Decimal(parseNumber(shares)).abs()).toString();
 
