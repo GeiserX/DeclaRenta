@@ -38,11 +38,13 @@ export function mergeStatement(target: Statement, source: Statement, brokerName?
   target.toDate = maxDate(target.toDate, source.toDate);
   target.period = target.period || source.period;
 
-  target.trades.push(...source.trades);
-  target.cashTransactions.push(...source.cashTransactions);
-  target.corporateActions.push(...source.corporateActions);
-  target.openPositions.push(...source.openPositions);
-  target.securitiesInfo.push(...source.securitiesInfo);
+  // One push per row: push(...rows) passes every row as an argument and throws
+  // RangeError past about 125k rows, so a large export could not be merged.
+  for (const trade of source.trades) target.trades.push(trade);
+  for (const cash of source.cashTransactions) target.cashTransactions.push(cash);
+  for (const action of source.corporateActions) target.corporateActions.push(action);
+  for (const position of source.openPositions) target.openPositions.push(position);
+  for (const info of source.securitiesInfo) target.securitiesInfo.push(info);
   target.cashBalances = [...(target.cashBalances ?? []), ...(source.cashBalances ?? [])];
   target.optionExercises = [...(target.optionExercises ?? []), ...(source.optionExercises ?? [])];
   target.parserWarnings = [...(target.parserWarnings ?? []), ...(source.parserWarnings ?? [])];
