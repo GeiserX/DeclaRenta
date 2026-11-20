@@ -386,7 +386,6 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     if (sharesNum === 0) continue;
     if (!isSell && !isBuy) continue;
 
-    const feeNum = parseFloat(parseNumber(fee));
     // Scalable's assetType column flags ETFs/funds explicitly ("ETF").
     // Map those to FUND; "Security" and others remain STK.
     const assetCategory: Trade["assetCategory"] = /etf|fund/.test(assetType) ? "FUND" : "STK";
@@ -478,7 +477,12 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       openCloseIndicator: isSell ? "C" : "O",
       exchange: "XETR",
       commissionCurrency: currency || "EUR",
-      commission: feeNum !== 0 ? `-${Math.abs(feeNum)}` : "0",
+      // The fee keeps the sign Scalable writes: a paid fee is negative
+      // ("-0,99"), a positive one is money paid back, a rebate, as
+      // commissionCost reads it. Booked by its absolute value, a rebate of 5
+      // lowered the gain by 5 instead of raising it (#467). A charge written
+      // positive can only raise the tax.
+      commission: new Decimal(fee).isZero() ? "0" : new Decimal(fee).toString(),
       taxes: tax,
       multiplier: "1",
     });

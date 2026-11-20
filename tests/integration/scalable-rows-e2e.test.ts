@@ -24,6 +24,7 @@
  *   was booked at shares × price.
  * - A Distribution with a written 0 amount and a positive tax (a refund) was
  *   booked as a new withholding, so the refund raised the 0597 or the 0588.
+ * - A positive fee (a rebate) was booked as a charge, so it lowered the gain.
  */
 import { describe, it, expect } from "vitest";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
@@ -428,5 +429,33 @@ describe("Scalable round 4: a Distribution of 0 with a positive tax is a refund,
       expect(locale[REFUND]).toContain("{{rows}}");
       expect(locale[`${REFUND}.hint`]).toContain("Renta Web");
     }
+  });
+});
+
+describe("Scalable round 4: a trade fee keeps its sign, so a rebate never lowers the gain (#467)", () => {
+  // Buy 10 at 100 € and sell them at 150 €: 1500 − 1000 = 500 before fees.
+  const buyFee = (fee: string) => `2025-02-03;09:15;Executed;U1;Apple;Security;Buy;US0378331005;10;100,00;-1000,00;${fee};0;EUR`;
+  const sellFee = (fee: string) => `2025-09-03;09:15;Executed;U2;Apple;Security;Sell;US0378331005;-10;150,00;1500,00;${fee};0;EUR`;
+  const gains = (r: TaxReport): string[] =>
+    [r.capitalGains.transmissionValue, r.capitalGains.acquisitionValue, r.capitalGains.netGainLoss].map((d) => d.toFixed(2));
+
+  it.each(METHODS)("[%s] control: two paid fees of -1,00 give a gain of 498", (method) => {
+    expect(parse([buyFee("-1,00"), sellFee("-1,00")]).trades.map((t) => t.commission)).toEqual(["-1", "-1"]);
+    expect(gains(report([buyFee("-1,00"), sellFee("-1,00")], method))).toEqual(["1499.00", "1001.00", "498.00"]);
+  });
+
+  it.each(METHODS)("[%s] a sale fee of +5,00 is a rebate: the gain is 504, not 494", (method) => {
+    const rows = [buyFee("-1,00"), sellFee("5,00")];
+    expect(parse(rows).trades.map((t) => t.commission)).toEqual(["-1", "5"]);
+    expect(gains(report(rows, method))).toEqual(["1505.00", "1001.00", "504.00"]);
+  });
+
+  it.each(METHODS)("[%s] a buy fee of +5,00 is a rebate: the gain is 504, not 494", (method) => {
+    const rows = [buyFee("5,00"), sellFee("-1,00")];
+    expect(gains(report(rows, method))).toEqual(["1499.00", "995.00", "504.00"]);
+  });
+
+  it("a fee of 0 or an empty fee books no commission", () => {
+    for (const fee of ["0", "0,00", ""]) expect(parse([buyFee(fee)]).trades[0]!.commission, fee).toBe("0");
   });
 });
