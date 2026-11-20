@@ -1557,6 +1557,30 @@ describe("#467 a crypto buy or sale whose quantity, side or coin cannot be read 
     expect(lotsGain(shifted, method)).toEqual(["2400.00", "2000.00", "400.00"]);
   });
 
+  // With an empty Fee the split leaves no cell past the header with text,
+  // only an empty one, and the row was still booked as 1 BTC with a fee of
+  // 2000 (#467). Such a row is named when a numeric cell and the next read
+  // as one number with a comma and Price × Executed does not give Amount.
+  const bnNoFee = (cells: string): Statement => binance(
+    `2025-02-01 10:00:00,BTCEUR,BUY,${cells}`,
+    "2025-03-01 10:00:00,BTCEUR,BUY,40000.00,0.05,2000.00,0EUR",
+    "2025-06-01 10:00:00,BTCEUR,SELL,48000.00,0.05,2400.00,0EUR",
+  );
+  it.each(METHODS)("[%s] control: an empty Fee and a trailing empty cell keep a row that squares, with no message", (method) => {
+    for (const cells of ["40000.00,0.05BTC,2000.00,", "40000.00,0.05BTC,2000.00,,", "40000,1,40000,,"]) {
+      const parsed = bnNoFee(cells);
+      expect(parsed.parserMessages ?? [], cells).toEqual([]);
+      expect(lotsGain(parsed, method), cells).toEqual(["2400.00", "2000.00", "400.00"]);
+    }
+  });
+  it.each(METHODS)("[%s] a Binance buy of 1,5BTC with no quotes and an empty Fee books nothing and is named", (method) => {
+    for (const cells of ["40000.00,1,5BTC,2000.00,", "40000.00,1,5,2000.00,"]) {
+      const parsed = bnNoFee(cells);
+      expect(unreadableRows(parsed), cells).toBe(`BTC 20250201 [Price,Executed,Amount,Fee: ${JSON.stringify(cells)}]`);
+      expect(lotsGain(parsed, method), cells).toEqual(["2400.00", "2000.00", "400.00"]);
+    }
+  });
+
   // The same at Kraken: read with its sign dropped, a buy of vol "-0.05"
   // (coins going out) was one more lot of 0.05 with no word (#467). Kraken
   // writes vol positive on both sides, so the row books nothing and is named.

@@ -1636,11 +1636,25 @@ function parseBinanceCsv(lines: string[]): Statement {
     // word (1 BTC instead of 1.5, #467). Whether "1,5" is 1.5 or 15 the file
     // does not say, so the row is named by its numeric cells as written. A
     // trailing empty cell (a trailing comma) moves nothing.
+    // With an empty Fee the split leaves only an empty cell past the header,
+    // as a trailing comma does. Such a row is shifted too when a numeric
+    // cell is a plain integer that reads with the next cell as one number
+    // with a comma ("1" and "5BTC", "1" and "5") and Price × Executed does
+    // not give Amount, as it does on every row Binance writes.
     const numericFrom = Math.min(...[cols.price, cols.executed, cols.amount, cols.fee].filter((c) => c >= 0));
-    const shifted = fields.slice(headerWidth).some((f) => f.trim() !== "");
     const executedCell = readCoinAmount(fields[cols.executed], [symbol]);
     const amountCell = readCoinAmount(fields[cols.amount], [currency]);
     const priceCell = readCoinAmount(fields[cols.price], [currency]);
+    const squares = (): boolean => {
+      if (!priceCell || !executedCell || !amountCell) return false;
+      const expected = new Decimal(priceCell.amount).mul(executedCell.amount);
+      const written = new Decimal(amountCell.amount);
+      return expected.minus(written).abs().lessThanOrEqualTo(written.abs().mul("0.01"));
+    };
+    const commaSplit = (): boolean => [cols.price, cols.executed, cols.amount].some((c) =>
+      c >= 0 && /^[+-]?\d+$/.test((fields[c] ?? "").trim()) && /^\d+(\.\d+)?[A-Za-z]*$/.test((fields[c + 1] ?? "").trim()));
+    const shifted = fields.slice(headerWidth).some((f) => f.trim() !== "") ||
+      (fields.length > headerWidth && commaSplit() && !squares());
     const badCell = shifted ? numericFrom
       : sideLower !== "buy" && sideLower !== "sell" ? cols.side
       : !executedCell ? cols.executed
