@@ -121,29 +121,38 @@ function parsePair(pair: string): { symbol: string; currency: string } | null {
 }
 
 // ---------------------------------------------------------------------------
-// Fee parsing: "0.001BTC" -> { amount: "0.001", asset: "BTC" }
+// Amount parsing: "0.001BTC" -> { amount: "0.001", asset: "BTC" }
 // ---------------------------------------------------------------------------
 
-/** Extract numeric value from strings like "285.7CTK" or "0.001BTC" or plain "42000.00" */
-function parseAmountWithSuffix(str: string): { amount: string; asset: string } {
-  const trimmed = str.trim();
-  if (!trimmed) return { amount: "0", asset: "" };
-
-  const match = trimmed.match(/^([0-9.]+)([A-Za-z]+)$/);
-  if (match) {
-    return { amount: match[1]!, asset: match[2]!.toUpperCase() };
+/**
+ * Read an Executed, Amount, Price or Fee cell against the coins it can be
+ * written in: a plain finite number ("42000.00"), or one followed by one of
+ * `coins` ("285.7CTK", "0.001BTC"). The coin is matched as a whole, the
+ * longest first, so a coin that starts with a digit keeps its digits:
+ * "1001INCH" is 100 1INCH. A letters-only match glued them onto the number
+ * and read 1001 with no word (#467). Returns null for any other cell (empty,
+ * text, "1,000.5BTC", or a number in another coin, which may be any amount).
+ */
+function readCoinAmount(cell: string | undefined, coins: readonly string[]): { amount: string; asset: string } | null {
+  const upper = (cell ?? "").trim().toUpperCase();
+  for (const coin of [...coins.filter((c) => c), ""].sort((a, b) => b.length - a.length)) {
+    if (!upper.endsWith(coin)) continue;
+    const num = upper.slice(0, upper.length - coin.length);
+    if (/^[0-9.]+$/.test(num) && toFiniteDecimalString(num, "", false) !== "") return { amount: num, asset: coin };
   }
-
-  const numMatch = trimmed.match(/^[0-9.]+$/);
-  if (numMatch) {
-    return { amount: trimmed, asset: "" };
-  }
-
-  return { amount: "0", asset: "" };
+  return null;
 }
 
-function parseFee(feeStr: string): { amount: string; asset: string } {
-  return parseAmountWithSuffix(feeStr);
+/**
+ * The Fee cell: in the coin received or BNB, read whole (readCoinAmount).
+ * A fee in any other coin keeps the old letters-only read. An empty or
+ * unreadable fee is no fee, which can only raise the tax.
+ */
+function parseFee(feeStr: string, coins: readonly string[]): { amount: string; asset: string } {
+  const known = readCoinAmount(feeStr, coins);
+  if (known) return known;
+  const match = feeStr.trim().match(/^([0-9.]+)([A-Za-z]+)$/);
+  return match ? { amount: match[1]!, asset: match[2]!.toUpperCase() } : { amount: "0", asset: "" };
 }
 
 // ---------------------------------------------------------------------------
@@ -1539,16 +1548,6 @@ function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint, uni
 // Trade History parser (Date(UTC),Pair,Side,Price,Executed,Amount,Fee)
 // ---------------------------------------------------------------------------
 
-/**
- * Whether an Executed or Amount cell is a number this parser reads: digits and
- * dots, optionally followed by the coin ("0.1", "285.7CTK"), finite. Anything
- * else ("", "abc", "1,000.5BTC") was read as 0 units with no word (#467).
- */
-function readableAmount(cell: string | undefined): boolean {
-  const m = /^([0-9.]+)[A-Za-z]*$/.exec((cell ?? "").trim());
-  return m !== null && toFiniteDecimalString(m[1]!, "", false) !== "";
-}
-
 function parseBinanceCsv(lines: string[]): Statement {
   const headers = parseCsvLine(lines[0]!, ",");
   const cols = resolveColumns(headers);
@@ -1592,11 +1591,15 @@ function parseBinanceCsv(lines: string[]): Statement {
     // gain, a loss or an art. 33.5.e repurchase: it is kept as a trade that
     // books nothing for each coin it names, and named by its cell, never
     // skipped with no word or booked as zero units (#467).
-    const priceReadable = readableAmount(fields[cols.price]);
+    // Executed is in the coin bought or sold, Amount and Price in the quote
+    // (readCoinAmount).
+    const executedCell = readCoinAmount(fields[cols.executed], [symbol]);
+    const amountCell = readCoinAmount(fields[cols.amount], [currency]);
+    const priceCell = readCoinAmount(fields[cols.price], [currency]);
     const badCell = sideLower !== "buy" && sideLower !== "sell" ? cols.side
-      : !readableAmount(fields[cols.executed]) ? cols.executed
-      : !isFiat(currency) && !readableAmount(fields[cols.amount]) ? cols.amount
-      : isFiat(currency) && !priceReadable && !readableAmount(fields[cols.amount]) ? cols.price
+      : !executedCell ? cols.executed
+      : !isFiat(currency) && !amountCell ? cols.amount
+      : isFiat(currency) && !priceCell && !amountCell ? cols.price
       : -1;
     if (badCell >= 0) {
       const cell = unreadableCell((headers[badCell] ?? "").trim(), fields[badCell]);
@@ -1617,18 +1620,18 @@ function parseBinanceCsv(lines: string[]): Statement {
     // non-finite price/qty silently poisons every casilla total. parseEu=false
     // keeps the original raw-string parse (these cells are plain decimals; the
     // suffix-parsed ones are already normalized to [0-9.]+).
-    const executed = toFiniteDecimal(parseAmountWithSuffix((fields[cols.executed] ?? "0").trim()).amount || "0", "0", false);
-    const amount = toFiniteDecimal(parseAmountWithSuffix((fields[cols.amount] ?? "0").trim()).amount || "0", "0", false);
+    const executed = toFiniteDecimal(executedCell!.amount, "0", false);
+    const amount = toFiniteDecimal(amountCell?.amount ?? "0", "0", false);
     // FIFO values a fiat-quoted trade at Price × Executed. A Price it cannot
     // read ("", "abc", "30,000.00") was read as 0, so a sale booked no
     // proceeds and a full loss with no word. Then the price is Amount ÷
     // Executed, the file's own numbers (#467). A written zero stays the
     // file's word, and a row of zero units moves nothing whatever its price.
-    const price = priceReadable
-      ? toFiniteDecimal(parseAmountWithSuffix(fields[cols.price]!.trim()).amount, "0", false)
+    const price = priceCell
+      ? toFiniteDecimal(priceCell.amount, "0", false)
       : executed.isZero() ? new Decimal(0) : amount.div(executed);
 
-    const fee = parseFee((fields[cols.fee] ?? "").trim());
+    const fee = parseFee(fields[cols.fee] ?? "", [symbol, currency, "BNB"]);
     const feeAmount = toFiniteDecimal(fee.amount || "0", "0", false);
 
     const key = occurrenceKey(seenKeys, [dateStr, pairStr, sideLower, ...[cols.price, cols.executed, cols.amount, cols.fee].map((c) => (fields[c] ?? "").trim())].join("|"));
