@@ -244,4 +244,24 @@ describe("#467 Binance Transaction History: a Change split by an unquoted comma 
     const ok = parse(header, ["1,2025-02-01 10:00:00,Spot,Buy,BTC,0.5,20000,via app, card", "1,2025-02-01 10:00:00,Spot,Sell,EUR,-20000,-20000,"]);
     expect(ok.parserMessages ?? []).toEqual([]);
   });
+
+  // An integer Change, a number under EUR_Value and a comma only in Remark
+  // is no split: split, "1,5" would leave the EUR value under Remark, and
+  // "via app" is no number (verify of 4235670).
+  it.each(METHODS)("[%s] with EUR_Value, an integer Change and a comma only in Remark keep the booking; 1,5 split before it is named", (method) => {
+    const header = "User_ID,UTC_Time,Account,Operation,Coin,Change,EUR_Value,Remark";
+    const lots = (first: string): Statement => parse(header, [
+      `1,2025-02-01 10:00:00,Spot,Buy,BTC,${first}`, "1,2025-02-01 10:00:00,Spot,Sell,EUR,-40000,-40000,",
+      "1,2025-03-01 10:00:00,Spot,Buy,BTC,1,40000,", "1,2025-03-01 10:00:00,Spot,Sell,EUR,-40000,-40000,",
+      "1,2025-06-01 10:00:00,Spot,Sell,BTC,-1,50000,", "1,2025-06-01 10:00:00,Spot,Buy,EUR,50000,50000,",
+    ]);
+    const kept = lots("1,40000,via app, card");
+    expect(kept.parserMessages ?? []).toEqual([]);
+    expect(disposals(report(kept, method), "BTC")).toEqual(disposals(report(lots("1,40000,via app"), method), "BTC"));
+    expect(disposals(report(kept, method), "BTC")).toEqual(["1 p50000.00 c40000.00 g10000.00"]);
+    for (const split of ["1,5,40000,", "1,5,40000,note", "1,5,,"]) {
+      const s = lots(split);
+      expect(message(s.parserMessages, AMOUNT)?.context?.rows, split).toBe(`BTC Buy 20250201 [Change,EUR_Value,Remark: ${JSON.stringify(split.replace(/,+$/, ""))}]`);
+    }
+  });
 });

@@ -592,7 +592,14 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       // the Change is not read and the row is named by its cells as written.
       const nextCell = (fields[cols.change + 1] ?? "").trim();
       const nextInvalid = cols.change + 1 === cols.eurValue && nextCell !== "" && toFiniteDecimalString(nextCell, "", false) === "";
-      const splitChange = fields.length > headerWidth && (nextInvalid || (/^[+-]?\d+$/.test(changeStr) && /^\d+(\.\d+)?$/.test(nextCell)));
+      // Under EUR_Value, a split Change leaves the EUR value one cell on: a
+      // row whose next cell after it is text ("1,20000,via app, card") is no
+      // split, only a comma in Remark, and keeps its booking (verify of
+      // 4235670). An empty or numeric cell there keeps the row named.
+      const afterNext = (fields[cols.change + 2] ?? "").trim();
+      const eurValueMoved = cols.change + 1 !== cols.eurValue || afterNext === "" || toFiniteDecimalString(afterNext, "", false) !== "";
+      const splitChange = fields.length > headerWidth &&
+        (nextInvalid || (/^[+-]?\d+$/.test(changeStr) && /^\d+(\.\d+)?$/.test(nextCell) && eurValueMoved));
       if (splitChange) change = null;
       const changeCell = splitChange
         ? unreadableCell(headers.slice(cols.change, headerWidth).map((h) => h.trim()).join(","), fields.slice(cols.change).join(",").replace(/,+$/, ""))
