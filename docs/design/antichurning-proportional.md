@@ -587,7 +587,11 @@ práctico Renta 2025. The decisions, each pinned in
       written in another currency than its Currency cell ("EUR 1500" with
       USD) is not booked and is named with those cells (it was booked in
       the Currency cell's currency). An empty Currency cell takes the
-      currency in front of the amounts.
+      currency in front of the amounts. A closed position does the same
+      with its Cost basis, Gross proceeds and Fees: one written in another
+      currency than its Currency cell keeps both legs as unreadable rows
+      named with those cells (it was booked in the Currency cell's
+      currency).
       A split, merger or spin-off row with no ticker is a corporate-action
       row with no security, named as not applied (it was dropped with no
       word, so a split's later sale kept its pre-split cost and a cash

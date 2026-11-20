@@ -237,7 +237,13 @@ function parseTrades(
     const grossProceeds = grossProceedsCol >= 0 ? (row[grossProceedsCol] ?? "0").trim() : "0";
     const grossPnl = grossPnlCol >= 0 ? (row[grossPnlCol] ?? "0").trim() : "0";
     const fees = feesCol >= 0 ? (row[feesCol] ?? "0").trim() : "0";
-    const currency = currencyCol >= 0 ? (row[currencyCol] ?? "USD").trim() : "USD";
+    // The currency written in front of Cost basis, Gross proceeds or Fees
+    // ("USD 1000") fills an empty Currency cell, as in the transaction log.
+    const prefixed = ([[costBasisCol, "Cost basis"], [grossProceedsCol, "Gross proceeds"], [feesCol, "Fees"]] as const)
+      .filter(([col]) => col >= 0)
+      .map(([col, name]) => ({ col, name, prefix: readRevolutNumber(row[col]).currency }));
+    const currencyCell = (row[currencyCol] ?? "USD").trim();
+    const currency = currencyCell || (prefixed.find((p) => p.prefix !== "")?.prefix ?? "");
 
     // All money/quantity parsing routes through readRevolutNumber, so a
     // garbled cell can never yield NaN/Infinity (which would poison cost
@@ -264,14 +270,28 @@ function parseTrades(
     // sale became a full loss with no word (#467). Both legs are kept as
     // unreadable rows named by that cell: they book nothing, and the
     // purchase is no lot left open. A written 0 stays the file's word.
-    const proceedsCell = row[grossProceedsCol];
-    if (readRevolutNumber(proceedsCell).amount === undefined) {
+    const keepUnreadable = (cell: string): void => {
       const leg = { symbol, isin: "", assetCategory, currency, exchange: "REVOLUT" } as const;
-      const cell = unreadableCell(headers[grossProceedsCol] ?? "Gross proceeds", proceedsCell);
       trades.push(
         unreadableTrade({ ...leg, tradeID: `revolut-open-${dateAcquired}-${symbol}-${i}`, tradeDate: dateAcquired, buySell: "BUY" }, cell),
         unreadableTrade({ ...leg, tradeID: `revolut-close-${dateSold}-${symbol}-${i}`, tradeDate: dateSold, buySell: "SELL" }, cell),
       );
+    };
+    const proceedsCell = row[grossProceedsCol];
+    if (readRevolutNumber(proceedsCell).amount === undefined) {
+      keepUnreadable(unreadableCell(headers[grossProceedsCol] ?? "Gross proceeds", proceedsCell));
+      continue;
+    }
+    // An amount written in another currency than the Currency cell was read
+    // in the Currency cell's currency: proceeds of "EUR 900" against a cost
+    // of "USD 1000" with Currency USD were booked as 900 USD, so a loss of
+    // about 11 € became one of 112 € with no word (#467). Both legs are kept
+    // as unreadable rows named by the Currency cell and each cell that
+    // disagrees, as the transaction log does: they book nothing.
+    const mismatch = prefixed.filter((p) => p.prefix !== "" && p.prefix !== currency)
+      .map((p) => unreadableCell(headers[p.col] ?? p.name, row[p.col]));
+    if (mismatch.length > 0) {
+      keepUnreadable([unreadableCell(headers[currencyCol] ?? "Currency", currencyCell), ...mismatch].join(", "));
       continue;
     }
     // Use absolute values to avoid double-negative if input is already negative

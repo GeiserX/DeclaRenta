@@ -17,7 +17,7 @@
  *   by the column lookup: every trade was priced 0, or the file gave an
  *   empty statement with no word.
  * - The currency in front of an amount was ignored: "EUR 1500" with a
- *   Currency of USD was booked as 1500 USD.
+ *   Currency of USD was booked as 1500 USD, in both formats.
  * - A split, merger or spin-off with no ticker was dropped with no word: a
  *   split's later sale kept its pre-split cost, a cash merger's money was lost.
  */
@@ -376,5 +376,33 @@ describe("Revolut splits and other corporate actions with no ticker are kept and
       expect(s.trades.map((t) => t.tradeID), row.join()).toEqual(["revolut-buy-20250203-AAPL-1"]);
       expect(s.parserMessages, row.join()).toBeUndefined();
     }
+  });
+});
+
+describe("Revolut closed positions: an amount whose currency disagrees with the Currency column is never booked in the wrong currency", () => {
+  it.each(METHODS)("[%s] control: amounts written \"USD 1000\" and \"USD 1500\" with a Currency of USD give a 547.80 € gain", async (method) => {
+    const r = await report([closed({ "Cost basis": "USD 1000", "Gross proceeds": "USD 1500" })], method, HC);
+    expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("547.80");
+  });
+
+  it.each(METHODS)("[%s] proceeds of \"EUR 900\" with a Currency of USD keeps both legs as unreadable rows that book nothing", async (method) => {
+    for (const [o, cells] of [
+      [{ "Cost basis": "USD 1000", "Gross proceeds": "EUR 900" }, 'Currency: "USD", Gross proceeds: "EUR 900"'],
+      [{ "Cost basis": "EUR 1000", "Gross proceeds": "EUR 1500" }, 'Currency: "USD", Cost basis: "EUR 1000", Gross proceeds: "EUR 1500"'],
+      [{ Fees: "EUR 2" }, 'Currency: "USD", Fees: "EUR 2"'],
+    ] as const) {
+      const s = await parse([closed(o)], HC);
+      expect(msg(s, "parser.trade_row_unreadable"), cells).toBe(`AAPL 20250203 [${cells}]; AAPL 20250603 [${cells}]`);
+      const r = await report([closed(o)], method, HC);
+      expect(r.capitalGains.transmissionValue.toFixed(2), cells).toBe("0.00");
+      expect(r.capitalGains.netGainLoss.toFixed(2), cells).toBe("0.00");
+    }
+  });
+
+  it.each(METHODS)("[%s] an empty Currency cell takes the currency written in front of the amounts", async (method) => {
+    const o = { Currency: "", "Cost basis": "USD 1000", "Gross proceeds": "USD 1500" };
+    expect((await parse([closed(o)], HC)).trades.map((t) => t.currency)).toEqual(["USD", "USD"]);
+    const r = await report([closed(o)], method, HC);
+    expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("547.80");
   });
 });
