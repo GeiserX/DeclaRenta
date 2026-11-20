@@ -1120,6 +1120,10 @@ const eu: TranslationKeys = {
     "eToro: DeclaRentak ez ditu ezagutzen «{{sheet}}» orriko {{columns}} zutabeak. Ez du orri horretako errenkadarik inportatu.",
   "etoro.columns_not_detected.hint":
     "eTorok batzuetan zutabeen izenak aldatzen ditu. DeclaRentak ezagutzen ez baditu, ezin ditu orri horretako errenkadak irakurri, eta ez du bat ere batzen. Deskargatu berriro kontuaren XLSX txosten osoa eta igo berriro. Abisuak jarraitzen badu, gehitu eskuz Renta Web-en orri horretako eragiketak, dibidenduak edo interesak.",
+  "etoro.staking_not_imported":
+    "eToro: staking-eko {{count}} sari ez dira kalkulatzen: {{rows}}.",
+  "etoro.staking_not_imported.hint":
+    "DeclaRentak oraindik ez ditu eToro-ren kriptomonetak inportatzen. Horregatik, ez ditu sari horiek batzen. Aitortzen duzun urteko diru-sarrerak badira, aitortu egin behar dituzu hala ere. Gehitu eskuz Renta Web-en haien balioa eurotan, jaso zenituen egunekoa. Balio hori da haien kostua ere, saltzen dituzunean.",
   "lightyear.unknown_types":
     "Lightyear-en CSVko {{count}} errenkada baztertu dira, mugimendu mota ezezaguna dutelako: {{types}}.",
   "lightyear.unknown_types.hint":

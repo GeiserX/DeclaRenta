@@ -1763,7 +1763,7 @@ describe("#466 #467 #468 the warnings of these issues read as plain short senten
     "parser.trade_row_unreadable", "parser.corporate_action_not_applied", "parser.cash_row_undated",
     "parser.cash_row_unidentified", "parser.crypto_income_unidentified", "parser.crypto_income_amount_unreadable", "parser.cash_income_amount_unreadable",
     "revolut.bad_fx_rate", "revolut.holding_size_unknown", "revolut.dividend_tax_correction",
-    "etoro.columns_not_detected", "degiro.cash_row_undescribed",
+    "etoro.columns_not_detected", "etoro.staking_not_imported", "degiro.cash_row_undescribed",
   ];
   const sentences = (text: string): string[] => text.split(/(?<=[.?!])\s+(?=[A-ZÁÉÍÓÚÑ¿¡])/);
   it.each([["es", es], ["en", en]] as [string, Record<string, string>][])("%s: no hint joins clauses with a semicolon, and no sentence is longer than 25 words", (_name, locale) => {
@@ -2959,6 +2959,27 @@ describe("#467 eToro: a row or a sheet the parser cannot read is named, never bo
       expect(message(parsed, ID)?.context?.rows).toBe(`Interest Payment USD 20250615 [Amount: ${JSON.stringify(cell)}]`);
       expect(nums(report(parsed, method))).toEqual(["0.00", "0.00", "0.00", "0.00"]);
     });
+  });
+
+  it.each(METHODS)("[%s] a staking reward in Account Activity is named for the user to add by hand, never dropped with no word", async (method) => {
+    const parsed = await book([["Account Activity", [AA,
+      ["15/06/2025", "Staking", "ETH/USD", "42.50"],
+      ["16/06/2025", "Interest Payment", "", "42.50"],
+      ["17/06/2025", "Deposit", "", "1000.00"],
+      ["18/06/2025", "Open Position", "AAPL/USD", "-500.00"]]]]);
+    // The interest is booked; the staking reward is not guessed, it is named.
+    expect(parsed.cashTransactions.map((c) => [c.type, c.amount])).toEqual([["Broker Interest Received", "42.5"]]);
+    const emitted = message(parsed, "etoro.staking_not_imported");
+    expect([emitted?.severity, emitted?.context]).toEqual(["warning", { count: "1", rows: "Staking ETH/USD 42.50 20250615" }]);
+    expect(emitted?.message).toBe((es as Record<string, string>)["etoro.staking_not_imported"]!.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => emitted?.context?.[k] ?? ""));
+    expect(emitted?.hint).toBe((es as Record<string, string>)["etoro.staking_not_imported.hint"]);
+    expect(parsed.parserMessages).toHaveLength(1);
+    expect(nums(report(parsed, method))).toEqual(["0.00", "0.00", "39.10", "0.00"]);
+    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+      expect(locale["etoro.staking_not_imported"]).toContain("{{count}}");
+      expect(locale["etoro.staking_not_imported"]).toContain("{{rows}}");
+      expect(locale["etoro.staking_not_imported.hint"]).toBeTruthy();
+    }
   });
 
   it.each(METHODS)("[%s] controls: a readable interest payment is booked, and a written 0 stays skipped with no warning", async (method) => {

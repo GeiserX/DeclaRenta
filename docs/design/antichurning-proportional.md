@@ -909,6 +909,11 @@ práctico Renta 2025. The decisions, each pinned in
       converts the dollars to euros, as for any USD trade. A non-USD row
       whose FX rate at close cannot be read, or that has no such column, is
       kept as an unreadable row named by that cell.
+    - eToro: an Account Activity row whose Type names staking was dropped
+      with no word, because only interest was read. DeclaRenta does not
+      import eToro crypto, so the reward is not booked and its value is not
+      guessed. `etoro.staking_not_imported` names each row by type,
+      details, amount and date, for the user to add by hand.
     - DEGIRO Account CSV: a Dividendo, a Retención del dividendo or an
       interest row whose amount cannot be read, or whose currency cell is
       empty, is not booked, and neither are the withholdings of such a

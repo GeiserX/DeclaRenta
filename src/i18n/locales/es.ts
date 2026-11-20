@@ -1155,6 +1155,10 @@ const es = {
     "eToro: DeclaRenta no reconoce las columnas {{columns}} de la hoja «{{sheet}}». No ha importado ninguna fila de esa hoja.",
   "etoro.columns_not_detected.hint":
     "eToro cambia a veces los nombres de las columnas. Si DeclaRenta no las reconoce, no puede leer las filas de esa hoja y no suma ninguna. Vuelve a descargar el informe XLSX completo de la cuenta y súbelo otra vez. Si el aviso sigue, añade a mano en Renta Web las operaciones, los dividendos o los intereses de esa hoja.",
+  "etoro.staking_not_imported":
+    "eToro: {{count}} recompensa(s) de staking no se calculan: {{rows}}.",
+  "etoro.staking_not_imported.hint":
+    "DeclaRenta todavía no importa las criptomonedas de eToro. Por eso no suma estas recompensas. Si son ingresos del año que declaras, tienes que declararlos igualmente. Añade a mano en Renta Web su valor en euros del día en que las recibiste. Ese valor es también su coste cuando las vendas.",
   "lightyear.unknown_types":
     "Se ha(n) omitido {{count}} fila(s) del CSV de Lightyear con un tipo de movimiento no reconocido: {{types}}.",
   "lightyear.unknown_types.hint":

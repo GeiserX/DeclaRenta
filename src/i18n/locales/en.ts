@@ -1116,6 +1116,10 @@ const en: TranslationKeys = {
     "eToro: DeclaRenta does not recognise the columns {{columns}} of the sheet «{{sheet}}». It imported no row of that sheet.",
   "etoro.columns_not_detected.hint":
     "eToro sometimes renames its columns. If DeclaRenta does not recognise them, it cannot read the rows of that sheet and adds none of them. Download the full XLSX account statement from eToro again and upload it. If the warning stays, add the trades, dividends or interest of that sheet by hand in Renta Web.",
+  "etoro.staking_not_imported":
+    "eToro: {{count}} staking reward(s) are not calculated: {{rows}}.",
+  "etoro.staking_not_imported.hint":
+    "DeclaRenta does not import eToro's crypto yet. So it does not add these rewards. If they are income of the year you declare, you must still declare them. Add by hand in Renta Web their value in euros on the day you received them. That value is also their cost when you sell them.",
   "lightyear.unknown_types":
     "{{count}} Lightyear CSV row(s) with an unrecognized transaction type were skipped: {{types}}.",
   "lightyear.unknown_types.hint":

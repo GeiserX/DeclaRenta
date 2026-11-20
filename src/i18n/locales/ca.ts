@@ -1118,6 +1118,10 @@ const ca: TranslationKeys = {
     "eToro: DeclaRenta no reconeix les columnes {{columns}} del full «{{sheet}}». No ha importat cap fila d'aquest full.",
   "etoro.columns_not_detected.hint":
     "eToro canvia de vegades els noms de les columnes. Si DeclaRenta no les reconeix, no pot llegir les files d'aquest full i no en suma cap. Torna a baixar l'informe XLSX complet del compte i torna'l a pujar. Si l'avís continua, afegeix a mà a Renta Web les operacions, els dividends o els interessos d'aquest full.",
+  "etoro.staking_not_imported":
+    "eToro: {{count}} recompensa(es) de staking no es calculen: {{rows}}.",
+  "etoro.staking_not_imported.hint":
+    "DeclaRenta encara no importa les criptomonedes d'eToro. Per això no suma aquestes recompenses. Si són ingressos de l'any que declares, les has de declarar igualment. Afegeix a mà a Renta Web el seu valor en euros del dia que les vas rebre. Aquest valor és també el seu cost quan les vengis.",
   "lightyear.unknown_types":
     "S'han omès {{count}} fila(es) del CSV de Lightyear amb un tipus de moviment no reconegut: {{types}}.",
   "lightyear.unknown_types.hint":

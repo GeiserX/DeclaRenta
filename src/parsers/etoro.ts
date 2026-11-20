@@ -588,6 +588,7 @@ function parseDividends(
 const ACTIVITY_DATE_HEADERS = ["date", "fecha"];
 const ACTIVITY_TYPE_HEADERS = ["type", "tipo"];
 const ACTIVITY_AMOUNT_HEADERS = ["amount", "importe"];
+const ACTIVITY_DETAILS_HEADERS = ["details", "detalles"];
 
 function parseAccountActivity(
   xlsx: typeof import("xlsx"),
@@ -605,17 +606,29 @@ function parseAccountActivity(
   const dateCol = findColumn(headers, ACTIVITY_DATE_HEADERS);
   const typeCol = findColumn(headers, ACTIVITY_TYPE_HEADERS);
   const amountCol = findColumn(headers, ACTIVITY_AMOUNT_HEADERS);
+  const detailsCol = findColumn(headers, ACTIVITY_DETAILS_HEADERS);
 
   if (columnsNotDetected(parserMessages, sheetName, rows, [[dateCol, "Date"], [typeCol, "Type"], [amountCol, "Amount"]])) return [];
 
   const cashTransactions: CashTransaction[] = [];
+  // Staking rewards, "type details amount date" (#467).
+  const staking: string[] = [];
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i]!;
     if (!row.length) continue;
 
     const typeStr = (row[typeCol] ?? "").toLowerCase().trim();
-    // Only capture interest payments
+    // A staking reward is crypto income DeclaRenta does not import from eToro
+    // (closed crypto positions are skipped too). It is named for the user to
+    // add by hand, never dropped with no word, and its value is not guessed.
+    if (typeStr.includes("staking")) {
+      const cell = (c: number): string => (c >= 0 ? (row[c] ?? "").trim() : "");
+      staking.push([(row[typeCol] ?? "").trim(), cell(detailsCol), cell(amountCol) || "—",
+        parseEtoroDate(cell(dateCol), order) || "—"].filter((part) => part !== "").join(" "));
+      continue;
+    }
+    // Otherwise only interest payments are read.
     if (!typeStr.includes("interest") && !typeStr.includes("intereses")) continue;
 
     // An interest row with no readable date is booked with that date and
@@ -647,6 +660,18 @@ function parseAccountActivity(
       amount,
       fxRateToBase: "1",
       type: "Broker Interest Received",
+    });
+  }
+
+  if (staking.length > 0) {
+    const count = String(staking.length);
+    const list = staking.join("; ");
+    parserMessages.push({
+      id: "etoro.staking_not_imported",
+      severity: "warning",
+      message: `eToro: ${count} recompensa(s) de staking no se calculan: ${list}.`,
+      hint: "DeclaRenta todavía no importa las criptomonedas de eToro. Por eso no suma estas recompensas. Si son ingresos del año que declaras, tienes que declararlos igualmente. Añade a mano en Renta Web su valor en euros del día en que las recibiste. Ese valor es también su coste cuando las vendas.",
+      context: { count, rows: list },
     });
   }
 
