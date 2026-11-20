@@ -1031,9 +1031,9 @@ const ca: TranslationKeys = {
   "report.cash_amount_too_large.hint":
     "Sol ser un error del fitxer o del tipus de canvi: cap dividend, interès o retenció real no arriba a un bilió d'euros. Revisa aquestes files al fitxer del bròker i als tipus de canvi, i declara'n l'import a mà.",
   "report.withholding_of_excluded_dividend":
-    "{{count}} retenció(ns) del fitxer són d'un dividend que no es suma: {{rows}}. Tampoc no es sumen, perquè no es descomptin d'un altre dividend.",
+    "{{count}} retenció(ns) del fitxer poden ser d'un dividend que no es suma: {{rows}}. Tampoc no es sumen, perquè no es descomptin d'un altre dividend.",
   "report.withholding_of_excluded_dividend.hint":
-    "Quan declaris a mà aquest dividend, declara també la seva retenció.",
+    "Quan declaris a mà aquest dividend, declara també la seva retenció. Si alguna és d'un altre dividend, declara-la amb aquest altre dividend.",
   "report.non_finite_disposal":
     "{{count}} venda(es) tenen un import que no és un número (NaN o infinit) o que passa de 12 xifres enteres en euros: {{rows}}. Aquest import no es suma a les caselles. La resta d'operacions de l'any sí que es sumen.",
   "report.non_finite_disposal.hint":

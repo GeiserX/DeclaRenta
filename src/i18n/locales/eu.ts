@@ -1033,9 +1033,9 @@ const eu: TranslationKeys = {
   "report.cash_amount_too_large.hint":
     "Normalean fitxategiaren edo kanbio-tasaren akatsa da: benetako dibidendu, interes edo atxikipen batek ere ez du bilioi bat euro lortzen. Berrikusi errenkada horiek brokerraren fitxategian eta kanbio-tasetan, eta adierazi haien zenbatekoa eskuz.",
   "report.withholding_of_excluded_dividend":
-    "Fitxategiko {{count}} atxikipen batzen ez den dibidendu batenak dira: {{rows}}. Haiek ere ez dira batzen, beste dibidendu bati ken ez dakizkion.",
+    "Fitxategiko {{count}} atxikipen batzen ez den dibidendu batenak izan daitezke: {{rows}}. Haiek ere ez dira batzen, beste dibidendu bati ken ez dakizkion.",
   "report.withholding_of_excluded_dividend.hint":
-    "Dibidendu hori eskuz adierazten duzunean, adierazi haren atxikipena ere.",
+    "Dibidendu hori eskuz adierazten duzunean, adierazi haren atxikipena ere. Horietako bat beste dibidendu batena bada, adierazi beste dibidendu horrekin.",
   "report.non_finite_disposal":
     "{{count}} salmentak zenbaki ez den zenbateko bat du (NaN edo infinitua) edo eurotan 12 zifra oso baino gehiago dituena: {{rows}}. Zenbateko hori ez da laukietan batzen. Urteko gainerako eragiketak bai.",
   "report.non_finite_disposal.hint":

@@ -350,6 +350,50 @@ describe("the withholding of a dividend left out goes with it (dividends, CodeRa
     });
   }
 
+  for (const method of METHODS) {
+    for (const [label, kept, keptWithholding] of [
+      ["four days before", "2025-03-10", "2025-03-10"],
+      ["the same day", "2025-03-14", "2025-03-14"],
+    ] as const) {
+      it(`a kept dividend ${label} with its own withholding never deducts the one left out's (${method})`, () => {
+        // XYZ pays 1000 USD with 5 USD withheld, then 9e15 USD (left out)
+        // with 150 USD withheld. A trap: listed first, the dividend left out
+        // took the first withholding in reach, the 5 USD, so the kept one
+        // took the 150 USD and box 0588 deducted 150 €. In file order the
+        // other layout fails the same way. The rows cannot tell which pair
+        // is right, so both withholdings go and both are named: 0 €, never
+        // more than the 5 € the kept dividend paid.
+        const r = generateTaxReport(statement([], [
+          cash("D2", kept, "1000", "Dividends"),
+          cash("W2", keptWithholding, "-5", "Withholding Tax"),
+          cash("D1", "2025-03-14", "9e15", "Dividends"),
+          cash("W1", "2025-03-14", "-150", "Withholding Tax"),
+        ]), rates, 2025, reportOptionsForMethod(method));
+        expect(r.dividends.entries.map((e) => e.withholdingTaxEur.toString())).toEqual(["0"]);
+        expect(r.doubleTaxation.deduction.toString()).toBe("0");
+        const dmy = `${kept.slice(8, 10)}/03/2025`;
+        expect(message(r, "report.withholding_of_excluded_dividend")?.context).toMatchObject({ count: "2", rows: `XYZ (${dmy}), XYZ (14/03/2025)` });
+      });
+    }
+
+    it(`a refund the matcher gives to a dividend left out stays, so it can only lower the deduction (${method})`, () => {
+      // 15 USD withheld on 8 March, the 9e15 USD dividend (left out) on 14
+      // March, 15 USD refunded on 15 March, then 100 USD on 20 March with 15
+      // USD withheld. A trap: the refund went with the dividend left out, so
+      // the kept dividend deducted its 15 USD in full. The rows cannot tell
+      // whose refund it is: kept, it lowers the kept dividend's to 0.
+      const r = generateTaxReport(statement([], [
+        cash("W1", "2025-03-08", "-15", "Withholding Tax"),
+        cash("D1", "2025-03-14", "9e15", "Dividends"),
+        cash("R1", "2025-03-15", "15", "Withholding Tax"),
+        cash("D2", "2025-03-20", "100", "Dividends"),
+        cash("W2", "2025-03-20", "-15", "Withholding Tax"),
+      ]), rates, 2025, reportOptionsForMethod(method));
+      expect(r.doubleTaxation.deduction.toString()).toBe("0");
+      expect(message(r, "report.withholding_of_excluded_dividend")?.context).toMatchObject({ count: "1", rows: "XYZ (08/03/2025)" });
+    });
+  }
+
   it("a dividend left out with no withholding of its own may take a kept one's: the deduction can only drop, and it is named", () => {
     // The 9e15 USD dividend of 14 March has no withholding; the 7.5 USD of 16
     // March are in its reach too. The rows cannot tell which dividend they

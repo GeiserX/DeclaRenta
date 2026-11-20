@@ -720,16 +720,16 @@ function traditionalFxMessages(input: {
 const isDividendRow = (c: CashTransaction): boolean => c.type === "Dividends" || c.type === "Payment In Lieu Of Dividends";
 
 /**
- * The withholding rows that belong to a dividend the report leaves out. The
- * matcher runs as the report runs it (`collapseCorrections`, then
+ * The withholding rows that may belong to a dividend the report leaves out.
+ * The matcher runs as the report runs it (`collapseCorrections`, then
  * `matchWithholdings`) on the rows the report keeps plus the dividends it
- * leaves out, listed first, so each such dividend takes its own withholding
- * before any other dividend can, whatever the file order. A row goes with
- * the dividend only when no part of it belongs to a dividend the report
- * keeps: a refund split between both stays (it can only lower the
- * deduction). A withholding in reach of a dividend left out that has none of
- * its own goes with it too: the rows cannot tell whose it is, the kept
- * dividend can only deduct less, and the warning names the row.
+ * leaves out, twice: in file order, and with those dividends listed first.
+ * Pass 1 gives each dividend the first withholding in reach in list order,
+ * not the nearest one, so neither order alone finds every row such a dividend
+ * may own. A withholding row (below 0) that either run gives to a dividend
+ * left out goes with it. The rows cannot tell whose it is: a kept dividend
+ * can only deduct less, and the warning names the row. A refund (above 0)
+ * always stays: it can only lower the deduction.
  */
 function withholdingsOfExcluded(
   rows: CashTransaction[],
@@ -738,18 +738,20 @@ function withholdingsOfExcluded(
   uncountable: ReadonlySet<CashTransaction>,
 ): CashTransaction[] {
   const kept = collapseCorrections(rows.filter((c) => excludedDividends.has(c) || (!outOfRange.has(c) && !uncountable.has(c))));
-  // The dividends left out go first: pass 1 gives each withholding to the
-  // first dividend in reach in list order. A trap: in file order a kept
-  // dividend four days earlier took the 15 USD withheld from a 9e15 USD one,
-  // and box 0588 deducted tax it never paid, with no warning.
-  const match = matchWithholdings([...kept.filter((c) => excludedDividends.has(c)), ...kept.filter((c) => !excludedDividends.has(c))]);
-  const toExcluded = new Set<number>();
-  const toKept = new Set<number>();
-  match.parts.forEach((parts, divIndex) => {
-    const target = excludedDividends.has(match.dividends[divIndex]!) ? toExcluded : toKept;
-    for (const { index } of parts) target.add(index);
-  });
-  return match.withholdings.filter((_w, index) => toExcluded.has(index) && !toKept.has(index));
+  // Traps: in file order a kept 50 USD dividend four days earlier took the
+  // 15 USD withheld from a 9e15 USD one; with the dividends left out listed
+  // first, the 9e15 USD one took a kept dividend's own 5 USD and the kept one
+  // took the 150 USD. Box 0588 deducted tax never paid, each time.
+  const excludedFirst = [...kept.filter((c) => excludedDividends.has(c)), ...kept.filter((c) => !excludedDividends.has(c))];
+  const leaves = new Set<CashTransaction>();
+  for (const order of [kept, excludedFirst]) {
+    const match = matchWithholdings(order);
+    match.parts.forEach((parts, divIndex) => {
+      if (!excludedDividends.has(match.dividends[divIndex]!)) return;
+      for (const { index, amount } of parts) if (amount.lessThan(0)) leaves.add(match.withholdings[index]!);
+    });
+  }
+  return kept.filter((c) => leaves.has(c));
 }
 
 /**
@@ -1671,8 +1673,8 @@ export function generateTaxReport(
     allMessages.push({
       id: "report.withholding_of_excluded_dividend",
       severity: "warning",
-      message: `${count} retención(es) del fichero son de un dividendo que no se suma: ${rows}. Tampoco se suman, para que no se descuenten de otro dividendo.`,
-      hint: "Cuando declares a mano ese dividendo, declara también su retención.",
+      message: `${count} retención(es) del fichero pueden ser de un dividendo que no se suma: ${rows}. Tampoco se suman, para que no se descuenten de otro dividendo.`,
+      hint: "Cuando declares a mano ese dividendo, declara también su retención. Si una de ellas es de otro dividendo, declárala con ese otro dividendo.",
       context: { count, rows },
     });
   }
