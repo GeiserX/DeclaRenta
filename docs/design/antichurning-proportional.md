@@ -634,7 +634,10 @@ práctico Renta 2025. The decisions, each pinned in
       interest (casilla 0027); it was dropped with no word. A withholding
       keeps its sign when the file writes any withholding as negative, so a
       positive one is a refund. The withholding of a dividend that is not
-      booked is not booked either, and is named with it.
+      booked is not booked either, and is named with it. It is the
+      withholding of the same day and security, where the ISIN of one row
+      matches the other's ISIN or ticker, so a row that writes no ISIN
+      still finds it.
     - Freedom24: a row with no readable date, no ticker, or an operation
       other than `buy` or `sell` after trimming (`sale`, `transfer`). Before,
       every operation that was not `sell` was booked as a buy (#468). In

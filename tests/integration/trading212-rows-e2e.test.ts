@@ -460,3 +460,37 @@ describe("Trading 212 fees: two fees in two other currencies are never added as 
     expect(fee(feeSell("1.5", "EUR", "1", "USD"))).toBe("-1.5 EUR -1");
   });
 });
+
+// A dividend that is not booked takes its withholdings with it: booked, the
+// engine pairs them by ISIN within 7 days with another dividend of the
+// security. Next to a dividend of 1000 USD with 50 withheld (0029 = 1100.00,
+// 0588 = 55.00), a dividend of 1000 USD with 150 withheld that is not booked
+// must leave 0588 at 55.00, not 220 × the cap (165.00).
+describe("Trading 212 dividends: the withholdings of a dividend not booked are never another dividend's", () => {
+  const row = (action: string, day: string, isin: string, ticker: string, total: string, id: string) =>
+    `${action},2025-05-${day} 09:00:00,${isin},${ticker},Apple,${action.includes("tax") ? "," : "10,1"},USD,0.92,,,${total},USD,,${id}`;
+  const div = (day: string, isin: string, ticker: string, total: string, id: string) => row("Dividend (Ordinary)", day, isin, ticker, total, id);
+  const wht = (day: string, isin: string, ticker: string, total: string, id: string) => row("Dividend (Dividend tax)", day, isin, ticker, total, id);
+  const other = (isin = AAPL) => [div("18", isin, "AAPL", "1000", "d2"), wht("18", isin, "AAPL", "-50", "w2")];
+  const numbers = (rows: string[], method: FxMethod): string[] => {
+    const r = report(rows, method);
+    return [r.dividends.grossIncome.toFixed(2), r.doubleTaxation.deduction.toFixed(2)];
+  };
+
+  it.each(METHODS)("[%s] control: the other dividend alone gives 0029 = 1100.00 and 0588 = 55.00", (method) => {
+    expect(numbers(other(), method)).toEqual(["1100.00", "55.00"]);
+    expect(numbers(other(""), method)).toEqual(["1100.00", "55.00"]);
+  });
+
+  it.each(METHODS)("[%s] a dividend whose Total cannot be read takes its withholding when only one of the two rows writes the ISIN", (method) => {
+    for (const [rows, tax] of [
+      [[div("15", "", "AAPL", "abc", "d1"), wht("15", AAPL, "AAPL", "-150", "w1"), ...other()], "Withholding tax - AAPL -150 USD"],
+      [[div("15", AAPL, "AAPL", "abc", "d1"), wht("15", "", "AAPL", "-150", "w1"), ...other("")], "Withholding tax - AAPL -150 USD"],
+    ] as const) {
+      const s = parse([...rows]);
+      expect(s.cashTransactions.map((c) => `${c.type} ${c.amount}`), tax).toEqual(["Dividends 1000", "Withholding Tax -50"]);
+      expect(msg(s, "parser.cash_income_amount_unreadable"), tax).toContain(`(${tax}) [Total: "abc"]`);
+      expect(numbers([...rows], method), tax).toEqual(["1100.00", "55.00"]);
+    }
+  });
+});

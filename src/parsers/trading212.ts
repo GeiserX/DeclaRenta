@@ -177,6 +177,20 @@ function isSkippedAction(action: string): boolean {
   return /deposit|withdrawal|currency conversion|card debit|card credit|new card cost|spending cashback/i.test(action);
 }
 
+/** A cash row's security: its ISIN (may be ""), and its ticker or else its ISIN. */
+type Held = Pick<CashTransaction, "isin" | "symbol">;
+
+/**
+ * Whether two rows name one security. The engine pairs a withholding with a
+ * dividend by ISIN, but a row may write only the ticker or only the ISIN, so
+ * the ISIN matches the other's ISIN or symbol and the ticker matches the
+ * other's symbol or ISIN: a dividend with no ISIN still finds its
+ * withholding that writes one, and the other way round (#467).
+ */
+function sameSecurity(a: Held, b: Held): boolean {
+  return (a.isin !== "" && (a.isin === b.isin || a.isin === b.symbol)) || (a.symbol !== "" && (a.symbol === b.symbol || a.symbol === b.isin));
+}
+
 // Fractional currency normalization (GBX pence, ZAc cents, ILA agorot →
 // ECB major unit ÷100) is shared with the Degiro parser: see
 // normalizeFractionalCurrency in csv-utils.ts.
@@ -203,14 +217,11 @@ function parseTrading212Csv(lines: string[]): Statement {
   // Dividend and withholding rows with no ticker and no ISIN (#467).
   const unidentifiedCash: string[] = [];
   // Dividend, interest and withholding rows whose Total or currency cannot
-  // be read (#467). A dividend's `key` finds its withholdings below.
-  const unreadableIncome: { key?: string; type: string; security: string; currency: string; date: string; cells: string[] }[] = [];
+  // be read (#467). A dividend's `held` (its ISIN, and its ticker or else its
+  // ISIN) finds its withholdings below.
+  const unreadableIncome: { held?: Held; type: string; security: string; currency: string; date: string; cells: string[] }[] = [];
   // Money rows of an action no branch knows, which move no shares (#467).
   const notBookedCash: string[] = [];
-  // The engine pairs a withholding with a dividend by ISIN alone, so the key
-  // is the ISIN when there is one: a withholding that writes no Ticker is
-  // still that dividend's.
-  const incomeKey = (isin: string, security: string, date: string): string => isin ? `${isin}|${date}` : `|${security}|${date}`;
   const currencyCells = (fields: string[]): string[] => [
     unreadableCell(headers[cols.priceCurrency] ?? "Currency (Price / share)", fields[cols.priceCurrency]),
     unreadableCell(headers[cols.totalCurrency] ?? "Currency (Total)", fields[cols.totalCurrency]),
@@ -376,7 +387,7 @@ function parseTrading212Csv(lines: string[]): Statement {
       if (totalUnreadable || (!cashCurrencyCell && !new Decimal(totalStr).isZero())) {
         const dividend = isDividendAction(action);
         unreadableIncome.push({
-          ...(dividend ? { key: incomeKey(isin, security, tradeDate) } : {}),
+          ...(dividend ? { held: { isin, symbol: security } } : {}),
           type: action, security: dividend ? security || "—" : "", currency: cashCurrencyCell ? cashCurrency : "", date: tradeDate,
           cells: [
             ...(totalUnreadable ? [unreadableCell(headers[cols.total] ?? "Total", fields[cols.total])] : []),
@@ -605,13 +616,13 @@ function parseTrading212Csv(lines: string[]): Statement {
   // day) are not booked either: a deduction for income the report does not
   // count, which could pair with another dividend of the security. They are
   // named with it.
-  const unreadableRows = unreadableIncome.map((row) => {
-    if (row.key === undefined) return cashIncomeRowText(row.type, row.security, row.currency, row.date, row.cells);
-    const withheld = cashTransactions.filter((c) => c.type === "Withholding Tax" && incomeKey(c.isin, c.symbol, c.dateTime) === row.key);
+  const takeWithholdings = (held: Held, date: string): string => {
+    const withheld = cashTransactions.filter((c) => c.type === "Withholding Tax" && c.dateTime === date && sameSecurity(held, c));
     for (const w of withheld) cashTransactions.splice(cashTransactions.indexOf(w), 1);
-    const tax = withheld.map((w) => `${w.description} ${w.amount} ${w.currency}`).join(", ");
-    return cashIncomeRowText(row.type, row.security, row.currency, row.date, row.cells, tax);
-  });
+    return withheld.map((w) => `${w.description} ${w.amount} ${w.currency}`).join(", ");
+  };
+  const unreadableRows = unreadableIncome.map((row) => cashIncomeRowText(row.type, row.security, row.currency, row.date, row.cells,
+    row.held === undefined ? "" : takeWithholdings(row.held, row.date)));
 
   markUndatedTrades(trades, headers[cols.time] ?? "Time");
   parserMessages.push(
