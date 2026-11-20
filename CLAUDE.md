@@ -132,7 +132,7 @@ To ship a run of merges as one release, disable Auto Release (`gh workflow disab
 ## Critical Rules
 
 ### Commission Sign
-- `Trade.commission` follows the broker cash sign: negative = fee charged, positive = rebate received (IBKR sends exchange/liquidity rebates as a positive `ibCommission`). Every parser emits fees as negative. The engines read it through `commissionCost()` (fifo.ts) and the matching negation in fx-fifo.ts; never `.abs()` it, or a rebate becomes a fee counted twice.
+- `Trade.commission` follows the broker cash sign: negative = fee charged, positive = rebate received (IBKR sends exchange/liquidity rebates as a positive `ibCommission`). Every parser emits a charged fee as negative. Trade Republic writes a paid fee negative, so it passes the `fee` cell on with its sign: a positive one is a rebate (#467). The engines read it through `commissionCost()` (fifo.ts) and the matching negation in fx-fifo.ts; never `.abs()` it, or a rebate becomes a fee counted twice.
 
 ### Financial Precision
 - **ALWAYS** use `Decimal` from `decimal.js` for any monetary calculation

@@ -248,7 +248,11 @@ function parseTrCsv(lines: string[]): Statement {
       const absSharesDec = toFiniteDecimal(sharesStr).abs();
       const absShares = absSharesDec.toString();
       const absAmount = absAmountDec.toString();
-      const absFee = toFiniteDecimal(field(fields, cols.fee)).abs();
+      // The fee keeps the sign TR writes: a paid fee is negative ("-1.00"),
+      // a positive one is money paid back, a rebate, as commissionCost reads
+      // it. Booked by its absolute value, a rebate lowered the gain by twice
+      // its amount (#467). A charge written positive can only raise the tax.
+      const fee = toFiniteDecimal(field(fields, cols.fee));
       // TR writes a paid tax as a negative number. A positive one is money
       // paid back, no cost: booked by its absolute value, it lowered the gain
       // by twice the refund. It is not booked, and the row is named (#467).
@@ -291,7 +295,7 @@ function parseTrCsv(lines: string[]): Statement {
         openCloseIndicator: isSell ? "C" : "O",
         exchange: "TRADE_REPUBLIC",
         commissionCurrency: currency,
-        commission: absFee.isZero() ? "0" : absFee.neg().toString(),
+        commission: fee.isZero() ? "0" : fee.toString(),
         taxes: taxDec.isNegative() ? taxDec.toString() : "0",
         multiplier: "1",
       });

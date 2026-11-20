@@ -829,7 +829,11 @@ práctico Renta 2025. The decisions, each pinned in
       sale's `tax` is a cost only when it is negative, as TR writes a paid
       tax. A positive one is money paid back: booked by its absolute value,
       it lowered the gain by twice the refund. It is not booked, and
-      `trade_republic.trade_tax_positive` names the row.
+      `trade_republic.trade_tax_positive` names the row. The `fee` keeps
+      the sign TR writes: a paid fee is negative, a positive one is a
+      rebate, as `commissionCost` reads it. Booked by its absolute value,
+      a rebate lowered the gain by twice its amount. A charge written
+      positive can only raise the tax.
     - DEGIRO: a row with no ISIN but a readable quantity or price, or an
       order id. When the product name has the shape of an option
       (`AAPL C200.00 20DEC24`) or a future (`FDAX MAR25`), the row is kept as

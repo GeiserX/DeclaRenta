@@ -20,6 +20,7 @@
  * - A price, amount or fee cell was read twice: "1.2,3,4" became 123.4, or
  *   its raw text stopped the report.
  * - A positive tax on a buy or a sale (money paid back) was booked as a cost.
+ * - A positive fee on a buy or a sale (a rebate) was booked as a cost.
  * - A row of an unknown category with a written zero share count, and a CASH
  *   row of an unknown type with an empty amount, that named an ISIN were
  *   dropped with no word.
@@ -401,5 +402,32 @@ describe("Trade Republic rows of an unknown category, or with an empty amount, t
       COUPON({ symbol: "", amount: "" }),
     );
     expect([s.trades, s.cashTransactions, s.parserMessages]).toEqual([[], [], undefined]);
+  });
+});
+
+describe("Trade Republic trade fee: the fee keeps the sign TR writes, so a positive fee (money paid back) is never a cost", () => {
+  it.each(METHODS)("[%s] control: fees of -1.00 on the buy and the sale give proceeds 149.00, cost 101.00, gain 48.00", (method) => {
+    const s = tr(BUY(), SELL());
+    expect(s.trades.map((t) => t.commission)).toEqual(["-1", "-1"]);
+    const r = report(s, method);
+    expect([r.capitalGains.transmissionValue.toFixed(2), r.capitalGains.acquisitionValue.toFixed(2), r.capitalGains.netGainLoss.toFixed(2)])
+      .toEqual(["149.00", "101.00", "48.00"]);
+  });
+
+  it.each(METHODS)("[%s] a sale fee of 1.00 or a buy fee of +1.00 is a rebate: the gain is 50.00, not 48.00", (method) => {
+    const sale = tr(BUY(), SELL({ fee: "1.00" }));
+    expect(sale.trades.map((t) => t.commission)).toEqual(["-1", "1"]);
+    const rs = report(sale, method);
+    expect([rs.capitalGains.transmissionValue.toFixed(2), rs.capitalGains.netGainLoss.toFixed(2)]).toEqual(["151.00", "50.00"]);
+    const buy = tr(BUY({ fee: "+1.00" }), SELL());
+    expect(buy.trades.map((t) => t.commission)).toEqual(["1", "-1"]);
+    const rb = report(buy, method);
+    expect([rb.capitalGains.acquisitionValue.toFixed(2), rb.capitalGains.netGainLoss.toFixed(2)]).toEqual(["99.00", "50.00"]);
+  });
+
+  it("an empty fee cell or a written zero is no fee", () => {
+    for (const fee of ["", "0", "0.00"]) {
+      expect(tr(BUY({ fee }), SELL({ fee })).trades.map((t) => t.commission), fee).toEqual(["0", "0"]);
+    }
   });
 });
