@@ -777,14 +777,20 @@ export function generateTaxReport(
   const outOfRangeTrades = statement.trades.filter((tr) => tradeOutOfRange(tr));
   const outOfRange = new Set<Trade>(outOfRangeTrades);
   const countedTrades = outOfRange.size === 0 ? statement.trades : statement.trades.filter((tr) => !outOfRange.has(tr));
+  // The trades whose amounts are no number: a missing rate for their quote
+  // currency must not drop them, or a sale leaves its lot to a later one
+  // (`resolveCryptoTradeValues`, CodeRabbit on 10e1918).
+  const noValueTrades = new Set<Trade>();
   const fifoInputTrades = outOfRange.size === 0
     ? statement.trades
     : statement.trades.flatMap((tr): Trade[] => {
         if (!outOfRange.has(tr)) return [tr];
         if (tradeQuantityOutOfRange(tr)) return [];
-        return [{ ...tr, tradePrice: "NaN", tradeMoney: "NaN", commission: "0", taxes: "0", multiplier: "1" }];
+        const noValue = { ...tr, tradePrice: "NaN", tradeMoney: "NaN", commission: "0", taxes: "0", multiplier: "1" };
+        noValueTrades.add(noValue);
+        return [noValue];
       });
-  const valuation = resolveCryptoTradeValues(fifoInputTrades, rateMap, manualRates);
+  const valuation = resolveCryptoTradeValues(fifoInputTrades, rateMap, manualRates, noValueTrades);
   const resolvedRateMap = valuation.rateMap;
   // A cash row the read range lets through but whose value in euros fails
   // the counted bound (`isCountableAmount`: 1e12 € or more, or no number,

@@ -212,3 +212,42 @@ describe("a loss the boxes count blocks like any other (wash-sale, CodeRabbit 46
     expect(r.capitalGains.blockedLosses.toString()).toBe("0");
   });
 });
+
+describe("a coin sale with no rate for its quote still takes its lot (crypto valuation, CodeRabbit 4634270129)", () => {
+  // BTC bought at 300 € and then at 100 €. The first sale is paid in ETH with
+  // a price no broker writes, on a day ETH has no rate: it must still take
+  // the 300 € coin, so the second sale, for 400 €, takes the 100 € one and
+  // gains 300 €. A trap: the valuation dropped the first sale for its missing
+  // rate, and the second sale took the 300 € coin and gained only 100 €.
+  const rates = rateMap({ USD: "1" });
+  const coin = (date: string, side: "BUY" | "SELL", price: string, currency = "EUR") =>
+    stock(date, side, "1", price, { symbol: "BTC", description: "BTC", isin: "", assetCategory: "CRYPTO", currency, commissionCurrency: currency, exchange: "BINANCE" });
+
+  it("the 400 € sale gains 300 € from the 100 € coin", () => {
+    const r = generateTaxReport(statement([
+      coin("2025-01-10", "BUY", "300"),
+      coin("2025-02-10", "BUY", "100"),
+      coin("2025-03-10", "SELL", "1e25", "ETH"),
+      coin("2025-04-10", "SELL", "400"),
+    ]), rates, 2025, reportOptionsForMethod("multidivisa"));
+    expect(message(r, "report.trade_out_of_range")?.context?.rows).toBe("BTC (10/03/2025)");
+    const sale = r.capitalGains.disposals.find((d) => d.sellDate.startsWith("2025-04-10"))!;
+    expect(sale.costBasisEur.toString()).toBe("100");
+    expect(sale.gainLossEur.toString()).toBe("300");
+    // Its own rate cannot be typed in: it is named once, as out of range, not
+    // as a permuta waiting for a hand-typed price.
+    expect(message(r, "report.crypto_valuation_unresolved")).toBeUndefined();
+  });
+
+  it("an ordinary sale with no rate for its quote is still left out and named (control)", () => {
+    const r = generateTaxReport(statement([
+      coin("2025-01-10", "BUY", "300"),
+      coin("2025-02-10", "BUY", "100"),
+      coin("2025-03-10", "SELL", "20", "ETH"),
+      coin("2025-04-10", "SELL", "400"),
+    ]), rates, 2025, reportOptionsForMethod("multidivisa"));
+    expect(message(r, "report.crypto_valuation_unresolved")).toBeDefined();
+    const sale = r.capitalGains.disposals.find((d) => d.sellDate.startsWith("2025-04-10"))!;
+    expect(sale.costBasisEur.toString()).toBe("300");
+  });
+});
