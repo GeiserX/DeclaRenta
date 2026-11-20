@@ -255,7 +255,9 @@ function dateUndatedRowsAtUploadStart(statement: Statement): void {
  * loss). A hidden fill below the cap still passes: nothing in the files
  * tells its cash from a fee. So a fee above an ordinary Flatex fee (10 € per
  * leg net of Stornos plus 1 % of the gross) is not booked: the fills of that
- * day keep a fee of 0 and `flatex.commission.above_usual` names the order. A split fee is also below the day's smallest
+ * day keep a fee of 0 and `flatex.commission.above_usual` names the order. A
+ * hidden fill below that allowance still passes: only the order's Abrechnung
+ * PDF tells it from a stamp duty. A split fee is also below the day's smallest
  * fill: a missing or extra leg of a fill of the day (a sale leg not
  * exported, a leg uploaded twice with no TA-Nr.) moves the fee by at least
  * that fill's value. A day
@@ -470,9 +472,10 @@ function reconcileOrderLegs(statement: Statement): void {
   let crossCurrencyTrades = 0;
   let proratedOrders = 0;
   const notRecovered: string[] = [];
-  // Days of an order whose fee is above an ordinary Flatex fee: their fills
-  // keep a fee of 0 (#467).
+  // Days of an order whose fee is above an ordinary Flatex fee, and the
+  // orders they belong to: their fills keep a fee of 0 (#467).
   const aboveUsual: string[] = [];
+  const aboveUsualOrders = new Set<string>();
 
   // Commission = | net cash settled − gross trade value |. The FIFO engine
   // (fifo.ts) reads Trade.commission directly and folds it into cost basis
@@ -536,6 +539,7 @@ function reconcileOrderLegs(statement: Statement): void {
         });
         if (unusual) {
           aboveUsual.push(orderRow(orderKey, day.legs, day.trades));
+          aboveUsualOrders.add(orderKey);
         }
         continue;
       }
@@ -563,6 +567,7 @@ function reconcileOrderLegs(statement: Statement): void {
       // the fills keep 0 and the order is named, as above (#467).
       if (aboveUsualFee(totalFee, gross, Math.max(1, netLegCount(day.legs, day.trades)))) {
         aboveUsual.push(orderRow(orderKey, day.legs, day.trades));
+        aboveUsualOrders.add(orderKey);
         continue;
       }
       for (const trade of day.trades) {
@@ -633,7 +638,8 @@ function reconcileOrderLegs(statement: Statement): void {
   }
 
   if (aboveUsual.length > 0) {
-    const count = String(aboveUsual.length);
+    // The count is of orders; an order filled on two days has a row per day.
+    const count = String(aboveUsualOrders.size);
     const rows = aboveUsual.join("; ");
     addInfoMessage(statement, {
       id: "flatex.commission.above_usual",

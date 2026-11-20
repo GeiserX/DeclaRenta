@@ -3716,6 +3716,18 @@ describe("#467 Flatex: a cash leg, income row, currency, Kurs or order number th
       expect(r.messages.map((m) => m.id)).toContain(ABOVE);
     });
 
+    // Round 5 (#467): the warning says "orden(es)", so it counts orders; an
+    // order filled on two days has a row per day.
+    it.each(METHODS)("[%s] an order above the usual on two days is one order with two rows", (method) => {
+      const statement = merged(depot(fill("01.03.2024", "10", "9101"), fill("04.03.2024", "10", "9102"), sell("20")),
+        konto(leg("01.03.2024", "8101", "-1035,90"), leg("04.03.2024", "8102", "-1035,90"), sellLeg("2388,20")));
+      expect(booked(statement)).toEqual([["10", "0"], ["10", "0"], ["-20", "-11.8"]]);
+      const m = message(statement, ABOVE)!;
+      expect(m.context).toEqual({ count: "1", rows: `333333 ${ISIN} 20240301 [1000 EUR / -1035.9 EUR]; 333333 ${ISIN} 20240304 [1000 EUR / -1035.9 EUR]` });
+      expect(m.message).toContain("Flatex: 1 orden(es)");
+      expect(gains(report(statement, method))).toEqual(["2388.20", "2000.00", "388.20"]);
+    });
+
     it("the above-usual warning is the es locale and exists in the five locales", () => {
       const m = merged(depot(fill("01.03.2024", "10", "9101"), sell("10")), konto(leg("01.03.2024", "8101", "-1035,90"), sellLeg("1194,10")))
         .parserMessages!.find((x) => x.id === ABOVE)!;
