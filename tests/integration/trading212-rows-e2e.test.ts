@@ -236,6 +236,29 @@ describe("Trading 212 dividends: tax-exempt dividends, refunds and unreadable di
     }
   });
 
+  // In a file that writes withholdings negative a third withholding row can
+  // be a refund: read as 0 and dropped, the report kept a deduction paid back.
+  it.each(METHODS)("[%s] a withholding whose Total cannot be read is named, never read as 0 and dropped with no word", (method) => {
+    const noSecurity = (row: string) => row.replace(`,${AAPL},AAPL,Apple,`, ",,,,");
+    for (const [third, named] of [
+      [wht("18", "abc", "w2"), 'Dividend (Dividend tax) AAPL USD 20250518 [Total: "abc"]'],
+      [wht("18", "", "w2"), 'Dividend (Dividend tax) AAPL USD 20250518 [Total: ""]'],
+      [noSecurity(wht("18", "abc", "w2")), 'Dividend (Dividend tax) — USD 20250518 [Total: "abc"]'],
+    ] as const) {
+      const rows = [div("Dividend (Ordinary)", "15", "110", "d1"), wht("15", "-16.5", "w1"), third];
+      const s = parse(rows);
+      expect(s.cashTransactions.map((c) => `${c.type} ${c.amount}`), named).toEqual(["Dividends 110", "Withholding Tax -16.5"]);
+      expect(msg(s, "parser.cash_income_amount_unreadable"), named).toBe(named);
+      expect(report(rows, method).messages.map((m) => m.id), named).toContain("parser.cash_income_amount_unreadable");
+    }
+  });
+
+  it("control: a withholding that writes 0 stays skipped with no word", () => {
+    const s = parse([div("Dividend (Ordinary)", "15", "110", "d1"), wht("15", "-16.5", "w1"), wht("18", "0", "w2")]);
+    expect(s.cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual(["Dividends 110", "Withholding Tax -16.5"]);
+    expect(s.parserMessages).toBeUndefined();
+  });
+
   it("control: the withholding of a readable dividend on another day stays booked", () => {
     const s = parse([div("Dividend (Ordinary)", "15", "abc", "d1"), wht("18", "-1.65", "w1"), div("Dividend (Ordinary)", "18", "11", "d2")]);
     expect(s.cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual(["Withholding Tax -1.65", "Dividends 11"]);

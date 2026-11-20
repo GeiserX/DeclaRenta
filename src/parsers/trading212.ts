@@ -304,6 +304,17 @@ function parseTrading212Csv(lines: string[]): Statement {
 
     // Withholding tax on dividend — must be checked before the generic dividend branch
     if (isDividendTaxAction(action)) {
+      // A Total that cannot be read is no zero: in a file that writes
+      // withholdings negative the row can be a refund, and dropped the report
+      // kept a deduction paid back. Not booked, named, with or without a
+      // security (#467). A written zero stays skipped.
+      if (quantityUnreadable(fields[cols.total])) {
+        unreadableIncome.push({
+          type: action, security: security || "—", currency: cashCurrencyCell ? cashCurrency : "", date: tradeDate,
+          cells: [unreadableCell(headers[cols.total] ?? "Total", fields[cols.total]), ...(cashCurrencyCell ? [] : currencyCells(fields))],
+        });
+        continue;
+      }
       const signedDec = new Decimal(totalStr).div(cashDivisor);
       const amountDec = withholdingsSigned ? signedDec : signedDec.abs().neg();
       if (amountDec.isZero()) continue;
