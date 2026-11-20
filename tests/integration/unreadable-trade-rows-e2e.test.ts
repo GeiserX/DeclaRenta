@@ -1496,6 +1496,8 @@ describe("#467 a crypto buy or sale whose quantity, side or coin cannot be read 
     { label: "Binance Trade History, Side 'SOLD'", broker: "Binance", parse: () => binance(bnBuy, bnSell("SOLD", "0.1")), rows: 'BTC 20250301 [Side: "SOLD"]' },
     { label: "Binance Trade History, Executed empty", broker: "Binance", parse: () => binance(bnBuy, bnSell("SELL", "")), rows: 'BTC 20250301 [Executed: ""]' },
     { label: "Binance Trade History, Executed '1,000.5BTC'", broker: "Binance", parse: () => binance(bnBuy, bnSell("SELL", '"1,000.5BTC"')), rows: 'BTC 20250301 [Executed: "1,000.5BTC"]' },
+    // Not quoted, the comma splits the cell: Executed "1" and Amount "5BTC".
+    { label: "Binance Trade History, Executed 1,5BTC with no quotes", broker: "Binance", parse: () => binance(bnBuy, bnSell("SELL", "1,5BTC")), rows: 'BTC 20250301 [Price,Executed,Amount,Fee: "90000.00,1,5BTC,9000.00,0EUR"]' },
     { label: "Kraken trades, vol empty", broker: "Kraken", parse: () => kraken(krBuy, krSell("")), rows: 'BTC 20250301 [vol: ""]' },
     { label: "Kraken trades, vol 'abc'", broker: "Kraken", parse: () => kraken(krBuy, krSell("abc")), rows: 'BTC 20250301 [vol: "abc"]' },
   ];
@@ -1522,6 +1524,37 @@ describe("#467 a crypto buy or sale whose quantity, side or coin cannot be read 
       const r = run([[parsed, broker]], 2025, method);
       expect([r.capitalGains.netGainLoss.toFixed(2), r.capitalGains.disposals.length]).toEqual(["6000.00", 1]);
     });
+  });
+
+  // BTC bought twice and 0.05 sold. Read as 1 BTC with a fee of 2000, the
+  // unquoted "1,5BTC" of the first buy gave the sale a cost of 2100 with no
+  // word (#467). The row books nothing and is named; the sale takes the
+  // second lot.
+  const bnLots = (executed: string, tail = ""): Statement => binance(
+    `2025-02-01 10:00:00,BTCEUR,BUY,40000.00,${executed},2000.00,1EUR${tail}`,
+    "2025-03-01 10:00:00,BTCEUR,BUY,40000.00,0.05,2000.00,0EUR",
+    "2025-06-01 10:00:00,BTCEUR,SELL,48000.00,0.05,2400.00,0EUR",
+  );
+  const lotsGain = (parsed: Statement, method: FxMethod): string[] => {
+    const cg = run([[parsed, "Binance"]], 2025, method).capitalGains;
+    return [cg.transmissionValue, cg.acquisitionValue, cg.netGainLoss].map((d) => d.toFixed(2));
+  };
+  it.each(METHODS)("[%s] control: a Binance buy of 0.05BTC is the lot the sale takes, with no message, also with a trailing empty cell", (method) => {
+    for (const tail of ["", ",", ", "]) {
+      const parsed = bnLots("0.05BTC", tail);
+      expect(parsed.parserMessages ?? [], tail).toEqual([]);
+      expect(lotsGain(parsed, method), tail).toEqual(["2400.00", "2001.00", "399.00"]);
+    }
+  });
+  it.each(METHODS)("[%s] a Binance buy whose Executed 1,5BTC is not quoted books nothing and is named", (method) => {
+    const parsed = bnLots("1,5BTC");
+    expect(unreadableRows(parsed)).toBe('BTC 20250201 [Price,Executed,Amount,Fee: "40000.00,1,5BTC,2000.00,1EUR"]');
+    expect(parsed.trades.filter((t) => t.tradeDate === "20250201").map((t) => [t.buySell, t.quantityUnknown])).toEqual([["BUY", true]]);
+    expect(lotsGain(parsed, method)).toEqual(["2400.00", "2000.00", "400.00"]);
+    // A cell cut in two that leaves one empty moves the rest too: Fee "2000.00".
+    const shifted = bnLots("0.05BTC,");
+    expect(unreadableRows(shifted)).toBe('BTC 20250201 [Price,Executed,Amount,Fee: "40000.00,0.05BTC,,2000.00,1EUR"]');
+    expect(lotsGain(shifted, method)).toEqual(["2400.00", "2000.00", "400.00"]);
   });
 
   it("a crypto-quoted Binance row with no readable side or quantity names both coins", () => {

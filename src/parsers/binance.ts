@@ -1578,6 +1578,8 @@ function parseBinanceCsv(lines: string[]): Statement {
   /** Each row left out for its pair, named as "date side executed [Pair: cell]" (#467). */
   const unsupportedRows: string[] = [];
   const seenKeys = new Map<string, number>();
+  // The columns the header names: a trailing empty header cell names none.
+  const headerWidth = headers.reduce((width, h, idx) => (h.trim() !== "" ? idx + 1 : width), 0);
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -1610,16 +1612,27 @@ function parseBinanceCsv(lines: string[]): Statement {
     // skipped with no word or booked as zero units (#467).
     // Executed is in the coin bought or sold, Amount and Price in the quote
     // (readCoinAmount).
+    // A row with more cells than the header, past it not empty, had a comma
+    // inside an unquoted cell ("1,5BTC"): every cell after it moved one
+    // column on, so Executed "1" and a Fee of the Amount were booked with no
+    // word (1 BTC instead of 1.5, #467). Whether "1,5" is 1.5 or 15 the file
+    // does not say, so the row is named by its numeric cells as written. A
+    // trailing empty cell (a trailing comma) moves nothing.
+    const numericFrom = Math.min(...[cols.price, cols.executed, cols.amount, cols.fee].filter((c) => c >= 0));
+    const shifted = fields.slice(headerWidth).some((f) => f.trim() !== "");
     const executedCell = readCoinAmount(fields[cols.executed], [symbol]);
     const amountCell = readCoinAmount(fields[cols.amount], [currency]);
     const priceCell = readCoinAmount(fields[cols.price], [currency]);
-    const badCell = sideLower !== "buy" && sideLower !== "sell" ? cols.side
+    const badCell = shifted ? numericFrom
+      : sideLower !== "buy" && sideLower !== "sell" ? cols.side
       : !executedCell ? cols.executed
       : !isFiat(currency) && !amountCell ? cols.amount
       : isFiat(currency) && !priceCell && !amountCell ? cols.price
       : -1;
     if (badCell >= 0) {
-      const cell = unreadableCell((headers[badCell] ?? "").trim(), fields[badCell]);
+      const cell = shifted
+        ? unreadableCell(headers.slice(numericFrom).map((h) => h.trim()).filter((h) => h).join(","), fields.slice(numericFrom).join(","))
+        : unreadableCell((headers[badCell] ?? "").trim(), fields[badCell]);
       // The side when the row gives one: the coin bought, and on a
       // crypto-quoted pair the quote coin given up for it (or the reverse).
       const side = sideLower === "buy" || sideLower === "sell" ? sideLower : undefined;
