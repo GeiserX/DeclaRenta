@@ -254,8 +254,8 @@ function dateUndatedRowsAtUploadStart(statement: Statement): void {
  * listed fill the hidden fill's value as a fee (a 188 € gain became a 112 €
  * loss). A hidden fill below the cap still passes: nothing in the files
  * tells its cash from a fee. So a fee above an ordinary Flatex fee (10 € per
- * leg plus 1 % of the gross) is kept but named in
- * `flatex.commission.above_usual`. A split fee is also below the day's smallest
+ * leg net of Stornos plus 1 % of the gross) is not booked: the fills of that
+ * day keep a fee of 0 and `flatex.commission.above_usual` names the order. A split fee is also below the day's smallest
  * fill: a missing or extra leg of a fill of the day (a sale leg not
  * exported, a leg uploaded twice with no TA-Nr.) moves the fee by at least
  * that fill's value. A day
@@ -326,9 +326,10 @@ const FEE_CAP_SHARE = new Decimal("0.02");
 // third-party fees abroad (the fixture's foreign orders pay 7.90 €, a savings
 // plan 0) and, in some countries, a stamp duty or a transaction tax of up to
 // 1 % of the gross (Ireland 1 %, the UK 0.5 %). A fee below the cap but above
-// 10 € per leg plus 1 % of the gross is kept and named: the leg may also pay
-// a fill the Depot export does not list, a 30 € fill gave a 35.90 € fee, and
-// nothing in the files tells them apart (#467).
+// 10 € per leg plus 1 % of the gross is not booked, and is named: the leg may
+// also pay a fill the Depot export does not list, a 30 € fill gave a 35.90 €
+// fee, and nothing in the files tells them apart. Booked, that fill's value
+// lowered the gain; left at 0, a real fee can only raise the tax (#467).
 const FEE_USUAL_BASE = new Decimal(10);
 const FEE_USUAL_SHARE = new Decimal("0.01");
 
@@ -469,7 +470,8 @@ function reconcileOrderLegs(statement: Statement): void {
   let crossCurrencyTrades = 0;
   let proratedOrders = 0;
   const notRecovered: string[] = [];
-  // Days of an order whose fee is kept but above an ordinary Flatex fee (#467).
+  // Days of an order whose fee is above an ordinary Flatex fee: their fills
+  // keep a fee of 0 (#467).
   const aboveUsual: string[] = [];
 
   // Commission = | net cash settled − gross trade value |. The FIFO engine
@@ -514,18 +516,23 @@ function reconcileOrderLegs(statement: Statement): void {
           notRecovered.push(orderRow(orderKey, day.legs, day.trades));
           continue;
         }
+        // A fee above an ordinary Flatex fee may be a fill the Depot export
+        // does not list, and the pairs may then not match: no fill of the day
+        // gets a fee, and the order is named. Booked, it lowered the gain by
+        // that fill's value (#467).
+        const unusual = sortedTrades.some((trade, i) => {
+          const fee = fees[i];
+          return fee !== null && fee !== undefined && aboveUsualFee(fee, new Decimal(trade.tradeMoney), 1);
+        });
         sortedTrades.forEach((trade, i) => {
           const fee = fees[i];
           if (fee === null || fee === undefined) {
             crossCurrencyTrades++;
             return;
           }
+          if (unusual) return;
           trade.commission = fee.abs().negated().toFixed();
           trade.commissionCurrency = sortedLegs[i]!.currency || trade.commissionCurrency || trade.currency;
-        });
-        const unusual = sortedTrades.some((trade, i) => {
-          const fee = fees[i];
-          return fee !== null && fee !== undefined && aboveUsualFee(fee, new Decimal(trade.tradeMoney), 1);
         });
         if (unusual) {
           aboveUsual.push(orderRow(orderKey, day.legs, day.trades));
@@ -550,14 +557,18 @@ function reconcileOrderLegs(statement: Statement): void {
         notRecovered.push(orderRow(orderKey, day.legs, day.trades));
         continue;
       }
+      // The allowance counts legs net of Stornos: a Storno and the leg it
+      // rebooks are one payment, and counted as two they raised it by 20 €,
+      // so a 35.90 € fee on 1000 € went silent. A fee above it is not split:
+      // the fills keep 0 and the order is named, as above (#467).
+      if (aboveUsualFee(totalFee, gross, Math.max(1, netLegCount(day.legs, day.trades)))) {
+        aboveUsual.push(orderRow(orderKey, day.legs, day.trades));
+        continue;
+      }
       for (const trade of day.trades) {
         trade.commission = totalFee.mul(trade.tradeMoney).div(gross).abs().negated().toFixed();
         trade.commissionCurrency = day.legs[0]!.currency || trade.commissionCurrency || trade.currency;
       }
-      // The allowance counts legs net of Stornos: a Storno and the leg it
-      // rebooks are one payment, and counted as two they raised it by 20 €,
-      // so a 35.90 € fee on 1000 € went silent (#467).
-      if (aboveUsualFee(totalFee, gross, Math.max(1, netLegCount(day.legs, day.trades)))) aboveUsual.push(orderRow(orderKey, day.legs, day.trades));
       prorated = true;
     }
     if (prorated) proratedOrders++;
@@ -627,8 +638,8 @@ function reconcileOrderLegs(statement: Statement): void {
     addInfoMessage(statement, {
       id: "flatex.commission.above_usual",
       severity: "warning",
-      message: `Flatex: ${count} orden(es) tienen una comisión mayor que la habitual de Flatex, y DeclaRenta la calcula: ${rows}.`,
-      hint: "Cada fila trae el número de orden, el valor y la fecha. Entre corchetes va el importe de la operación y la suma de sus apuntes de caja. La diferencia es la comisión. Una comisión habitual de Flatex es de 5,90 € por orden, más unos pocos euros de gastos de la bolsa y, en algunos países, un impuesto de hasta el 1 % del importe. Esta es mayor. Puede ser real, pero el apunte de caja puede pagar también otra ejecución que no está en el CSV de Depotumsätze. Entonces la comisión sale mayor de lo que pagaste: sube el coste de la compra o baja el valor de la venta, y así pagarías de menos. Consulta la comisión en la liquidación de la orden en Flatex. Si es menor, corrígela a mano en Renta Web. Si falta una ejecución, sube el CSV de Depotumsätze que la trae.",
+      message: `Flatex: ${count} orden(es) tienen una comisión mayor que la habitual de Flatex, y DeclaRenta no la resta: ${rows}.`,
+      hint: "Cada fila trae el número de orden, el valor y la fecha. Entre corchetes va el importe de la operación y la suma de sus apuntes de caja. La diferencia sería la comisión. Una comisión habitual de Flatex es de 5,90 € por orden, más unos pocos euros de gastos de la bolsa y, en algunos países, un impuesto de hasta el 1 % del importe. Esta es mayor. Puede ser real, pero el apunte de caja puede pagar también otra ejecución que no está en el CSV de Depotumsätze. Los dos CSV no permiten saberlo. Por eso DeclaRenta deja la comisión en 0. No la suma al coste de la compra ni la resta del valor de la venta. Consulta la comisión en la liquidación de la orden (Abrechnung) en Flatex. Si es real y quieres deducirla, añádela a mano en Renta Web. Si falta una ejecución, sube el CSV de Depotumsätze que la trae.",
       context: { count, rows },
     });
   }
