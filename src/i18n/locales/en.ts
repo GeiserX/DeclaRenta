@@ -1029,9 +1029,9 @@ const en: TranslationKeys = {
   "report.cash_amount_too_large.hint":
     "It is usually an error in the file or in the exchange rate: no real dividend, interest or withholding reaches a trillion euros. Check those rows in the broker's file and the exchange rates, and declare their amount by hand.",
   "report.withholding_of_excluded_dividend":
-    "{{count}} withholding row(s) in the file may belong to a dividend that is not added: {{rows}}. They are not added either, so they are not deducted from another dividend.",
+    "{{count}} withholding row(s) in the file are within 7 days of a dividend of the same security that is not added: {{rows}}. They may belong to that dividend, so they are not added either. This way no other dividend deducts them.",
   "report.withholding_of_excluded_dividend.hint":
-    "When you declare that dividend by hand, declare its withholding too. If one of them belongs to another dividend, declare it with that other dividend.",
+    "When you declare that dividend by hand, declare the withholding that belongs to it too. If one of them belongs to another dividend, declare it with that other dividend.",
   "report.non_finite_disposal":
     "{{count}} sale(s) have an amount that is not a number (NaN or infinity) or that has more than 12 integer digits in euros: {{rows}}. That amount is not added to the boxes. The other operations of the year are added.",
   "report.non_finite_disposal.hint":
