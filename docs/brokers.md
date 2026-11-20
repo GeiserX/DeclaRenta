@@ -127,6 +127,8 @@ Los informes antiguos no tienen columnas de tipo de cambio. Entonces DeclaRenta 
 
 **Limitaciones:** Revolut no incluye ISINs, dividendos ni posiciones abiertas en este extracto. Para dividendos se necesita el Account Statement (no soportado aún). Para posiciones abiertas (Modelo 720/D-6), se necesita información adicional.
 
+**Desdoblamientos con dinero:** un desdoblamiento que te pagó dinero (por una fracción de acción) no se aplica. DeclaRenta te avisa con la fila para que añadas esa venta a mano.
+
 ### Lightyear
 
 1. Abre la app de **Lightyear**.

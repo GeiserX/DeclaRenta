@@ -642,10 +642,14 @@ function parseTransactionLog(
     // one whose Quantity is 0, empty or not a number does not say how many
     // shares it added: either is kept as a row that books nothing, named as
     // not applied, and its holding is of unknown size (#467), never applied
-    // on a false day or with a false size, and never only counted. A
+    // on a false day or with a false size, and never only counted. So is a
+    // split whose Total Amount is neither blank nor a written zero: it paid
+    // cash (for a fractional share), and applied with that cash dropped, a
+    // 550 € gain became a 275 € loss with no word (#467). The hint of
+    // `parser.corporate_action_not_applied` asks for that payout by hand. A
     // dividend with no readable date is booked with that date and taken out,
     // named with its amount, by dropUndatedCash below (#467).
-    if (TXN_TYPE_SPLIT.test(type) && (!isReadableTradeDate(tradeDate) || signedQtyDec.isZero())) {
+    if (TXN_TYPE_SPLIT.test(type) && (!isReadableTradeDate(tradeDate) || signedQtyDec.isZero() || !movesNoMoney)) {
       trades.push(corporateActionTrade({
         tradeID: `revolut-split-${tradeDate}-${ticker}-${i}`, symbol: ticker, isin: "",
         assetCategory: detectAssetCategory(ticker), currency,
@@ -678,7 +682,7 @@ function parseTransactionLog(
     }
 
     // STOCK SPLIT: Quantity is the number of shares added (negative for a
-    // reverse split) and the amount is zero. The ratio depends on the whole
+    // reverse split) and the amount is zero (blank or a written zero). The ratio depends on the whole
     // holding, which can span several yearly files, so the parser does not size
     // it: the FIFO engine does, from the lots it holds at the split date, and
     // rescales them keeping their cost (Art. 37.1.a LIRPF: not a disposal).

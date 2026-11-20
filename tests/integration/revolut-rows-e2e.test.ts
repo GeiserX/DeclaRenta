@@ -20,6 +20,7 @@
  *   Currency of USD was booked as 1500 USD, in both formats.
  * - A split, merger or spin-off with no ticker was dropped with no word: a
  *   split's later sale kept its pre-split cost, a cash merger's money was lost.
+ * - A split that paid cash was applied with the cash dropped.
  */
 import { describe, it, expect } from "vitest";
 import * as XLSX from "xlsx";
@@ -404,5 +405,38 @@ describe("Revolut closed positions: an amount whose currency disagrees with the 
     expect((await parse([closed(o)], HC)).trades.map((t) => t.currency)).toEqual(["USD", "USD"]);
     const r = await report([closed(o)], method, HC);
     expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("547.80");
+  });
+});
+
+describe("Revolut splits that pay cash are never applied with the cash dropped", () => {
+  // Buy 10 AAPL at 100 USD; a reverse split leaves 1 share (-9) or half a
+  // share and pays 750 USD for the other half (-9.5); sell what is left at
+  // 1500 USD a share.
+  const SPLIT = (qty: string, total: string) => ["2025-04-01T10:00:00Z", "AAPL", "STOCK SPLIT", qty, "", total, "USD", "1.1"];
+  const SELL = (qty: string, total: string) => ["2025-06-03T10:00:00Z", "AAPL", "SELL - MARKET", qty, "USD 1500", total, "USD", "1.1"];
+
+  it.each(METHODS)("[%s] control: a split with a Total of \"USD 0\" or blank is applied, a gain of 550 €", async (method) => {
+    for (const total of ["USD 0", ""]) {
+      const s = await parse([BUY, SPLIT("-9", total), SELL("1", "USD 1500")]);
+      expect(s.corporateActions.map((c) => [c.type, c.quantity]), total).toEqual([["RS", "-9"]]);
+      const r = await report([BUY, SPLIT("-9", total), SELL("1", "USD 1500")], method);
+      expect(r.capitalGains.netGainLoss.toFixed(2), total).toBe("550.00");
+    }
+  });
+
+  it.each(METHODS)("[%s] a split with a Total of \"USD 750\" or one with no number is named as not applied", async (method) => {
+    for (const total of ["USD 750", "USD abc", "USD"]) {
+      const rows = [BUY, SPLIT("-9.5", total), SELL("0.5", "USD 750")];
+      const s = await parse(rows);
+      expect(s.corporateActions, total).toEqual([]);
+      expect(msg(s, "parser.corporate_action_not_applied"), total).toBe("AAPL 20250401 [STOCK SPLIT: -9.5]");
+      expect(s.openPositions.map((p) => [p.symbol, p.quantityUnknown]), total).toEqual([["AAPL", true]]);
+      const r = await report(rows, method);
+      expect(r.messages.some((m) => m.id === "parser.corporate_action_not_applied"), total).toBe(true);
+      // Not applied, the half share sold keeps its own cost (50 USD): a gain
+      // of 770 € the user is told to check, never the 275 € loss of the split
+      // applied with its 750 USD dropped.
+      expect(r.capitalGains.netGainLoss.toFixed(2), total).toBe("770.00");
+    }
   });
 });
