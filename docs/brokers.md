@@ -127,7 +127,7 @@ Los informes antiguos no tienen columnas de tipo de cambio. Entonces DeclaRenta 
 
 **Limitaciones:** Revolut no incluye ISINs, dividendos ni posiciones abiertas en este extracto. Para dividendos se necesita el Account Statement (no soportado aún). Para posiciones abiertas (Modelo 720/D-6), se necesita información adicional.
 
-**Divisas:** un importe puede traer una divisa distinta de la columna Currency. Puede venir como código («EUR 900») o como símbolo («€900»). Entonces DeclaRenta no calcula esa fila y te avisa con ella.
+**Divisas:** un importe puede traer una divisa distinta de la columna Currency. Puede venir como código («EUR 900»), como símbolo («€900») o en la cabecera («Gross proceeds (EUR)»). Entonces DeclaRenta no calcula esa fila y te avisa con ella. Si el archivo trae dos columnas para el mismo importe, DeclaRenta no lo lee y te dice cuáles son.
 
 **Desdoblamientos con dinero:** un desdoblamiento que te pagó dinero (por una fracción de acción) no se aplica. DeclaRenta te avisa con la fila para que añadas esa venta a mano.
 

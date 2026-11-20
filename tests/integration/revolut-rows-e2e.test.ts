@@ -21,8 +21,9 @@
  * - A split, merger or spin-off with no ticker was dropped with no word: a
  *   split's later sale kept its pre-split cost, a cash merger's money was lost.
  * - A split that paid cash was applied with the cash dropped.
- * - A currency symbol ("€1500") that disagrees with the Currency column was
- *   ignored.
+ * - A currency symbol ("€1500") or a header currency ("Gross proceeds (EUR)")
+ *   that disagrees with the Currency column was ignored, and of two such
+ *   columns the first was read.
  */
 import { describe, it, expect } from "vitest";
 import * as XLSX from "xlsx";
@@ -493,5 +494,43 @@ describe("Revolut amounts written with a currency symbol that disagrees with the
     expect(s.cashTransactions[0]!.currency).toBe("USD");
     const d = await report([dividend("$110", "")], method);
     expect(d.dividends.grossIncome.toFixed(2)).toBe("121.00");
+  });
+});
+
+describe("Revolut headers that name a currency (\"Gross proceeds (EUR)\") are never read in the row's currency", () => {
+  const swap = (header: string[], from: string, to: string) => header.map((h) => (h === from ? to : h));
+
+  it.each(METHODS)("[%s] closed positions: \"(EUR)\" columns with a Currency of USD keep both legs unreadable", async (method) => {
+    const header = swap(swap(HC, "Gross proceeds", "Gross proceeds (EUR)"), "Cost basis", "Cost basis (EUR)");
+    const s = await parse([closed({ "Gross proceeds": "900" })], header);
+    const cells = 'Currency: "USD", Cost basis (EUR): "1000", Gross proceeds (EUR): "900"';
+    expect(msg(s, "parser.trade_row_unreadable")).toBe(`AAPL 20250203 [${cells}]; AAPL 20250603 [${cells}]`);
+    const r = await report([closed({ "Gross proceeds": "900" })], method, header);
+    expect(r.capitalGains.transmissionValue.toFixed(2)).toBe("0.00");
+    expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("0.00");
+  });
+
+  it("closed positions: two Gross proceeds columns are refused, naming both", async () => {
+    const header = [...swap(HC, "Gross proceeds", "Gross proceeds (EUR)"), "Gross proceeds (USD)"];
+    const row = [...closed({ "Gross proceeds": "818.18" }), "900"];
+    await expect(parseRevolutXlsx(workbook([header, row])))
+      .rejects.toThrow("Revolut XLSX: varias columnas para un mismo dato (Gross proceeds (EUR), Gross proceeds (USD))");
+  });
+
+  it.each(METHODS)("[%s] transaction log: \"(EUR)\" columns with a Currency of USD name the sale, which books nothing", async (method) => {
+    const header = swap(swap(H, "Price per share", "Price per share (EUR)"), "Total Amount", "Total Amount (EUR)");
+    const rows = [BUY.map((c) => c.replace(/^USD /, "")), sell("150", "1500")];
+    const s = await parse(rows, header);
+    expect(msg(s, "parser.trade_row_unreadable"))
+      .toBe('AAPL 20250203 [Currency: "USD", Price per share (EUR): "100", Total Amount (EUR): "1000"]; ' +
+        'AAPL 20250603 [Currency: "USD", Price per share (EUR): "150", Total Amount (EUR): "1500"]');
+    const r = await report(rows, method, header);
+    expect(r.capitalGains.transmissionValue.toFixed(2)).toBe("0.00");
+  });
+
+  it.each(METHODS)("[%s] a \"(USD)\" header with an empty Currency cell takes USD", async (method) => {
+    const header = swap(swap(HC, "Gross proceeds", "Gross proceeds (USD)"), "Cost basis", "Cost basis (USD)");
+    const r = await report([closed({ Currency: "" })], method, header);
+    expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("547.80");
   });
 });

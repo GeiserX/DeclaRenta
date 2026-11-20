@@ -162,7 +162,32 @@ function sheetToRows(xlsx: typeof import("xlsx"), sheet: WorkSheet): string[][] 
 function revolutColumn(headers: string[], names: string[], loose = false): number {
   const exact = findColumn(headers, names);
   if (exact >= 0 || !loose) return exact;
-  return headers.findIndex((h) => names.some((n) => h.toLowerCase().trim().includes(n)));
+  return looseColumns(headers, names)[0] ?? -1;
+}
+
+/** Every header that contains one of the names. */
+function looseColumns(headers: string[], names: string[]): number[] {
+  return headers.flatMap((h, i) => (names.some((n) => h.toLowerCase().trim().includes(n)) ? [i] : []));
+}
+
+/**
+ * A money column found by {@link revolutColumn}, and the currency its header
+ * names ("Gross proceeds (EUR)"), "" when it names none. The loose lookup read
+ * such a column in the row's Currency, so EUR figures were booked as USD, and
+ * with two such columns it took the first, with no word (#467). The header's
+ * currency is checked against the Currency cell like the one written in front
+ * of an amount, and two columns that both match are refused, naming them: the
+ * parser cannot tell which one to read.
+ */
+function moneyColumn(headers: string[], names: string[]): { col: number; currency: string } {
+  const exact = findColumn(headers, names);
+  if (exact >= 0) return { col: exact, currency: "" };
+  const loose = looseColumns(headers, names);
+  if (loose.length > 1) {
+    throw new Error(`Revolut XLSX: varias columnas para un mismo dato (${loose.map((c) => headers[c]!.trim()).join(", ")})`);
+  }
+  const col = loose[0] ?? -1;
+  return { col, currency: (headers[col] ?? "").match(/\(\s*([A-Za-z]{3})\s*\)/)?.[1]?.toUpperCase() ?? "" };
 }
 
 /**
@@ -191,8 +216,10 @@ function parseTrades(
   const dateSoldCol = findColumn(headers, DATE_SOLD_HEADERS);
   const symbolCol = findColumn(headers, SYMBOL_HEADERS);
   const quantityCol = findColumn(headers, QUANTITY_HEADERS);
-  const costBasisCol = revolutColumn(headers, COST_BASIS_HEADERS, true);
-  const grossProceedsCol = revolutColumn(headers, GROSS_PROCEEDS_HEADERS, true);
+  const costBasisColumn = moneyColumn(headers, COST_BASIS_HEADERS);
+  const grossProceedsColumn = moneyColumn(headers, GROSS_PROCEEDS_HEADERS);
+  const costBasisCol = costBasisColumn.col;
+  const grossProceedsCol = grossProceedsColumn.col;
   const grossPnlCol = findColumn(headers, GROSS_PNL_HEADERS);
   const feesCol = findColumn(headers, FEES_HEADERS);
   const currencyCol = findColumn(headers, CURRENCY_HEADERS);
@@ -238,10 +265,12 @@ function parseTrades(
     const grossPnl = grossPnlCol >= 0 ? (row[grossPnlCol] ?? "0").trim() : "0";
     const fees = feesCol >= 0 ? (row[feesCol] ?? "0").trim() : "0";
     // The currency written in front of Cost basis, Gross proceeds or Fees
-    // ("USD 1000") fills an empty Currency cell, as in the transaction log.
-    const prefixed = ([[costBasisCol, "Cost basis"], [grossProceedsCol, "Gross proceeds"], [feesCol, "Fees"]] as const)
+    // ("USD 1000", "$1000"), or named by its header ("Cost basis (USD)"),
+    // fills an empty Currency cell, as in the transaction log.
+    const prefixed = ([[costBasisCol, "Cost basis", costBasisColumn.currency], [grossProceedsCol, "Gross proceeds", grossProceedsColumn.currency],
+      [feesCol, "Fees", ""]] as const)
       .filter(([col]) => col >= 0)
-      .map(([col, name]) => ({ col, name, prefix: readRevolutNumber(row[col]).currency }));
+      .flatMap(([col, name, header]) => [readRevolutNumber(row[col]).currency, header].map((prefix) => ({ col, name, prefix })));
     const currencyCell = (row[currencyCol] ?? "USD").trim();
     const currency = currencyCell || (prefixed.find((p) => p.prefix !== "")?.prefix ?? "");
 
@@ -288,8 +317,8 @@ function parseTrades(
     // about 11 € became one of 112 € with no word (#467). Both legs are kept
     // as unreadable rows named by the Currency cell and each cell that
     // disagrees, as the transaction log does: they book nothing.
-    const mismatch = prefixed.filter((p) => p.prefix !== "" && p.prefix !== currency)
-      .map((p) => unreadableCell(headers[p.col] ?? p.name, row[p.col]));
+    const mismatch = [...new Set(prefixed.filter((p) => p.prefix !== "" && p.prefix !== currency).map((p) => p.col))]
+      .map((col) => unreadableCell(headers[col] ?? prefixed.find((p) => p.col === col)!.name, row[col]));
     if (mismatch.length > 0) {
       keepUnreadable([unreadableCell(headers[currencyCol] ?? "Currency", currencyCell), ...mismatch].join(", "));
       continue;
@@ -418,6 +447,9 @@ interface TxnLogColumns {
   total: number;
   currency: number;
   fxRate: number;
+  /** The currency the Price per share and Total Amount headers name, or "" ({@link moneyColumn}). */
+  priceCurrency: string;
+  totalCurrency: string;
 }
 
 function findTxnLogColumns(headers: string[]): TxnLogColumns {
@@ -425,15 +457,15 @@ function findTxnLogColumns(headers: string[]): TxnLogColumns {
   const ticker = findColumn(headers, TXN_TICKER_HEADERS);
   const type = findColumn(headers, TXN_TYPE_HEADERS);
   const quantity = findColumn(headers, TXN_QUANTITY_HEADERS);
-  const price = revolutColumn(headers, TXN_PRICE_HEADERS, true);
-  const total = revolutColumn(headers, TXN_TOTAL_HEADERS, true);
+  const { col: price, currency: priceCurrency } = moneyColumn(headers, TXN_PRICE_HEADERS);
+  const { col: total, currency: totalCurrency } = moneyColumn(headers, TXN_TOTAL_HEADERS);
   const currency = findColumn(headers, TXN_CURRENCY_HEADERS);
   const fxRate = findColumn(headers, TXN_FX_RATE_HEADERS);
 
   // A missing Price per share is priced from Total Amount ÷ Quantity, and a
   // missing Quantity makes rows of unknown size: both are named row by row.
   requireColumns({ Date: date, Type: type, "Total Amount": total, Currency: currency });
-  return { date, ticker, type, quantity, price, total, currency, fxRate };
+  return { date, ticker, type, quantity, price, total, currency, fxRate, priceCurrency, totalCurrency };
 }
 
 function parseTransactionLog(
@@ -505,10 +537,12 @@ function parseTransactionLog(
     // Currency cell was ignored, so "EUR 1500" with Currency USD was booked
     // as 1500 USD with no word (#467): a buy, a sale or a dividend with such
     // a cell is not booked and is named with the cells below.
+    // So does the currency a header names ("Total Amount (EUR)").
     const priceCurrency = readRevolutNumber(row[cols.price]).currency;
-    const currency = currencyCell || totalCurrency || priceCurrency;
-    const currencyMismatch = ([[cols.price, priceCurrency, "Price per share"], [cols.total, totalCurrency, "Total Amount"]] as const)
-      .filter(([, prefix]) => prefix !== "" && prefix !== currency)
+    const currency = currencyCell || totalCurrency || priceCurrency || cols.totalCurrency || cols.priceCurrency;
+    const currencyMismatch = ([[cols.price, [priceCurrency, cols.priceCurrency], "Price per share"],
+      [cols.total, [totalCurrency, cols.totalCurrency], "Total Amount"]] as const)
+      .filter(([, prefixes]) => prefixes.some((prefix) => prefix !== "" && prefix !== currency))
       .map(([col, , name]) => unreadableCell(headers[col] ?? name, row[col]));
     if (currencyMismatch.length > 0) currencyMismatch.unshift(unreadableCell(headers[cols.currency] ?? "Currency", currencyCell));
 
