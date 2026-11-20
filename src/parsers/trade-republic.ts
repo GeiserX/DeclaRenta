@@ -454,17 +454,21 @@ function parseTrCsv(lines: string[]): Statement {
     }
 
     // --- A category or CASH type the parser does not know (#467) ---
-    // A CASH row that writes no share count, or a zero one, and names a
-    // security (an ISIN) and an amount may be income (a coupon, a capital
-    // return): it is not booked, since its meaning is unknown, and it is
-    // named. A row that moves shares (a saveback, a stock perk) is kept as a
-    // row that books nothing: evidence of a holding for the anti-churning
-    // exception (#453). Rows with no security (deposits, card payments,
-    // transfers) stay skipped.
-    if (category === "CASH" && (sharesUnreadable || shares === 0)) {
+    // A CASH row that writes no share count, or a zero one, and a row of
+    // another category that moves no shares, that names a security (an
+    // ISIN) and does not write a zero amount, may be income (a coupon, a
+    // capital return): it is not booked, since its meaning is unknown, and
+    // it is named, with its category when it is not CASH. An empty amount
+    // cell is no zero: it is named as an unreadable one. A row that moves
+    // shares (a saveback, a stock perk) is kept as a row that books
+    // nothing: evidence of a holding for the anti-churning exception
+    // (#453). Rows with no security (deposits, card payments, transfers)
+    // stay skipped.
+    if (category === "CASH" ? sharesUnreadable || shares === 0 : !movesShares) {
       const amountCell = field(fields, cols.amount);
-      if (symbol !== "" && amountCell !== "" && !(!quantityUnreadable(amountCell) && amount === 0)) {
-        unknownCash.push(`${field(fields, cols.type)} ${dividendSecurity(name, symbol)} ${quantityUnreadable(amountCell) ? `[${unreadableCell(headers[cols.amount] ?? "amount", amountCell)}]` : amountStr} ${currency} ${tradeDate || "—"}`);
+      if (symbol !== "" && !(!quantityUnreadable(amountCell) && amount === 0)) {
+        const kind = category === "CASH" ? field(fields, cols.type) : `${field(fields, cols.category)} ${field(fields, cols.type)}`.trim();
+        unknownCash.push(`${kind} ${dividendSecurity(name, symbol)} ${quantityUnreadable(amountCell) ? `[${unreadableCell(headers[cols.amount] ?? "amount", fields[cols.amount])}]` : amountStr} ${currency} ${tradeDate || "—"}`);
       }
       continue;
     }

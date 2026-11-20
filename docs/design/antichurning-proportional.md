@@ -784,10 +784,14 @@ práctico Renta 2025. The decisions, each pinned in
       not what the action did (a split, a merger, a transfer in), so booking
       the count could add or remove shares that were never there. The row
       books nothing and keeps the evidence "unverified". A CASH row of an
-      unknown type with no share count that names an ISIN and an amount (a
-      coupon, a capital return) is not booked and is named by
-      `trade_republic.cash_type_not_read`; deposits, card payments and
-      transfers name no ISIN and stay skipped. A negative `price` is
+      unknown type with no share count, or a zero one, and a row of an
+      unknown category that moves no shares, that names an ISIN and does
+      not write a zero amount (a coupon, a capital return) is not booked
+      and is named by `trade_republic.cash_type_not_read`, with its
+      category when it is not CASH. An empty amount is named as an
+      unreadable one, never skipped as a zero; a written zero stays
+      skipped. Deposits, card payments and transfers name no ISIN and stay
+      skipped. A negative `price` is
       |`amount`| ÷ `shares`, as an empty one: it sold the shares at a
       negative price. `price`, `amount` and `fee` are read once, from the
       cell: read a second time, "1.2,3,4" (first read "12.3,4") became

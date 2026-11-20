@@ -20,6 +20,9 @@
  * - A price, amount or fee cell was read twice: "1.2,3,4" became 123.4, or
  *   its raw text stopped the report.
  * - A positive tax on a buy or a sale (money paid back) was booked as a cost.
+ * - A row of an unknown category with a written zero share count, and a CASH
+ *   row of an unknown type with an empty amount, that named an ISIN were
+ *   dropped with no word.
  */
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
@@ -364,5 +367,39 @@ describe("Trade Republic trade tax: only a paid (negative) tax is a cost; a posi
       expect(s.trades.map((t) => t.taxes), tax).toEqual(["0", "0"]);
       expect(s.parserMessages, tax).toBeUndefined();
     }
+  });
+});
+
+describe("Trade Republic rows of an unknown category, or with an empty amount, that name a security and no share move are named", () => {
+  const COUPON = (o: Partial<Record<string, string>> = {}) =>
+    row({ category: "CASH", type: "COUPON", asset_class: "BOND", name: "Bond", symbol: "XS0000000001", amount: "50.00", ...o });
+
+  it.each(METHODS)("[%s] control: a CASH COUPON with a written zero share count is named", (method) => {
+    const s = tr(COUPON({ shares: "0" }));
+    expect(rowsOf(s, "trade_republic.cash_type_not_read")).toBe("COUPON Bond (XS0000000001) 50.00 EUR 20250515");
+    expect(report(s, method).dividends.grossIncome.toFixed(2)).toBe("0.00");
+  });
+
+  it.each(METHODS)("[%s] an INCOME COUPON with a written zero share count is named with its category, not dropped", (method) => {
+    const s = tr(COUPON({ category: "INCOME", shares: "0" }));
+    expect([s.trades, s.cashTransactions]).toEqual([[], []]);
+    expect(rowsOf(s, "trade_republic.cash_type_not_read")).toBe("INCOME COUPON Bond (XS0000000001) 50.00 EUR 20250515");
+    expect(report(s, method).dividends.grossIncome.toFixed(2)).toBe("0.00");
+  });
+
+  it.each(METHODS)("[%s] a CASH COUPON with an empty amount is named as '€' is, not dropped", (method) => {
+    const s = tr(COUPON({ amount: "" }), COUPON({ amount: "€" }));
+    expect(rowsOf(s, "trade_republic.cash_type_not_read")).toBe(
+      'COUPON Bond (XS0000000001) [amount: ""] EUR 20250515; COUPON Bond (XS0000000001) [amount: "€"] EUR 20250515');
+    expect(report(s, method).dividends.grossIncome.toFixed(2)).toBe("0.00");
+  });
+
+  it("controls: a written zero amount, or no security, stays skipped with no word", () => {
+    const s = tr(
+      COUPON({ category: "INCOME", shares: "0", amount: "0.00" }),
+      COUPON({ category: "INCOME", shares: "0", symbol: "", amount: "50.00" }),
+      COUPON({ symbol: "", amount: "" }),
+    );
+    expect([s.trades, s.cashTransactions, s.parserMessages]).toEqual([[], [], undefined]);
   });
 });
