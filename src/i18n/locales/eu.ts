@@ -743,6 +743,8 @@ const eu: TranslationKeys = {
   "crypto_rates.saved": "Gordeta",
   "crypto_rates.save_error":
     "Nabigatzaileak ez du utzi prezioak gordetzen: haren biltegia beteta edo blokeatuta egon daiteke. Txostena ez da aldatu.",
+  "crypto_rates.clear_error":
+    "Nabigatzaileak ez du utzi gordetako prezioak ezabatzen: haren biltegia blokeatuta egon daiteke. Txostena ez da aldatu.",
   "crypto_rates.row_invalid":
     "Berrikusi markatutako prezioak: idatzi zero baino handiagoa den prezio bat (adib. 1.234,56). Gordetako prezioak kentzeko, erabili «Ezabatu gordetako prezioak». Ez da ezer gorde.",
   "crypto_rates.recalculate_hint": "Balioak zure nabigatzailean gordetzen dira eta txostena birkalkulatzen da.",
@@ -776,6 +778,8 @@ const eu: TranslationKeys = {
   "opening_lots.saved": "Gordeta",
   "opening_lots.save_error":
     "Nabigatzaileak ez du utzi loteak gordetzen: haren biltegia beteta edo blokeatuta egon daiteke. Txostena ez da aldatu.",
+  "opening_lots.clear_error":
+    "Nabigatzaileak ez du utzi gordetako loteak ezabatzen: haren biltegia blokeatuta egon daiteke. Txostena ez da aldatu.",
   "opening_lots.row_invalid":
     "Berrikusi markatutako errenkadak: adierazi erosketa-data eta zero baino handiagoak diren kantitatea eta prezioa (adib. 1.234,56). Ez da ezer gorde.",
   "opening_lots.recalculate_hint": "Eskuzko loteak zure nabigatzailean gordetzen dira eta txostena birkalkulatzen da.",

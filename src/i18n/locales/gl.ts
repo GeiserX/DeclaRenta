@@ -743,6 +743,8 @@ const gl: TranslationKeys = {
   "crypto_rates.saved": "Gardado",
   "crypto_rates.save_error":
     "O navegador non deixou gardar os prezos: o seu almacenamento pode estar cheo ou bloqueado. O informe non cambiou.",
+  "crypto_rates.clear_error":
+    "O navegador non deixou borrar os prezos gardados: o seu almacenamento pode estar bloqueado. O informe non cambiou.",
   "crypto_rates.row_invalid":
     "Revisa os prezos marcados: escribe un prezo maior ca cero (p. ex. 1.234,56). Para quitar os prezos gardados, usa «Borrar prezos gardados». Non se gardou nada.",
   "crypto_rates.recalculate_hint": "Os valores gárdanse no teu navegador e o informe recalcúlase.",
@@ -776,6 +778,8 @@ const gl: TranslationKeys = {
   "opening_lots.saved": "Gardado",
   "opening_lots.save_error":
     "O navegador non deixou gardar os lotes: o seu almacenamento pode estar cheo ou bloqueado. O informe non cambiou.",
+  "opening_lots.clear_error":
+    "O navegador non deixou borrar os lotes gardados: o seu almacenamento pode estar bloqueado. O informe non cambiou.",
   "opening_lots.row_invalid":
     "Revisa as filas marcadas: indica a data de compra e unha cantidade e un prezo maiores ca cero (p. ex. 1.234,56). Non se gardou nada.",
   "opening_lots.recalculate_hint": "Os lotes manuais gárdanse no teu navegador e o informe recalcúlase.",

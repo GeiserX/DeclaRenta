@@ -500,3 +500,24 @@ describe("#452 follow-up: a Toronto loss sale keeps its open-point notice when a
     expect(msg(r, OPEN)).toBeUndefined();
   });
 });
+
+describe("#472 review: an IBKR file with the ISIN in lower case", () => {
+  const lower = ISIN.toLowerCase();
+  it.each(METHODS)("[%s] the user's 2 months still beat IBKR's LSE reading, on one row", (method) => {
+    const r = run(ibkrXml(ISSUE, "LSE", { isin: lower }), 2025, method, { windowMonthsByIsin: { [ISIN]: 2 } });
+    expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("0.00");
+    expect(fiscal(r)).toBe("-20.00");
+    expect(r.capitalGains.antichurningSecurities).toEqual([expect.objectContaining({ isin: ISIN, months: 2, source: "user" })]);
+  });
+  it.each(METHODS)("[%s] the user's 1 year applies with no IBKR market, on one row", (method) => {
+    const r = run(ibkrXml(ISSUE, "", { isin: lower }), 2025, method, { windowMonthsByIsin: { [ISIN]: 12 } });
+    expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("20.00");
+    expect(fiscal(r)).toBe("0.00");
+    expect(r.capitalGains.antichurningSecurities).toEqual([expect.objectContaining({ isin: ISIN, months: 12, source: "user" })]);
+  });
+  it.each(METHODS)("[%s] IBKR's LSE reading still gives 1 year with no user value (control)", (method) => {
+    const r = run(ibkrXml(ISSUE, "LSE", { isin: lower }), 2025, method);
+    expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("20.00");
+    expect(r.capitalGains.antichurningSecurities).toEqual([expect.objectContaining({ isin: ISIN, months: 12, source: "ibkr" })]);
+  });
+});

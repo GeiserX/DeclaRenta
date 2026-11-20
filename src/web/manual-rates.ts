@@ -106,25 +106,32 @@ export function getManualRates(): EcbRateMap {
   return buildManualRateMap(readStored());
 }
 
-/** Remove every saved manual crypto price, so the next run values nothing by hand. */
-export function clearManualRates(): void {
+/**
+ * Remove every saved manual crypto price, so the next run values nothing by
+ * hand. Returns false when the browser refuses (storage blocked): the prices
+ * are still saved and still value the swaps (#472 review).
+ */
+export function clearManualRates(): boolean {
   try {
     localStorage.removeItem(STORAGE_KEY);
   } catch {
-    /* storage unavailable — nothing to clear */
+    return false;
   }
+  return true;
 }
 
 export function getManualOpeningLots(): ManualOpeningLot[] {
   return readStoredOpeningLots();
 }
 
-export function clearManualOpeningLots(): void {
+/** Remove every saved opening lot. Returns false when the browser refuses (storage blocked, #472 review). */
+export function clearManualOpeningLots(): boolean {
   try {
     localStorage.removeItem(OPENING_LOTS_STORAGE_KEY);
   } catch {
-    /* storage unavailable — nothing to clear */
+    return false;
   }
+  return true;
 }
 
 /**
@@ -464,8 +471,11 @@ function renderOpeningLotRows(issue: ManualOpeningLotIssue): string {
     .join("");
 }
 
-/** `saved` shows the «Guardado» label in the panel a Save redraws (#472). */
-export function renderManualOpeningLotsPanel(messages: TaxMessage[], { saved = false }: { saved?: boolean } = {}): string {
+/**
+ * The groups the opening-lots panel shows for `messages`: one per missing lot
+ * the report names, or the saved groups when it names none.
+ */
+function openingLotIssues(messages: TaxMessage[]): { issues: ManualOpeningLotIssue[]; hasActiveIssues: boolean } {
   const issuesFromMessages = messages
     .map((msg) => manualOpeningIssueFromMessage(msg))
     .filter((issue): issue is ManualOpeningLotIssue => issue !== null)
@@ -473,23 +483,184 @@ export function renderManualOpeningLotsPanel(messages: TaxMessage[], { saved = f
       (issue, index, arr) =>
         arr.findIndex((i) => i.groupKey === issue.groupKey && i.sellDate === issue.sellDate) === index,
     );
-
-  const issues = issuesFromMessages.length > 0 ? issuesFromMessages : collectStoredOpeningLotIssues();
   const hasActiveIssues = issuesFromMessages.length > 0;
+  return { issues: hasActiveIssues ? issuesFromMessages : collectStoredOpeningLotIssues(), hasActiveIssues };
+}
 
-  if (issues.length === 0) return "";
+/**
+ * The panel's groups: one per asset, with every sale of it that misses a lot.
+ * The saved lots of an asset are one pool that FIFO spends on all its sales
+ * (report.ts 0d), and the Save replaces them by group key. Two groups with the
+ * same key would each replace the pool, so the last one won and an empty
+ * second group wiped the lot typed in the first (#472 review of 15c1b45).
+ */
+function openingLotGroups(issues: ManualOpeningLotIssue[]): ManualOpeningLotIssue[][] {
+  const byKey = new Map<string, ManualOpeningLotIssue[]>();
+  for (const issue of issues) byKey.set(issue.groupKey, [...(byKey.get(issue.groupKey) ?? []), issue]);
+  return [...byKey.values()];
+}
 
-  const groups = issues
-    .map(
-      (
-        issue,
-      ) => `<section class="manual-opening-lot-group" data-group-key="${esc(issue.groupKey)}" data-symbol="${esc(issue.symbol)}" data-description="${esc(issue.description)}" data-isin="${esc(issue.isin)}" data-conid="${esc(issue.conid ?? "")}" data-asset-category="${esc(issue.assetCategory)}" data-currency="${esc(issue.currency)}">
+/**
+ * What the groups of a panel drawn from `messages` show besides their inputs,
+ * in order. A run keeps a panel the user is editing only while this is the
+ * same for its report (#472 review of e4e439e): a crypto price saved or
+ * cleared in another panel puts a swap into the calculations or leaves it out,
+ * which can drop a sale's missing lot or add one. List every field a group
+ * shows, except the inputs, which read storage.
+ */
+export function openingLotsRowsKey(messages: TaxMessage[]): string {
+  const { issues, hasActiveIssues } = openingLotIssues(messages);
+  return JSON.stringify([
+    hasActiveIssues,
+    issues.map((i) => [i.groupKey, i.symbol, i.description, i.isin, i.conid ?? null, i.assetCategory, i.currency, i.sellDate ?? null, i.missingQuantity ?? null]),
+  ]);
+}
+
+const OPENING_LOT_FIELDS = ["acquireDate", "quantity", "pricePerShare"] as const;
+
+/** One typed row of a group: its three inputs and whether a refused Save flagged it. */
+type OpeningLotDraftRow = { values: string[]; invalid: boolean };
+
+/** The input the user is typing in: its group key, row and field, and the caret. */
+type OpeningLotFocus = { key: string; row: number; field: string; start: number | null; end: number | null };
+
+/**
+ * What a panel holds that nobody saved: the typed rows of each group by group
+ * key (one group per key, see openingLotGroups), the error on screen, whether
+ * the user left the panel open, and the input they are typing in, so a redraw
+ * does not take their keystrokes away.
+ */
+export interface OpeningLotsDraft {
+  groups: Map<string, OpeningLotDraftRow[]>;
+  error: string | null;
+  open: boolean;
+  focus: OpeningLotFocus | null;
+}
+
+/** The groups of a panel with their key. */
+function keyedGroups(panel: HTMLElement): { group: HTMLElement; key: string }[] {
+  return [...panel.querySelectorAll<HTMLElement>(".manual-opening-lot-group")].map((group) => ({
+    group,
+    key: group.dataset.groupKey ?? "",
+  }));
+}
+
+function lotRows(group: HTMLElement): HTMLTableRowElement[] {
+  return [...group.querySelectorAll<HTMLTableRowElement>(".manual-opening-lot-row")];
+}
+
+function readOpeningLotFocus(panel: HTMLElement, groups: ReturnType<typeof keyedGroups>): OpeningLotFocus | null {
+  const active = panel.ownerDocument.activeElement;
+  if (!(active instanceof HTMLInputElement) || !active.matches(".manual-opening-lot-input") || !panel.contains(active)) return null;
+  const at = groups.find(({ group }) => group.contains(active));
+  const row = active.closest<HTMLTableRowElement>(".manual-opening-lot-row");
+  if (!at || !row) return null;
+  const text = active.type === "text";
+  return {
+    key: at.key,
+    row: lotRows(at.group).indexOf(row),
+    field: active.dataset.field ?? "",
+    start: text ? active.selectionStart : null,
+    end: text ? active.selectionEnd : null,
+  };
+}
+
+/** Read the typed rows and the visible error of a drawn panel. */
+export function readOpeningLotsDraft(panel: HTMLElement): OpeningLotsDraft {
+  const groups = new Map<string, OpeningLotDraftRow[]>();
+  const keyed = keyedGroups(panel);
+  for (const { group, key } of keyed) {
+    groups.set(
+      key,
+      lotRows(group).map((row) => ({
+        values: OPENING_LOT_FIELDS.map((f) => row.querySelector<HTMLInputElement>(`[data-field='${f}']`)?.value ?? ""),
+        invalid: row.querySelector(".manual-opening-lot-input[aria-invalid='true']") !== null,
+      })),
+    );
+  }
+  const error = panel.querySelector<HTMLElement>(".manual-opening-lots-error-msg");
+  return {
+    groups,
+    error: error && !error.hidden ? error.textContent : null,
+    open: panel instanceof HTMLDetailsElement && panel.open,
+    focus: readOpeningLotFocus(panel, keyed),
+  };
+}
+
+/**
+ * Put a draft back into a panel drawn from a newer report: each group the draft
+ * holds gets the user's rows, with their flags, a new group keeps what is
+ * stored, a group the report no longer names is gone, the error stays on
+ * screen, and the panel stays open or closed as the user left it. The input
+ * the user was typing in keeps the focus and the caret, if its group is still
+ * there. «Guardado» stays hidden: the panel shows values nobody saved.
+ */
+export function applyOpeningLotsDraft(panel: HTMLElement, draft: OpeningLotsDraft): void {
+  if (panel instanceof HTMLDetailsElement) panel.open = draft.open;
+  const keyed = keyedGroups(panel);
+  for (const { group, key } of keyed) {
+    const rows = draft.groups.get(key);
+    const tbody = group.querySelector<HTMLTableSectionElement>("tbody");
+    if (!rows || rows.length === 0 || !tbody) continue;
+    let drawn = lotRows(group);
+    drawn.slice(rows.length).forEach((row) => row.remove());
+    for (let i = drawn.length; i < rows.length; i++) tbody.insertAdjacentHTML("beforeend", renderEmptyOpeningLotRow(group));
+    drawn = lotRows(group);
+    rows.forEach((row, i) => {
+      OPENING_LOT_FIELDS.forEach((f, j) => {
+        const input = drawn[i]!.querySelector<HTMLInputElement>(`[data-field='${f}']`);
+        if (!input) return;
+        input.value = row.values[j] ?? "";
+        if (row.invalid) input.setAttribute("aria-invalid", "true");
+        else input.removeAttribute("aria-invalid");
+      });
+    });
+  }
+  const saved = panel.querySelector<HTMLElement>(".manual-opening-lots-saved-msg");
+  if (saved) saved.hidden = true;
+  const error = panel.querySelector<HTMLElement>(".manual-opening-lots-error-msg");
+  if (error && draft.error !== null) {
+    error.hidden = false;
+    error.textContent = draft.error;
+  }
+  const focus = draft.focus;
+  const at = focus && keyed.find(({ key }) => key === focus.key);
+  const input = at ? lotRows(at.group)[focus.row]?.querySelector<HTMLInputElement>(`[data-field='${focus.field}']`) : null;
+  if (!focus || !input) return;
+  input.focus();
+  if (focus.start !== null && focus.end !== null) input.setSelectionRange(focus.start, focus.end);
+}
+
+/**
+ * `saved` shows the «Guardado» label in the panel a Save redraws (#472). A
+ * Save that emptied the last saved group with no missing lot left draws only
+ * the title and the label, with no rows and no buttons (#472 review).
+ */
+export function renderManualOpeningLotsPanel(messages: TaxMessage[], { saved = false }: { saved?: boolean } = {}): string {
+  const { issues, hasActiveIssues } = openingLotIssues(messages);
+
+  if (issues.length === 0) {
+    if (!saved) return "";
+    return `<details class="manual-opening-lots-panel crypto-rates-panel" open>
+    <summary class="manual-opening-lots-summary">
+      <span class="manual-opening-lots-summary-text">${esc(tr("opening_lots.title"))}</span>
+    </summary>
+    <div class="manual-opening-lots-body">
+      <span class="crypto-rates-saved-msg manual-opening-lots-saved-msg">${esc(tr("opening_lots.saved"))}</span>
+    </div>
+  </details>`;
+  }
+
+  const grouped = openingLotGroups(issues);
+  const groups = grouped
+    .map((sales) => {
+      const issue = sales[0]!;
+      const intros = sales
+        .filter((sale) => sale.missingQuantity && sale.sellDate)
+        .map((sale) => tr("opening_lots.group_intro", { quantity: sale.missingQuantity!, date: sale.sellDate! }));
+      return `<section class="manual-opening-lot-group" data-group-key="${esc(issue.groupKey)}" data-symbol="${esc(issue.symbol)}" data-description="${esc(issue.description)}" data-isin="${esc(issue.isin)}" data-conid="${esc(issue.conid ?? "")}" data-asset-category="${esc(issue.assetCategory)}" data-currency="${esc(issue.currency)}">
       <h4>${esc(issue.symbol)}${issue.isin ? ` <span class="mono">(${esc(issue.isin)})</span>` : ""}</h4>
-      <p>${esc(
-        issue.missingQuantity && issue.sellDate
-          ? tr("opening_lots.group_intro", { quantity: issue.missingQuantity, date: issue.sellDate })
-          : tr("opening_lots.group_intro_saved"),
-      )}</p>
+      ${(intros.length > 0 ? intros : [tr("opening_lots.group_intro_saved")]).map((intro) => `<p>${esc(intro)}</p>`).join("")}
       <div class="table-wrapper"><table>
         <thead><tr>
           <th>${esc(tr("opening_lots.col_acquire_date"))}</th>
@@ -499,8 +670,8 @@ export function renderManualOpeningLotsPanel(messages: TaxMessage[], { saved = f
         </tr></thead>
         <tbody>${renderOpeningLotRows(issue)}</tbody>
       </table></div>
-    </section>`,
-    )
+    </section>`;
+    })
     .join("");
 
   // A Save that covers the last missing lot redraws the panel from the stored
@@ -508,7 +679,7 @@ export function renderManualOpeningLotsPanel(messages: TaxMessage[], { saved = f
   return `<details class="manual-opening-lots-panel crypto-rates-panel"${hasActiveIssues || saved ? " open" : ""}>
     <summary class="manual-opening-lots-summary">
       <span class="manual-opening-lots-summary-text">${esc(tr("opening_lots.title"))}</span>
-      <span class="manual-opening-lots-summary-count">${issues.length}</span>
+      <span class="manual-opening-lots-summary-count">${grouped.length}</span>
     </summary>
     <div class="manual-opening-lots-body">
       <p>${esc(tr("opening_lots.description"))}</p>
@@ -532,11 +703,28 @@ export function renderManualOpeningLotsPanel(messages: TaxMessage[], { saved = f
  * write, then invokes `onSave("save")` (which re-runs the report so the new
  * rates take effect). A price it cannot read, or a saved price left empty,
  * flags its row and saves nothing (#472 review). On clear: drops every saved price and calls
- * `onSave("clear")`, so the redrawn panel shows no «Guardado» (#472).
+ * `onSave("clear")`, so the redrawn panel shows no «Guardado» (#472). A Clear
+ * the browser refuses says so and does not rerun; a good one empties every
+ * price on screen, because a panel the user edits while the rerun waits stays
+ * on screen and its next Save must not write the cleared prices back (#472 review).
  */
 export function bindManualRatesPanel(container: HTMLElement, onSave: (action: "save" | "clear") => void): void {
   container.querySelector<HTMLButtonElement>("#crypto-rates-clear-btn")?.addEventListener("click", () => {
-    clearManualRates();
+    const msg = container.querySelector<HTMLElement>(".crypto-rates-saved-msg");
+    const errorMsg = container.querySelector<HTMLElement>(".crypto-rates-error-msg");
+    if (msg) msg.hidden = true;
+    if (!clearManualRates()) {
+      if (errorMsg) {
+        errorMsg.hidden = false;
+        errorMsg.textContent = tr("crypto_rates.clear_error");
+      }
+      return;
+    }
+    if (errorMsg) errorMsg.hidden = true;
+    container.querySelectorAll<HTMLInputElement>(".crypto-rate-input").forEach((input) => {
+      input.value = "";
+      input.removeAttribute("aria-invalid");
+    });
     onSave("clear");
   });
 
@@ -561,6 +749,7 @@ export function bindManualRatesPanel(container: HTMLElement, onSave: (action: "s
         : storedRateFor(currency, date) !== "";
       if (invalid) {
         input.setAttribute("aria-invalid", "true");
+        revealFlagged(input);
         invalidRows++;
       } else {
         input.removeAttribute("aria-invalid");
@@ -592,6 +781,15 @@ export function bindManualRatesPanel(container: HTMLElement, onSave: (action: "s
 
     if (savedCount > 0) onSave("save");
   });
+}
+
+/**
+ * Open every closed <details> around a flagged input, so the error that asks
+ * the user to review the marked rows points at something on screen (#472
+ * review): a saved price sits in the collapsed «saved elsewhere» list.
+ */
+function revealFlagged(input: HTMLElement): void {
+  for (let d = input.closest("details"); d; d = d.parentElement?.closest("details") ?? null) d.open = true;
 }
 
 function renderEmptyOpeningLotRow(groupEl: HTMLElement): string {
@@ -634,10 +832,27 @@ export function bindManualOpeningLotsPanel(container: HTMLElement, onSave: (acti
     }
   });
 
+  // A Clear the browser refuses says so and does not rerun. A good one empties
+  // every row on screen: a panel the user edits while the rerun waits stays on
+  // screen, and its next Save must not write the cleared lots back (#472 review).
   const clearBtn = container.querySelector<HTMLButtonElement>("#manual-opening-lots-clear-btn");
   if (clearBtn) {
     clearBtn.addEventListener("click", () => {
-      clearManualOpeningLots();
+      const msg = container.querySelector<HTMLElement>(".manual-opening-lots-saved-msg");
+      const errorMsg = container.querySelector<HTMLElement>(".manual-opening-lots-error-msg");
+      if (msg) msg.hidden = true;
+      if (!clearManualOpeningLots()) {
+        if (errorMsg) {
+          errorMsg.hidden = false;
+          errorMsg.textContent = tr("opening_lots.clear_error");
+        }
+        return;
+      }
+      if (errorMsg) errorMsg.hidden = true;
+      container.querySelectorAll<HTMLInputElement>(".manual-opening-lot-input").forEach((input) => {
+        input.value = "";
+        input.removeAttribute("aria-invalid");
+      });
       onSave("clear");
     });
   }
@@ -679,8 +894,10 @@ export function bindManualOpeningLotsPanel(container: HTMLElement, onSave: (acti
         const invalid =
           (acquireDate !== "" || quantity !== "" || pricePerShare !== "") && normalizeManualOpeningLot(lot) === null;
         row.querySelectorAll<HTMLInputElement>(".manual-opening-lot-input").forEach((input) => {
-          if (invalid) input.setAttribute("aria-invalid", "true");
-          else input.removeAttribute("aria-invalid");
+          if (invalid) {
+            input.setAttribute("aria-invalid", "true");
+            revealFlagged(input);
+          } else input.removeAttribute("aria-invalid");
         });
         if (invalid) invalidRows++;
         return lot;

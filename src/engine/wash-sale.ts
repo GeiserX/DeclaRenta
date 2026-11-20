@@ -42,7 +42,7 @@ import type { Trade, CorporateAction } from "../types/ibkr.js";
 import Decimal from "decimal.js";
 import { normalizeDate, parseDate } from "./dates.js";
 import { compareFifoTradeOrder } from "./fifo.js";
-import { resolveIsinWindow, type IsinWindow } from "./antichurning-window.js";
+import { canonicalIsin, resolveIsinWindow, type IsinWindow } from "./antichurning-window.js";
 import { hasSignConflict, readPositionNumber } from "./ecb.js";
 
 /** Asset categories exempt from anti-churning (not "valores homogéneos" per Art. 33.5.f/g) */
@@ -1736,7 +1736,8 @@ function buyQtyConversionToSellUnits(
  */
 function windowMonths(assetCategory: string, isin: string, windows: ReadonlyMap<string, IsinWindow>, sellDay: string): number {
   if (assetCategory === "CRYPTO") return 12;
-  const resolved = isin ? resolveIsinWindow(windows.get(isin), sellDay) : undefined;
+  // The map is keyed by `canonicalIsin`: a lower-case ISIN still finds the user's value.
+  const resolved = isin ? resolveIsinWindow(windows.get(canonicalIsin(isin)), sellDay) : undefined;
   if (resolved) return resolved.months;
   if (isin && LISTED_CATEGORIES.has(assetCategory)) return 2;
   // No ISIN (and not a recognized listed category) → assume unlisted.
