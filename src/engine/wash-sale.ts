@@ -44,7 +44,7 @@ import { normalizeDate, parseDate } from "./dates.js";
 import { compareFifoTradeOrder } from "./fifo.js";
 import { resolveIsinWindow, type IsinWindow } from "./antichurning-window.js";
 import { hasSignConflict, readPositionNumber } from "./ecb.js";
-import { isCountableAmount } from "./amount-range.js";
+import { finiteDisposalAmounts } from "../generators/casillas.js";
 
 /** Asset categories exempt from anti-churning (not "valores homogéneos" per Art. 33.5.f/g) */
 const WASH_SALE_EXEMPT: ReadonlySet<string> = new Set(["OPT", "FUT", "FOP", "FSFOP", "CFD", "CASH"]);
@@ -592,17 +592,23 @@ export function detectWashSales(
     group.idxs.push(idx);
   }
 
-  // Only a loss the report counts can be blocked. A sale with non-finite
-  // proceeds or cost (a corrupt rate), or one past 12 integer digits of euros
-  // (`isCountableAmount`), has no counted loss: `finiteDisposalAmounts` leaves
-  // that amount out, so the sale reads as a gain or as nothing. Blocking its
-  // "Infinity" would zero the year's blocked total in guardNonFiniteTotals and
-  // drop every valid blocked loss from the base (#469); blocking 1e2000 would
-  // put a 2000-digit figure in the blocked line (#470).
-  const isLossAt = (idx: number): boolean => {
-    const d = result[idx]!;
-    return isCountableAmount(d.proceedsEur) && isCountableAmount(d.costBasisEur) && d.gainLossEur.lessThan(0);
+  // Only the loss the report counts can be blocked, and exactly that loss:
+  // the result of `finiteDisposalAmounts`, the one the boxes add. A sale with
+  // non-finite proceeds or cost (a corrupt rate), or one past 12 integer
+  // digits of euros (`isCountableAmount`), loses that amount there: with no
+  // proceeds it counts nothing, with no cost it counts its proceeds. Blocking
+  // its raw "Infinity" would zero the year's blocked total in
+  // guardNonFiniteTotals and drop every valid blocked loss from the base
+  // (#469); blocking 1e2000 would put a 2000-digit figure in the blocked line
+  // (#470). A trap: the test asked for both amounts to count, so a sale whose
+  // cost is left out and whose proceeds are below 0 (a commission above the
+  // gross) subtracted its loss from the boxes and a repurchase blocked none
+  // of it (CodeRabbit on 10e1918).
+  const countedLossAt = (idx: number): Decimal => {
+    const gainLoss = finiteDisposalAmounts(result[idx]!).gainLoss;
+    return gainLoss.lessThan(0) ? gainLoss.negated() : new Decimal(0);
   };
+  const isLossAt = (idx: number): boolean => countedLossAt(idx).greaterThan(0);
   // A short cover buys back shares sold short; it transmits no held shares, so
   // it is never a «transmisión definitiva»: it runs no definitive test, releases
   // no pending loss and cannot empty the position. Its own loss still blocks.
@@ -958,7 +964,7 @@ export function detectWashSales(
       const absorbed = absorbedOf.get(idx);
       if (!isLossAt(idx) || !absorbed || absorbed.lessThanOrEqualTo(0)) continue;
       const qty = disposal.quantity.abs();
-      const lossAbs = disposal.gainLossEur.abs();
+      const lossAbs = countedLossAt(idx);
       const blocked = absorbed.greaterThanOrEqualTo(qty) ? lossAbs : lossAbs.mul(absorbed).div(qty);
       disposal.blockedLossEur = blocked;
       disposal.washSaleBlocked = blocked.greaterThan(0);
@@ -1168,7 +1174,9 @@ export function salesWithWindowPastData(
     if (WASH_SALE_EXEMPT.has(d.assetCategory) || d.quantity.isZero()) continue;
     const key = homogeneousKey(d.isin, d.symbol, d.assetCategory);
     if (!key) continue;
-    const openLoss = d.gainLossEur.lessThan(0) && d.blockedLossEur.lessThan(d.gainLossEur.abs());
+    // The loss the detector can block: the one the boxes count (`isLossAt`).
+    const counted = finiteDisposalAmounts(d).gainLoss;
+    const openLoss = counted.lessThan(0) && d.blockedLossEur.lessThan(counted.abs());
     const undoableRelease = d.reintegratedLossEur.greaterThan(0) && d.assetCategory !== "CRYPTO";
     if (!openLoss && !undoableRelease) continue;
     const sellDate = parseDate(d.sellDate);

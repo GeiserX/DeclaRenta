@@ -79,11 +79,11 @@ function conversion(date: string, usd: string, direction: "fund" | "toEur"): Tra
   });
 }
 
-function statement(trades: Trade[], cashTransactions: CashTransaction[] = []): FlexStatement {
+function statement(trades: Trade[], cashTransactions: CashTransaction[] = [], toDate = "20251231"): FlexStatement {
   return {
     accountId: "U1",
     fromDate: "20250101",
-    toDate: "20251231",
+    toDate,
     period: "Annual",
     trades,
     cashTransactions,
@@ -159,5 +159,56 @@ describe("a sale left out releases the principal of its own shares (fx-fifo, Cod
     const r = generateTaxReport(statement(trades("0")), rates, 2025, reportOptionsForMethod("multidivisa"));
     expect(message(r, "report.trade_out_of_range")).toBeUndefined();
     expect(r.fxGains.netGainLoss.toString()).toBe("0");
+  });
+});
+
+describe("a loss the boxes count blocks like any other (wash-sale, CodeRabbit 4634270118)", () => {
+  // The lot cost 1e12 €, past what the boxes count, so the sale counts its
+  // proceeds and no cost: 10 × 0.01 − 5 € of commission = −4.90 €, a loss
+  // the boxes subtract. The shares are bought back the next day, so that
+  // loss waits (art. 33.5.f LIRPF). A trap: the anti-churning rule read the
+  // uncounted cost as "no loss" and let the 4.90 € through.
+  const rates = rateMap({ USD: "1" });
+  const eur = { currency: "EUR", commissionCurrency: "EUR" };
+  const rows = [
+    stock("2025-03-01", "BUY", "10", "1e11", eur),
+    stock("2025-03-15", "SELL", "10", "0.01", { ...eur, commission: "-5" }),
+    stock("2025-03-16", "BUY", "10", "9", eur),
+  ];
+
+  it("blocks the 4.90 € the boxes count as a loss", () => {
+    const r = generateTaxReport(statement(rows), rates, 2025, reportOptionsForMethod("monodivisa"));
+    expect(r.capitalGains.transmissionValue.toString()).toBe("-4.9");
+    expect(r.capitalGains.acquisitionValue.toString()).toBe("0");
+    expect(r.capitalGains.blockedLosses.toString()).toBe("4.9");
+    const sale = r.capitalGains.disposals.find((d) => d.sellDate.startsWith("2025-03-15"))!;
+    expect(sale.washSaleBlocked).toBe(true);
+    expect(sale.blockedLossEur.toString()).toBe("4.9");
+  });
+
+  it("a loss blocked in full raises no warning about the data ending inside its window", () => {
+    // The data ends on 20 March, inside the two months after the sale, but a
+    // later buy can block no more than the 4.90 € already blocked. A trap:
+    // the window check read the raw result (−1e12 €) as a loss still open.
+    const r = generateTaxReport(statement(rows, [], "20250320"), rates, 2025, reportOptionsForMethod("monodivisa"));
+    expect(r.capitalGains.blockedLosses.toString()).toBe("4.9");
+    expect(message(r, "report.antichurning_window_past_data")).toBeUndefined();
+    expect(message(r, "report.antichurning_window_open_at_filing")).toBeUndefined();
+  });
+
+  it("the same loss with no repurchase still warns that the data ends inside its window (control)", () => {
+    const r = generateTaxReport(statement(rows.slice(0, 2), [], "20250320"), rates, 2025, reportOptionsForMethod("monodivisa"));
+    expect(r.capitalGains.blockedLosses.toString()).toBe("0");
+    const warned = message(r, "report.antichurning_window_past_data") ?? message(r, "report.antichurning_window_open_at_filing");
+    expect(warned).toBeDefined();
+  });
+
+  it("proceeds the boxes do not count block nothing (control)", () => {
+    const r = generateTaxReport(statement([
+      stock("2025-03-01", "BUY", "10", "8", eur),
+      stock("2025-03-15", "SELL", "10", "1e11", { ...eur, commission: "-5" }),
+      stock("2025-03-16", "BUY", "10", "9", eur),
+    ]), rates, 2025, reportOptionsForMethod("monodivisa"));
+    expect(r.capitalGains.blockedLosses.toString()).toBe("0");
   });
 });
