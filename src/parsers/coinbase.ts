@@ -124,16 +124,22 @@ function money(cell: string | undefined): string {
 }
 
 /**
- * Position-independent key for a row with no Coinbase ID (a V1 export): its
- * own cells plus how many identical rows came before it in the same file.
- * The same row in two overlapping exports gets the same key, so the
- * duplicate-trades check sees it; two identical fills in one file still get
- * distinct keys. A line number differs between files (#467).
+ * Position-independent key for a row: what it says (see rowContent) plus how
+ * many rows saying the same came before it in the same file. The same row in
+ * two overlapping exports gets the same key, so the duplicate-trades check
+ * sees it; two identical fills in one file still get distinct keys. A line
+ * number differs between files (#467).
  */
 function occurrenceKey(seen: Map<string, number>, content: string): string {
   const n = (seen.get(content) ?? 0) + 1;
   seen.set(content, n);
   return `${content}#${n}`;
+}
+
+/** A number cell as its value ("€40000.00" and "40000" are both "40000"); one that cannot be read, as written. */
+function cellValue(cell: string | undefined): string {
+  const text = usCell(cell);
+  return quantityUnreadable(text) ? (cell ?? "").trim() : toFiniteDecimal(parseNumber(text!)).toString();
 }
 
 // ---------------------------------------------------------------------------
@@ -281,19 +287,26 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     const total = money(rawTotal);
     const fees = money(cols.fees >= 0 ? fields[cols.fees] : undefined);
     const notes = cols.notes >= 0 ? (fields[cols.notes] ?? "").trim() : "";
-    // The same row in two overlapping exports must get the same ID, or the
-    // duplicate-trades check cannot see it: use Coinbase's own transaction ID,
-    // and the row's own cells when it has none (V1 exports have no ID
-    // column). The line number was used there, so a full-year export and a
-    // Q1 export that shared rows doubled every trade with no warning (#467).
-    const ownId = cols.id >= 0 ? (fields[cols.id] ?? "").trim() : "";
-    const rowId = ownId || occurrenceKey(seenRows, fields.map((f) => f.trim()).join("|"));
-
     // A row with no readable Timestamp is booked with that date: a trade is
     // then kept as a row that books nothing and an income row is taken out,
     // each named (markUndatedTrades, dropUndatedCash below; #467).
     const tradeDate = convertTimestamp(timestamp);
     const tradeTime = timeOfDay(timestamp);
+
+    // The same row in two overlapping exports must get the same ID, or the
+    // duplicate-trades check cannot see it. The line number was used for a
+    // V1 export (no ID column), so a full-year export and a Q1 export that
+    // shared rows doubled every trade with no warning. Coinbase's own ID was
+    // used for V2 and V3, and the cells for V1, so a V1 and a V3 export of the
+    // same trades never matched: a 10200 € loss became 20400 € with no
+    // warning. Every row now goes by what it says, read as values, in every
+    // format: day and time, type, asset, quantity, currency, price, subtotal,
+    // total and fees. Notes are left out, since each format words them its
+    // own way (#467).
+    const rowId = occurrenceKey(seenRows, [
+      isReadableTradeDate(tradeDate) ? tradeDate : timestamp, tradeTime ?? "", txType, asset, cellValue(fields[cols.quantity]),
+      spotCurrency, cellValue(rawPrice), cellValue(rawSubtotal), cellValue(rawTotal), cellValue(cols.fees >= 0 ? fields[cols.fees] : undefined),
+    ].join("|"));
 
     // Skip non-taxable transfers
     if (SKIP_TYPES.includes(txType)) continue;

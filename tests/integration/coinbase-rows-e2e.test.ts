@@ -134,7 +134,7 @@ describe("#467 Coinbase V1 (no ID column): the same row in two overlapping expor
     expect(net(report(s, method))).toBe("-20400.00");
   });
 
-  it("mirror: the same overlap in a V3 export is flagged by Coinbase's own IDs", () => {
+  it("mirror: the same overlap in a V3 export is flagged too", () => {
     const s = merged(parse(H3, `a1,${buy}`, `a2,${sell}`), parse(H3, `a0,${send}`, `a1,${buy}`, `a2,${sell}`));
     expect(duplicates(s)).toContain("2 operación(es) duplicada(s)");
   });
@@ -178,5 +178,46 @@ describe("#467 Coinbase: income with no Asset is named with its readable amount,
     const r = report(merged(parsed), method);
     expect(r.interest.entries).toEqual([]);
     expect(unidentified(r)).toBe(rows);
+  });
+});
+
+describe("#467 Coinbase round 4: a V1 and a V3 export of the same trades are flagged as repeated", () => {
+  // Buy 1 BTC at 40000 € and sell it at 30000 € in 2024: a 10200 € loss.
+  const V1 = [
+    "2024-01-10T10:00:00Z,Buy,BTC,1,EUR,40000.00,40000.00,40100.00,100.00,Bought",
+    "2024-03-15T10:00:00Z,Sell,BTC,1,EUR,30000.00,30000.00,29900.00,100.00,Sold",
+  ];
+  const V3 = [
+    "aaa111,2024-01-10 10:00:00 UTC,Buy,BTC,1,EUR,€40000.00,€40000.00,€40100.00,€100.00,Bought 1 BTC for €40100.00",
+    "bbb222,2024-03-15 10:00:00 UTC,Sell,BTC,1,EUR,€30000.00,€30000.00,€29900.00,€100.00,Sold 1 BTC for €29900.00",
+  ];
+  const net = (r: TaxReport): string => r.capitalGains.netGainLoss.toFixed(2);
+
+  it.each(METHODS)("[%s] control: either export alone is a 10200 € loss and nothing is repeated", (method) => {
+    for (const s of [merged(parse(H1, ...V1)), merged(parse(H3, ...V3))]) {
+      expect(duplicates(s)).toBeUndefined();
+      expect(net(report(s, method))).toBe("-10200.00");
+    }
+  });
+
+  it.each(METHODS)("[%s] both exports give each trade the same ID, so both trades are flagged as repeated", (method) => {
+    const v1 = parse(H1, ...V1);
+    const v3 = parse(H3, ...V3);
+    expect(v3.trades.map((t) => t.tradeID)).toEqual(v1.trades.map((t) => t.tradeID));
+    const s = merged(v1, v3);
+    expect(duplicates(s)).toContain("2 operación(es) duplicada(s)");
+    // The duplicate check warns and drops nothing, as for two V1 exports.
+    expect(net(report(s, method))).toBe("-20400.00");
+  });
+
+  it("a V1 and a V3 export of different trades are not flagged", () => {
+    const other = "ccc333,2024-01-10 10:00:00 UTC,Buy,BTC,1,EUR,€41000.00,€41000.00,€41100.00,€100.00,Bought";
+    expect(duplicates(merged(parse(H1, V1[0]!), parse(H3, other)))).toBeUndefined();
+  });
+
+  it("two V3 fills with their own IDs and the same cells are two trades with two IDs, and nothing is flagged", () => {
+    const s = merged(parse(H3, V3[0]!, V3[0]!.replace("aaa111", "aaa112"), V3[1]!));
+    expect(new Set(s.trades.map((t) => t.tradeID)).size).toBe(3);
+    expect(duplicates(s)).toBeUndefined();
   });
 });
