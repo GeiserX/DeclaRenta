@@ -194,9 +194,12 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     if (!isin) {
       // A Kauf or Verkauf with no ISIN is still a purchase or a sale, and so
       // may be a row of another text that names a security and moves shares
-      // (a transfer in or out): kept unreadable. A row with neither is no
-      // trade (a separator or a cash line).
-      const movesNamedShares = name !== "" && !qtyUnknown && !qtyNum.isZero();
+      // (a transfer in or out): kept unreadable. So is one whose Nominal
+      // cannot be read but whose Kurs can: dropped, it let the one-purchase
+      // exception (#453) be applied with no proof. A row with neither is no
+      // trade (a separator, or a cash line with no Nominal and no Kurs).
+      const kursReadable = !quantityUnreadable(fields[priceCol]) && !toFiniteDecimal(price).isZero();
+      const movesNamedShares = name !== "" && (qtyUnknown ? kursReadable : !qtyNum.isZero());
       if (buyText || sellText || movesNamedShares) keepUnreadable(unreadableCell(headers[isinCol] ?? "ISIN", ""));
       continue;
     }

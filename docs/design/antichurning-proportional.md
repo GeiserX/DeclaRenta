@@ -688,8 +688,9 @@ práctico Renta 2025. The decisions, each pinned in
       Nominal stays a sale. A Storno of a Kauf or a Verkauf is neither: it is
       unreadable, named by its text (a reversed sale was booked as a second
       sale). A Kauf or Verkauf with no ISIN is kept, and so is a row of
-      another text with no ISIN that names a security and moves shares. A
-      row of the ISIN with a written zero Kurs is a corporate-action
+      another text with no ISIN that names a security and moves shares, or
+      has a Nominal that cannot be read and a readable Kurs. A row of the
+      ISIN with a written zero Kurs is a corporate-action
       row. The legs of a custody transfer (`Lagerstellenwechsel`) of one ISIN
       on one day that net to zero are skipped; every other leg is a
       corporate-action row, and `flatex.lagerstellenwechsel.unmatched` still
