@@ -138,7 +138,7 @@ Los informes antiguos no tienen columnas de tipo de cambio. Entonces DeclaRenta 
 
 **Datos extraídos:** Compras, ventas, dividendos, distribuciones (ETFs monetarios), intereses y retenciones fiscales.
 
-**Limitaciones:** Lightyear no incluye posiciones abiertas en el CSV. Para Modelo 720/D-6 se necesita información adicional. Las conversiones de divisa (FX) generan ganancias o pérdidas patrimoniales sujetas a tributación (DGT V2324-10, Art. 33.1 LIRPF); DeclaRenta las calcula salvo que elijas «Tradicional sin divisa (monodivisa)» en el paso «Revisar y elegir método».
+**Limitaciones:** Lightyear no incluye posiciones abiertas en el CSV. Para Modelo 720/D-6 se necesita información adicional. Las conversiones de divisa (FX) generan ganancias o pérdidas patrimoniales sujetas a tributación (DGT V2324-10, Art. 33.1 LIRPF); DeclaRenta las calcula salvo que elijas «Tradicional sin divisa (monodivisa)» en el paso «Revisar y elegir método». Si una compra trae una cantidad negativa, o una venta trae la cantidad y el importe negativos (una anulación), DeclaRenta no la calcula y te avisa con la fila.
 
 ### Freedom24
 

@@ -16,6 +16,8 @@
  * - An income row that names a security and writes a share count was booked
  *   as income only: the shares had no lot and blocked no loss.
  * - A row with an empty Type was dropped with no word.
+ * - A Buy with a negative Quantity, or a Sell with a negative Quantity and
+ *   Gross (a reversal), was booked as one more purchase or sale.
  */
 import { describe, it, expect } from "vitest";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
@@ -339,5 +341,43 @@ describe("Lightyear: a row with an empty Type is named, never dropped with no wo
 
   it("an all-blank padding row stays skipped with no word", () => {
     expect(parse([BUY, ",,,,,,,,,,,,"]).parserMessages).toBeUndefined();
+  });
+});
+
+describe("Lightyear Buy and Sell rows whose signs say the shares moved the other way are named, never booked as one more trade", () => {
+  // Buy 10 AAPL at 100 USD in 2024, buy 10 at 50 USD and sell 10 at 150 USD in 2025.
+  const B100 = "15/03/2024 10:30:00,OR-1,AAPL,US0378331005,Buy,10.000000000,USD,100.00,1000.00,,0,1000.00,";
+  const B50 = "10/01/2025 10:00:00,OR-5,AAPL,US0378331005,Buy,10.000000000,USD,50.00,500.00,,0,500.00,";
+  const S150 = "20/06/2025 14:22:11,OR-2,AAPL,US0378331005,Sell,10.000000000,USD,150.00,1500.00,,0,1500.00,";
+  const reversed = (type: string, gross: string, net = gross, date = "16/03/2024 10:30:00") =>
+    `${date},OR-1C,AAPL,US0378331005,${type},-10.000000000,USD,100.00,${gross},,0,${net},`;
+  const named = (r: TaxReport) => r.messages.find((m) => m.id === "parser.trade_row_unreadable")?.context?.rows;
+
+  it.each(METHODS)("[%s] control: a Sell written with a negative Quantity and a positive Gross is a sale", (method) => {
+    const r = report([B100, reversed("Sell", "1000.00"), B50, S150], method);
+    expect(r.capitalGains.netGainLoss.toString()).toBe("900");
+    expect(named(r)).toBeUndefined();
+  });
+
+  it.each(METHODS)("[%s] a Buy with a negative Quantity is named by its Quantity cell, never a second purchase", (method) => {
+    for (const gross of ["-1000.00", "1000.00"]) {
+      const rows = [B100, reversed("Buy", gross), B50, S150];
+      expect(parse(rows).trades.filter((t) => t.buySell === "BUY" && !t.quantityUnknown).map((t) => t.tradeID), gross)
+        .toEqual(["lightyear-buy-OR-1", "lightyear-buy-OR-5"]);
+      const r = report(rows, method);
+      expect(named(r), gross).toBe('AAPL (US0378331005) 20240316 [Quantity: "-10.000000000"]');
+    }
+  });
+
+  it.each(METHODS)("[%s] a Sell with a negative Quantity and a negative Gross or Net (a reversal) is named, never a second sale", (method) => {
+    // Buy 20 at 200 USD, sell 10 at 150 USD: a 450 € loss. The reversal sold nothing more.
+    const B20 = "15/03/2024 10:30:00,OR-1,AAPL,US0378331005,Buy,20.000000000,USD,200.00,4000.00,,0,4000.00,";
+    const S10 = "20/06/2025 14:22:11,OR-2,AAPL,US0378331005,Sell,10.000000000,USD,150.00,1500.00,,0,1500.00,";
+    expect(report([B20, S10], method).capitalGains.netGainLoss.toString()).toBe("-450");
+    for (const [gross, net] of [["-1500.00", "-1500.00"], ["1500.00", "-1500.00"], ["-1500.00", "1500.00"]] as const) {
+      const r = report([B20, S10, reversed("Sell", gross, net, "21/06/2025 09:00:00")], method);
+      expect(r.capitalGains.netGainLoss.toString(), `${gross} ${net}`).toBe("-450");
+      expect(named(r)).toBe('AAPL (US0378331005) 20250621 [Quantity: "-10.000000000"]');
+    }
   });
 });

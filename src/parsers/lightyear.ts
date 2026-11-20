@@ -532,6 +532,22 @@ function parseLightyearCsv(lines: string[]): Statement {
       }
       continue;
     }
+    // Lightyear writes a buy or a sale with a positive Quantity. A Buy with a
+    // negative Quantity, or a Sell whose Quantity and Gross or Net are
+    // negative, says the shares moved the other way (a reversal). Read with
+    // its signs dropped it was one more purchase or sale: a gain shrank or a
+    // loss doubled with no word. The row books nothing and is named by its
+    // Quantity cell (parser.trade_row_unreadable). A Sell with a negative
+    // Quantity and a positive Gross and Net stays a sale (#467).
+    if (new Decimal(quantityStr).isNegative() &&
+      (isBuy || new Decimal(grossAmount).isNegative() || new Decimal(netAmount).isNegative())) {
+      trades.push(unreadableTrade({
+        tradeID: `lightyear-row-${reference || `${tradeDate}-${ticker}-${i}`}`,
+        symbol: ticker, isin, assetCategory: "STK", currency, tradeDate, tradeTime,
+        buySell: isSell ? "SELL" : "BUY", exchange: "LIGHTYEAR",
+      }, unreadableCell(headers[cols.quantity] ?? "Quantity", fields[cols.quantity])));
+      continue;
+    }
 
     const feeDec = new Decimal(fee).abs();
     const grossDec = new Decimal(grossAmount).abs();
