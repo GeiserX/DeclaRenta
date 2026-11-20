@@ -1097,6 +1097,108 @@ describe("Clear in each panel (#472 review)", () => {
   });
 });
 
+describe("a kept anti-churning panel and the rows a run adds or drops (#472 review)", () => {
+  const ACME_ISIN = "XX0000000001";
+  beforeEach(async () => {
+    await startApp();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const isins = (p: HTMLElement) => [...p.querySelectorAll<HTMLSelectElement>(".antichurning-window-select")].map((sel) => sel.dataset.isin);
+  const runLands = async (strip: Element | null, what: string) => {
+    await waitFor(() => (document.getElementById("results-split") !== strip ? true : null), what);
+    await new Promise((r) => setTimeout(r, 50));
+  };
+
+  // An unsaved window choice, then an opening lot saved in another panel that
+  // turns the ACME sale into a loss: the run lists ACME, so the panel must show
+  // its row and still hold the unsaved choice. A Clear of the lot takes the
+  // row away again.
+  it("an unsaved window choice, then an opening-lot Save that adds a loss: the panel shows the new row and keeps the choice", async () => {
+    const win = await waitFor(windowPanel, "window panel");
+    expect(isins(win)).not.toContain(ACME_ISIN);
+    windowSelect(win).value = "12";
+    windowSelect(win).dispatchEvent(new Event("change", { bubbles: true }));
+
+    const lots = await waitFor(lotsPanel, "opening lots panel");
+    const field = (f: string) => lots.querySelector<HTMLInputElement>(`[data-field='${f}']`)!;
+    field("acquireDate").value = `${YEAR}-01-15`;
+    field("quantity").value = "10";
+    field("pricePerShare").value = "150";
+    let strip = document.getElementById("results-split");
+    lots.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn")!.click();
+    await runLands(strip, "rerun after the opening-lot Save");
+
+    const withAcme = windowPanel()!;
+    expect(isins(withAcme)).toContain(ACME_ISIN);
+    expect((withAcme as HTMLDetailsElement).open).toBe(true);
+    expect(windowSelect(withAcme).value).toBe("12");
+    expect(withAcme.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${ACME_ISIN}']`)!.value).toBe("auto");
+    expect(windowLabel().hidden).toBe(true);
+    expect(localStorage.getItem("declarenta_antichurning_windows")).toBeNull();
+
+    // The lot cleared: ACME has no loss, its row goes, the choice stays.
+    strip = document.getElementById("results-split");
+    lotsPanel()!.querySelector<HTMLButtonElement>("#manual-opening-lots-clear-btn")!.click();
+    await runLands(strip, "rerun after the opening-lot Clear");
+    const withoutAcme = windowPanel()!;
+    expect(isins(withoutAcme)).not.toContain(ACME_ISIN);
+    expect(windowSelect(withoutAcme).value).toBe("12");
+    expect((withoutAcme as HTMLDetailsElement).open).toBe(true);
+
+    // The choice is still unsaved until the panel's own Save stores it.
+    strip = document.getElementById("results-split");
+    withoutAcme.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    expect(JSON.parse(localStorage.getItem("declarenta_antichurning_windows")!)).toEqual({ [LSE_ISIN]: 12 });
+    await runLands(strip, "rerun after the anti-churning Save");
+    expect(shown(windowLabel())).toBe(true);
+  });
+
+  it("a refused Save, then an opening-lot Save that adds a row: the redrawn panel still shows the error", async () => {
+    const win = await waitFor(windowPanel, "window panel");
+    refuseWrites = true;
+    windowSelect(win).value = "12";
+    win.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    expect(win.querySelector<HTMLElement>(".antichurning-window-error")!.hidden).toBe(false);
+    refuseWrites = false;
+    expect((win as HTMLDetailsElement).open).toBe(true);
+    (win as HTMLDetailsElement).open = false;
+
+    const lots = await waitFor(lotsPanel, "opening lots panel");
+    const field = (f: string) => lots.querySelector<HTMLInputElement>(`[data-field='${f}']`)!;
+    field("acquireDate").value = `${YEAR}-01-15`;
+    field("quantity").value = "10";
+    field("pricePerShare").value = "150";
+    const strip = document.getElementById("results-split");
+    lots.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn")!.click();
+    await runLands(strip, "rerun after the opening-lot Save");
+
+    const after = windowPanel()!;
+    expect(isins(after)).toContain(ACME_ISIN);
+    // The user closed the panel after the refused Save: the redraw keeps it closed.
+    expect((after as HTMLDetailsElement).open).toBe(false);
+    expect(windowSelect(after).value).toBe("12");
+    expect(after.querySelector<HTMLElement>(".antichurning-window-error")!.hidden).toBe(false);
+    expect(windowLabel().hidden).toBe(true);
+  });
+
+  it("an unsaved window choice and a run that changes no row keeps the same panel (control)", async () => {
+    const win = await waitFor(windowPanel, "window panel");
+    windowSelect(win).value = "12";
+    windowSelect(win).dispatchEvent(new Event("change", { bubbles: true }));
+    const crypto = await waitFor(cryptoPanel, "crypto panel");
+    crypto.querySelector<HTMLInputElement>(".crypto-rate-input")!.value = "30000";
+    const strip = document.getElementById("results-split");
+    crypto.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    await runLands(strip, "rerun after the crypto Save");
+    expect(windowPanel()).toBe(win);
+    expect(windowSelect(win).value).toBe("12");
+  });
+});
+
 describe("a Save rerun that fails (#472 review)", () => {
   // The report generator throws on demand, so a rerun fails the way a broken
   // statement or engine error makes it fail.

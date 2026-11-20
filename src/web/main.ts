@@ -62,7 +62,15 @@ import { initSection720, renderSection720, rerenderSection720 } from "./section-
 import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
 import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.js";
 import { findMissingHoldings, type MissingHoldings, type ParsedExport } from "./missing-holdings.js";
-import { bindAntichurningWindowPanel, getWindowOverrides, renderAntichurningWindowPanel } from "./antichurning-window.js";
+import {
+  antichurningRowsKey,
+  applyAntichurningDraft,
+  bindAntichurningWindowPanel,
+  getWindowOverrides,
+  readAntichurningDraft,
+  renderAntichurningWindowPanel,
+  type AntichurningDraft,
+} from "./antichurning-window.js";
 import { initSectionGuide, rerenderSectionGuide } from "./section-guide.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import { validateStatement, renderValidationIssues } from "./validation.js";
@@ -1001,6 +1009,14 @@ let panelTouchSeq = 0;
  */
 const panelUnsaved = new WeakSet<Element>();
 
+/**
+ * The rows each drawn anti-churning panel shows (`antichurningRowsKey` of the
+ * report it was drawn from). A run keeps an edited panel only while its report
+ * lists the same rows; otherwise it draws the panel from the new report and
+ * puts the user's unsaved choices back by ISIN (#472 review of 99f969f).
+ */
+const panelRows = new WeakMap<Element, string>();
+
 async function processFiles(): Promise<void> {
   // Noted before any await: a Save calls this from its click handler.
   const touchSeqAtStart = panelTouchSeq;
@@ -1340,6 +1356,18 @@ function renderResults(report: TaxSummary, labelled: ReadonlySet<SavedPanel> = n
     const el = resultsSectionEl.querySelector<HTMLElement>(panelSelector[p]);
     if (el && keep(el)) kept.set(p, el);
   }
+  // A kept anti-churning panel whose rows the report changed (an opening lot
+  // or a crypto price saved in another panel turned a sale into a loss or a
+  // gain) would hide a new row from the user. Draw it again from the report
+  // instead, with what the user had not saved: the choices by ISIN, the error,
+  // and the marks that keep it through the next run (#472 review of 99f969f).
+  const windowRows = antichurningRowsKey(report.capitalGains.antichurningSecurities);
+  const staleWindow = kept.get("antichurning");
+  let windowDraft: { from: Element; draft: AntichurningDraft } | null = null;
+  if (staleWindow && panelRows.get(staleWindow) !== windowRows) {
+    windowDraft = { from: staleWindow, draft: readAntichurningDraft(staleWindow) };
+    kept.delete("antichurning");
+  }
   const keptEls = new Set<Element>(kept.values());
   resultsSectionEl.querySelectorAll(".crypto-rates-panel, .manual-opening-lots-panel, .antichurning-window-panel").forEach((el) => {
     if (!keptEls.has(el)) el.remove();
@@ -1404,6 +1432,12 @@ function renderResults(report: TaxSummary, labelled: ReadonlySet<SavedPanel> = n
   // whole pipeline, so the method comparison below picks it up too.
   placePanel("antichurning", renderAntichurningWindowPanel(report.capitalGains.antichurningSecurities, { saved: labelled.has("antichurning") }), (panel) => {
     bindAntichurningWindowPanel(panel, rerunAfter("antichurning", panel));
+    panelRows.set(panel, windowRows);
+    if (!windowDraft) return;
+    applyAntichurningDraft(panel, windowDraft.draft);
+    if (panelUnsaved.has(windowDraft.from)) panelUnsaved.add(panel);
+    const stamp = panelTouched.get(windowDraft.from);
+    if (stamp !== undefined) panelTouched.set(panel, stamp);
   });
 
   // «Acciones / Divisa / Total», then the closed comparison with the other methods.

@@ -99,6 +99,61 @@ function row(s: AntichurningSecurity, stored: Readonly<Record<string, WindowMont
 }
 
 /**
+ * What the rows of a panel drawn from `securities` show besides their selects,
+ * in order. A run keeps a panel the user is editing only while this is the
+ * same for its report (#472 review of 99f969f): an opening lot or a crypto
+ * price saved in another panel can turn a sale into a loss or a gain, which
+ * adds or drops a row or its open-point note. List every field `row()` shows,
+ * except the select, which reads storage.
+ */
+export function antichurningRowsKey(securities: readonly AntichurningSecurity[] | undefined): string {
+  return JSON.stringify(
+    (securities ?? []).map((s) => [s.isin, s.symbol, s.listingExchanges, s.openListingExchanges ?? null, s.openDecision ?? null, s.autoMonths]),
+  );
+}
+
+/**
+ * What a panel holds that nobody saved: each select's choice by canonical ISIN
+ * and the error on screen, plus whether the user left it open.
+ */
+export interface AntichurningDraft {
+  windows: Map<string, string>;
+  error: string | null;
+  open: boolean;
+}
+
+/** Read the choices and the visible error of a drawn panel. */
+export function readAntichurningDraft(panel: HTMLElement): AntichurningDraft {
+  const windows = new Map<string, string>();
+  for (const select of panel.querySelectorAll<HTMLSelectElement>(".antichurning-window-select")) {
+    windows.set(canonicalIsin(select.dataset.isin), select.value);
+  }
+  const error = panel.querySelector<HTMLElement>(".antichurning-window-error");
+  return { windows, error: error && !error.hidden ? error.textContent : null, open: panel instanceof HTMLDetailsElement && panel.open };
+}
+
+/**
+ * Put a draft back into a panel drawn from a newer report: each row whose ISIN
+ * the draft holds gets the user's choice, a new row keeps what is stored, and
+ * the error stays on screen, and the panel stays open or closed as the user
+ * left it. «Guardado» stays hidden: the panel shows values nobody saved.
+ */
+export function applyAntichurningDraft(panel: HTMLElement, draft: AntichurningDraft): void {
+  if (panel instanceof HTMLDetailsElement) panel.open = draft.open;
+  for (const select of panel.querySelectorAll<HTMLSelectElement>(".antichurning-window-select")) {
+    const value = draft.windows.get(canonicalIsin(select.dataset.isin));
+    if (value !== undefined) select.value = value;
+  }
+  const saved = panel.querySelector<HTMLElement>(".antichurning-window-saved");
+  if (saved) saved.hidden = true;
+  const error = panel.querySelector<HTMLElement>(".antichurning-window-error");
+  if (error && draft.error !== null) {
+    error.hidden = false;
+    error.textContent = draft.error;
+  }
+}
+
+/**
  * The collapsed panel, or "" when the report lists no security. It opens by
  * itself when IBKR gave a security 1 year, when a 2-month reading rests on an
  * open decision, or when the user set a window.
