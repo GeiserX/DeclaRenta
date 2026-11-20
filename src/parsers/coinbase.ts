@@ -276,7 +276,9 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     const writtenPrice = priceReadable ? parseNumber(usCell(rawPrice)!) : "0";
     const spotPrice = toFiniteDecimal(writtenPrice).isNegative() ? toFiniteDecimal(writtenPrice).abs().toString() : writtenPrice;
     const subtotal = subtotalReadable ? parseNumber(usCell(rawSubtotal)!) : "0";
-    const total = money(cols.total >= 0 ? fields[cols.total] : undefined);
+    const rawTotal = cols.total >= 0 ? fields[cols.total] : undefined;
+    const totalReadable = !quantityUnreadable(usCell(rawTotal));
+    const total = money(rawTotal);
     const fees = money(cols.fees >= 0 ? fields[cols.fees] : undefined);
     const notes = cols.notes >= 0 ? (fields[cols.notes] ?? "").trim() : "";
     // The same row in two overlapping exports must get the same ID, or the
@@ -332,10 +334,14 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     // An income row with no Asset says no coin: it is not booked under a
     // guessed one, but named by type, amount, date and cell, never skipped
     // with no word (#467). Another row with no Asset is a type this parser
-    // does not read, and is counted with the unknown types below.
+    // does not read, and is counted with the unknown types below. The amount
+    // shown is the one the booked branch would read: the Total, else the
+    // Subtotal. A blank Total was shown as 0 next to a readable Subtotal, so
+    // the only hint of the income's size said it was nothing (#467).
     if (!asset && INCOME_BUCKETS[txType]) {
       const shownDate = isReadableTradeDate(tradeDate) ? tradeDate : timestamp || "—";
-      unidentifiedIncome.push(`${rawType} ${(rawQty ?? "").trim() || "—"} (${total || subtotal} ${spotCurrency || "EUR"}) ${shownDate} [${unreadableCell(headers[cols.asset] ?? "Asset", "")}]`);
+      const shownAmount = totalReadable ? total : subtotalReadable ? subtotal : "—";
+      unidentifiedIncome.push(`${rawType} ${(rawQty ?? "").trim() || "—"} (${shownAmount} ${spotCurrency || "EUR"}) ${shownDate} [${unreadableCell(headers[cols.asset] ?? "Asset", "")}]`);
       continue;
     }
 
@@ -354,8 +360,6 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       // not booked, but named by type, coin, date and cells (#467).
       // An income row with no currency is named the same way: its amount
       // was booked as euros whatever the currency was (#467).
-      const rawTotal = cols.total >= 0 ? fields[cols.total] : undefined;
-      const totalReadable = !quantityUnreadable(usCell(rawTotal));
       if ((!totalReadable && !subtotalReadable) || !spotCurrency) {
         const shownDate = isReadableTradeDate(tradeDate) ? tradeDate : timestamp || "—";
         const cells = !spotCurrency ? unreadableCell(currencyHeader, rawCurrency)

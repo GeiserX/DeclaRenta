@@ -8,6 +8,8 @@
  * - A V1 export (no ID column) gave each trade its line number as ID, so the
  *   same row in two overlapping exports got two IDs and the duplicate check
  *   never saw it: the loss was counted twice with no word.
+ * - An income row with no Asset and a blank Total was named with an amount
+ *   of 0, although its Subtotal was readable.
  */
 import Decimal from "decimal.js";
 import { describe, it, expect } from "vitest";
@@ -158,5 +160,23 @@ describe("#467 Coinbase V1 (no ID column): the same row in two overlapping expor
     expect(ids[0]).toBe(ids[1]);
     const convert = parse(H1, "2024-03-15T10:00:00Z,Convert,BTC,0.1,EUR,30000,3000,3000,0,Converted 0.1 BTC to 1 ETH");
     expect(new Set(convert.trades.map((t) => t.tradeID)).size).toBe(2);
+  });
+});
+
+describe("#467 Coinbase: income with no Asset is named with its readable amount, never 0", () => {
+  const unidentified = (r: TaxReport): string | undefined => message(r.messages, "parser.crypto_income_unidentified")?.context?.rows;
+  const cases: [string, string, string, string][] = [
+    ["control: a readable Total", "32.00", "32.00", 'Staking Income 0.01 (32.00 EUR) 20240315 [Asset: ""]'],
+    ["a blank Total and a readable Subtotal", "32.00", "", 'Staking Income 0.01 (32.00 EUR) 20240315 [Asset: ""]'],
+    ["a Total of 'abc' and a readable Subtotal", "32.00", "abc", 'Staking Income 0.01 (32.00 EUR) 20240315 [Asset: ""]'],
+    ["neither cell readable", "", "", 'Staking Income 0.01 (— EUR) 20240315 [Asset: ""]'],
+    ["a written zero Total", "32.00", "0.00", 'Staking Income 0.01 (0.00 EUR) 20240315 [Asset: ""]'],
+  ];
+  it.each(METHODS.flatMap((m) => cases.map((c) => [m, ...c] as const)))("[%s] %s", (method, _label, subtotal, total, rows) => {
+    const parsed = parse(H1, `2024-03-15T10:00:00Z,Staking Income,,0.01,EUR,3200.00,${subtotal},${total},0.00,`);
+    expect(parsed.cashTransactions).toEqual([]);
+    const r = report(merged(parsed), method);
+    expect(r.interest.entries).toEqual([]);
+    expect(unidentified(r)).toBe(rows);
   });
 });
