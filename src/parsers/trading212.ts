@@ -618,17 +618,19 @@ function parseTrading212Csv(lines: string[]): Statement {
   // a deduction for income the report does not count, which the engine,
   // pairing by ISIN within 7 days, gives to another dividend of the
   // security. They are named with it. They are the withholdings of its
-  // security on its day. A dividend that names no security takes those of
-  // its day that no booked dividend of their own security and day claims
-  // (#467); a refund among them stays booked, which can only lower the
-  // deduction.
+  // security on its day. A dividend that names no security, or has no
+  // readable day, takes those of its day, or of its security, that no
+  // booked dividend of their own security and day claims (#467); a refund
+  // among them stays booked, which can only lower the deduction.
   const claimed = (w: CashTransaction): boolean =>
     cashTransactions.some((d) => d.type === "Dividends" && d.dateTime === w.dateTime && sameSecurity(d, w));
   const takeWithholdings = (held: Held, date: string): string => {
     const named = held.isin !== "" || held.symbol !== "";
-    const withheld = cashTransactions.filter((c) => c.type === "Withholding Tax" && c.dateTime === date && (named
-      ? sameSecurity(held, c)
-      : isReadableDay(date) && new Decimal(c.amount).isNegative() && !claimed(c)));
+    const dated = isReadableDay(date);
+    const withheld = cashTransactions.filter((c) => c.type === "Withholding Tax" && (named && dated
+      ? c.dateTime === date && sameSecurity(held, c)
+      : (dated ? c.dateTime === date : isReadableDay(c.dateTime)) && (!named || sameSecurity(held, c))
+        && new Decimal(c.amount).isNegative() && !claimed(c)));
     for (const w of withheld) cashTransactions.splice(cashTransactions.indexOf(w), 1);
     return withheld.map((w) => `${w.description} ${w.amount} ${w.currency}`).join(", ");
   };
@@ -638,11 +640,18 @@ function parseTrading212Csv(lines: string[]): Statement {
     const tax = row.date === undefined ? "" : takeWithholdings({ isin: "", symbol: "" }, row.date);
     return `${row.text}${tax ? ` (${tax})` : ""}`;
   });
+  // A dividend whose Time cannot be read is taken out by dropUndatedCash,
+  // and its withholdings with it.
+  const undatedTax = new Map<CashTransaction, string>();
+  for (const c of cashTransactions.filter((d) => d.type === "Dividends" && !isReadableDay(d.dateTime))) {
+    const tax = takeWithholdings(c, c.dateTime);
+    if (tax) undatedTax.set(c, tax);
+  }
 
   markUndatedTrades(trades, headers[cols.time] ?? "Time");
   parserMessages.push(
     ...tradeQuantityUnknownMessages("Trading 212", trades),
-    ...dropUndatedCash("Trading 212", cashTransactions, headers[cols.time] ?? "Time"),
+    ...dropUndatedCash("Trading 212", cashTransactions, headers[cols.time] ?? "Time", undatedTax),
     ...cashRowsUnidentifiedMessages("Trading 212", unidentifiedRows),
     ...cashIncomeAmountUnreadableMessages("Trading 212", unreadableRows),
     ...cashRowsNotBookedMessages("Trading 212", notBookedCash),

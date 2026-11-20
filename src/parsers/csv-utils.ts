@@ -230,9 +230,10 @@ export function markUndatedTrades(trades: Trade[], dateColumn = "Date"): void {
  * rate, and pairs a withholding with its dividend, so a guessed date would
  * move them with no word: the row is not booked, and the warning gives its
  * type, security, amount and date cell so the user can add it by hand.
- * `cash` is changed in place.
+ * `withheld` gives a row the withholdings the parser took out with it, shown
+ * after its amount. `cash` is changed in place.
  */
-export function dropUndatedCash(broker: string, cash: CashTransaction[], dateColumn = "Date"): TaxMessage[] {
+export function dropUndatedCash(broker: string, cash: CashTransaction[], dateColumn = "Date", withheld?: ReadonlyMap<CashTransaction, string>): TaxMessage[] {
   const undated = cash.filter((c) => !isReadableDay(c.dateTime));
   if (undated.length === 0) return [];
   const kept = cash.filter((c) => isReadableDay(c.dateTime));
@@ -240,7 +241,8 @@ export function dropUndatedCash(broker: string, cash: CashTransaction[], dateCol
   const count = String(undated.length);
   const list = undated.map((c) => {
     const security = c.isin && c.isin !== c.symbol ? `${c.symbol || c.description} (${c.isin})` : c.symbol || c.description || "—";
-    return `${c.type} ${security} ${c.amount} ${c.currency} [${unreadableCell(dateColumn, c.dateTime)}]`;
+    const tax = withheld?.get(c);
+    return `${c.type} ${security} ${c.amount} ${c.currency}${tax ? ` (${tax})` : ""} [${unreadableCell(dateColumn, c.dateTime)}]`;
   }).join("; ");
   return [{
     id: "parser.cash_row_undated",

@@ -639,7 +639,10 @@ práctico Renta 2025. The decisions, each pinned in
       matches the other's ISIN or ticker, so a row that writes no ISIN
       still finds it. A dividend with no ticker and no ISIN takes the
       withholdings of its day that no booked dividend of their own
-      security and day claims; a refund stays booked.
+      security and day claims; a refund stays booked. A dividend whose
+      `Time` cannot be read takes, in the same way, the withholdings of
+      its security that no booked dividend claims, whatever their day,
+      and `parser.cash_row_undated` names them next to it.
     - Freedom24: a row with no readable date, no ticker, or an operation
       other than `buy` or `sell` after trimming (`sale`, `transfer`). Before,
       every operation that was not `sell` was booked as a buy (#468). In

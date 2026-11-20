@@ -512,6 +512,25 @@ describe("Trading 212 dividends: the withholdings of a dividend not booked are n
     expect(parse(refund).cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual(["Withholding Tax 20", "Dividends 1000", "Withholding Tax -50"]);
   });
 
+  // A dividend whose Time cannot be read is named by parser.cash_row_undated
+  // and not booked. Its withholdings are those of its security that no booked
+  // dividend of their own security and day claims, whatever their day.
+  it.each(METHODS)("[%s] a dividend whose Time cannot be read takes the withholding of its security that no other dividend claims", (method) => {
+    const undated = (time: string, total: string) => div("15", AAPL, "AAPL", total, "d1").replace("2025-05-15 09:00:00", time);
+    for (const [first, named, id] of [
+      [undated("abc", "1000"), `Dividends AAPL (${AAPL}) 1000 USD (Withholding tax - AAPL -150 USD) [Time: "abc"]`, "parser.cash_row_undated"],
+      [undated("", "1000"), `Dividends AAPL (${AAPL}) 1000 USD (Withholding tax - AAPL -150 USD) [Time: ""]`, "parser.cash_row_undated"],
+      [undated("abc", "abc"), 'Dividend (Ordinary) AAPL USD abc (Withholding tax - AAPL -150 USD) [Total: "abc"]', "parser.cash_income_amount_unreadable"],
+      [undated("abc", "1000").replace(`,${AAPL},AAPL,`, ",,,"), "Dividend (Ordinary) 1000 USD abc (Withholding tax - AAPL -150 USD)", "parser.cash_row_unidentified"],
+    ] as const) {
+      const rows = [first, wht("15", AAPL, "AAPL", "-150", "w1"), ...other()];
+      const s = parse(rows);
+      expect(s.cashTransactions.map((c) => `${c.type} ${c.amount}`), named).toEqual(["Dividends 1000", "Withholding Tax -50"]);
+      expect(msg(s, id), named).toBe(named);
+      expect(numbers(rows, method), named).toEqual(["1100.00", "55.00"]);
+    }
+  });
+
   it.each(METHODS)("[%s] control: a withholding its own dividend claims on that day stays booked, and so does a refund of that day", (method) => {
     const rows = [div("18", "", "", "1000", "d1"), ...other(), wht("18", AAPL, "AAPL", "20", "w3")];
     const s = parse(rows);
