@@ -3683,6 +3683,21 @@ describe("#467 Flatex: a cash leg, income row, currency, Kurs or order number th
       expect(gains(report(above, method))).toEqual(["1794.10", "1535.90", "258.20"]);
     });
 
+    // Round 5 (#467): the allowance counted every leg, so a Storno and the leg
+    // it rebooks raised it by 20 € and a 35.90 € fee on 1000 € went silent.
+    it.each(METHODS)("[%s] a Storno and its rebooked leg count as one leg: 5.90 € stays silent, 35.90 € is named", (method) => {
+      const storno = (amount: string): string => krow("01.03.2024", `Storno ${BUY_INFO}`, "8103", amount);
+      const at = (paid: string): Statement => merged(depot(fill("01.03.2024", "10", "9101"), sell("10")),
+        konto(leg("01.03.2024", "8101", `-${paid}`), storno(paid), leg("01.03.2024", "8104", `-${paid}`), sellLeg("1194,10")));
+      const usual = at("1005,90");
+      expect(booked(usual)).toEqual([["10", "-5.9"], ["-10", "-5.9"]]);
+      expect(usual.parserMessages?.map((m) => m.id)).toEqual(["flatex.commission.multi_fill_prorated"]);
+      expect(gains(report(usual, method))).toEqual(["1194.10", "1005.90", "188.20"]);
+      const above = at("1035,90");
+      expect(above.parserMessages?.map((m) => [m.id, m.context?.rows])).toContainEqual([ABOVE, `333333 ${ISIN} 20240301 [1000 EUR / -1035.9 EUR]`]);
+      expect(report(above, method).messages.map((m) => m.id)).toContain(ABOVE);
+    });
+
     it("the above-usual warning is the es locale and exists in the five locales", () => {
       const m = merged(depot(fill("01.03.2024", "10", "9101"), sell("10")), konto(leg("01.03.2024", "8101", "-1035,90"), sellLeg("1194,10")))
         .parserMessages!.find((x) => x.id === ABOVE)!;

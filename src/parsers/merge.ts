@@ -361,9 +361,17 @@ function legFee(legs: readonly OrderLeg[], side: Trade["buySell"], gross: Decima
  * a fill ever to have two legs, the order would only lose its fee (named).
  */
 function moreLegsThanFills(legs: readonly OrderLeg[], trades: readonly Trade[]): boolean {
+  return netLegCount(legs, trades) > trades.length;
+}
+
+/**
+ * How many legs a day has once each Storno cancels the leg it reverses: a
+ * buy's legs are debits, a sale's credits, and a leg of the other sign is a
+ * Storno.
+ */
+function netLegCount(legs: readonly OrderLeg[], trades: readonly Trade[]): number {
   const sign = trades[0]!.buySell === "SELL" ? 1 : -1;
-  const net = legs.reduce((count, leg) => count + new Decimal(leg.netAmount).cmp(0) * sign, 0);
-  return net > trades.length;
+  return legs.reduce((count, leg) => count + new Decimal(leg.netAmount).cmp(0) * sign, 0);
 }
 
 /**
@@ -546,7 +554,10 @@ function reconcileOrderLegs(statement: Statement): void {
         trade.commission = totalFee.mul(trade.tradeMoney).div(gross).abs().negated().toFixed();
         trade.commissionCurrency = day.legs[0]!.currency || trade.commissionCurrency || trade.currency;
       }
-      if (aboveUsualFee(totalFee, gross, day.legs.length)) aboveUsual.push(orderRow(orderKey, day.legs, day.trades));
+      // The allowance counts legs net of Stornos: a Storno and the leg it
+      // rebooks are one payment, and counted as two they raised it by 20 €,
+      // so a 35.90 € fee on 1000 € went silent (#467).
+      if (aboveUsualFee(totalFee, gross, Math.max(1, netLegCount(day.legs, day.trades)))) aboveUsual.push(orderRow(orderKey, day.legs, day.trades));
       prorated = true;
     }
     if (prorated) proratedOrders++;
