@@ -5,12 +5,16 @@
  *
  * - A negative income row (a reward taken back) was booked as negative
  *   income and cut casilla 0027 with no word.
+ * - A V1 export (no ID column) gave each trade its line number as ID, so the
+ *   same row in two overlapping exports got two IDs and the duplicate check
+ *   never saw it: the loss was counted twice with no word.
  */
 import Decimal from "decimal.js";
 import { describe, it, expect } from "vitest";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
 import { coinbaseParser } from "../../src/parsers/coinbase.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../../src/parsers/merge.js";
+import { validateStatement } from "../../src/web/validation.js";
 import type { FxMethod, TaxMessage, TaxSummary as TaxReport } from "../../src/types/tax.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { Statement } from "../../src/types/broker.js";
@@ -22,6 +26,7 @@ import gl from "../../src/i18n/locales/gl.js";
 
 const METHODS: FxMethod[] = ["multidivisa", "tradicional-divisa", "monodivisa"];
 const H1 = "Timestamp,Transaction Type,Asset,Quantity Transacted,Spot Price Currency,Spot Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes";
+const H3 = "ID,Timestamp,Transaction Type,Asset,Quantity Transacted,Price Currency,Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes";
 
 function rates(): EcbRateMap {
   const map: EcbRateMap = new Map();
@@ -41,6 +46,7 @@ function merged(...files: Statement[]): Statement {
 
 const report = (s: Statement, method: FxMethod): TaxReport => generateTaxReport(s, rates(), 2024, reportOptionsForMethod(method));
 const message = (messages: readonly TaxMessage[] | undefined, id: string): TaxMessage | undefined => messages?.find((m) => m.id === id);
+const duplicates = (s: Statement): string | undefined => validateStatement(s, 2024, ["Coinbase"]).find((i) => /duplicad/.test(i.message))?.message;
 
 describe("#467 Coinbase: a negative income row is named and books nothing, never cuts the year's income", () => {
   // 0.01 ETH of staking, 32 € (casilla 0027).
@@ -100,5 +106,57 @@ describe("#467 Coinbase: a negative income row is named and books nothing, never
       expect(locale["coinbase.income_negative"]).toContain("{{rows}}");
       expect(locale["coinbase.income_negative.hint"]).toContain("Renta Web");
     }
+  });
+});
+
+describe("#467 Coinbase V1 (no ID column): the same row in two overlapping exports gets the same ID", () => {
+  // Buy 1 BTC at 40000 € and sell it at 30000 € in 2024: a 10200 € loss.
+  const buy = "2024-01-10T10:00:00Z,Buy,BTC,1,EUR,40000.00,40000.00,40100.00,100.00,Bought";
+  const sell = "2024-03-15T10:00:00Z,Sell,BTC,1,EUR,30000.00,30000.00,29900.00,100.00,Sold";
+  const send = "2024-02-01T10:00:00Z,Send,ETH,1,EUR,2000,2000,2000,0,Sent";
+  const net = (r: TaxReport): string => r.capitalGains.netGainLoss.toFixed(2);
+
+  it.each(METHODS)("[%s] control: one export is a 10200 € loss and nothing is repeated", (method) => {
+    const s = merged(parse(H1, buy, sell));
+    expect(duplicates(s)).toBeUndefined();
+    expect(net(report(s, method))).toBe("-10200.00");
+  });
+
+  it.each(METHODS)("[%s] a Q1 export and a full-year export with one more row first: both rows are flagged as repeated", (method) => {
+    const q1 = parse(H1, buy, sell);
+    const year = parse(H1, send, buy, sell);
+    expect(year.trades.map((t) => t.tradeID)).toEqual(q1.trades.map((t) => t.tradeID));
+    const s = merged(q1, year);
+    expect(duplicates(s)).toContain("2 operación(es) duplicada(s)");
+    // The duplicate check warns and drops nothing, as for V2/V3 exports.
+    expect(net(report(s, method))).toBe("-20400.00");
+  });
+
+  it("mirror: the same overlap in a V3 export is flagged by Coinbase's own IDs", () => {
+    const s = merged(parse(H3, `a1,${buy}`, `a2,${sell}`), parse(H3, `a0,${send}`, `a1,${buy}`, `a2,${sell}`));
+    expect(duplicates(s)).toContain("2 operación(es) duplicada(s)");
+  });
+
+  it("the same V1 file twice is still flagged", () => {
+    expect(duplicates(merged(parse(H1, buy, sell), parse(H1, buy, sell)))).toContain("2 operación(es) duplicada(s)");
+  });
+
+  it("two identical fills in one V1 file are two trades with two IDs, and nothing is flagged", () => {
+    const s = merged(parse(H1, buy, buy, sell));
+    expect(new Set(s.trades.map((t) => t.tradeID)).size).toBe(3);
+    expect(duplicates(s)).toBeUndefined();
+  });
+
+  it("two different same-day buys at the same line of two V1 files are not flagged", () => {
+    const other = "2024-01-10T15:00:00Z,Buy,BTC,0.5,EUR,41000.00,20500.00,20550.00,50.00,Bought";
+    expect(duplicates(merged(parse(H1, buy), parse(H1, other)))).toBeUndefined();
+  });
+
+  it("a reward in two overlapping V1 files gets the same ID, and a Convert's two legs keep two IDs", () => {
+    const stake = "2024-03-15T10:00:00Z,Staking Income,ETH,0.01,EUR,3200.00,32.00,32.00,0.00,Staking";
+    const ids = [parse(H1, stake), parse(H1, send, stake)].map((s) => s.cashTransactions[0]!.transactionID);
+    expect(ids[0]).toBe(ids[1]);
+    const convert = parse(H1, "2024-03-15T10:00:00Z,Convert,BTC,0.1,EUR,30000,3000,3000,0,Converted 0.1 BTC to 1 ETH");
+    expect(new Set(convert.trades.map((t) => t.tradeID)).size).toBe(2);
   });
 });

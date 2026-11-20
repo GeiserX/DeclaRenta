@@ -123,6 +123,19 @@ function money(cell: string | undefined): string {
   return quantityUnreadable(text) ? "0" : parseNumber(text!);
 }
 
+/**
+ * Position-independent key for a row with no Coinbase ID (a V1 export): its
+ * own cells plus how many identical rows came before it in the same file.
+ * The same row in two overlapping exports gets the same key, so the
+ * duplicate-trades check sees it; two identical fills in one file still get
+ * distinct keys. A line number differs between files (#467).
+ */
+function occurrenceKey(seen: Map<string, number>, content: string): string {
+  const n = (seen.get(content) ?? 0) + 1;
+  seen.set(content, n);
+  return `${content}#${n}`;
+}
+
 // ---------------------------------------------------------------------------
 // Date conversion
 // ---------------------------------------------------------------------------
@@ -233,6 +246,8 @@ function parseCoinbaseCsv(lines: string[]): Statement {
   const unreadableIncome: string[] = [];
   // Income rows with a negative amount (a reward taken back), named (#467).
   const negativeIncome: string[] = [];
+  // Rows seen so far by their cells, for the IDs of rows with no Coinbase ID.
+  const seenRows = new Map<string, number>();
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -266,8 +281,11 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     const notes = cols.notes >= 0 ? (fields[cols.notes] ?? "").trim() : "";
     // The same row in two overlapping exports must get the same ID, or the
     // duplicate-trades check cannot see it: use Coinbase's own transaction ID,
-    // and the line number only for V1 exports, which have no ID column.
-    const rowId = (cols.id >= 0 ? (fields[cols.id] ?? "").trim() : "") || String(i);
+    // and the row's own cells when it has none (V1 exports have no ID
+    // column). The line number was used there, so a full-year export and a
+    // Q1 export that shared rows doubled every trade with no warning (#467).
+    const ownId = cols.id >= 0 ? (fields[cols.id] ?? "").trim() : "";
+    const rowId = ownId || occurrenceKey(seenRows, fields.map((f) => f.trim()).join("|"));
 
     // A row with no readable Timestamp is booked with that date: a trade is
     // then kept as a row that books nothing and an income row is taken out,
