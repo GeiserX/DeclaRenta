@@ -51,17 +51,23 @@ function statementOf(parts: [Statement, string][]): Statement {
   return finalizeMergedStatement(merged);
 }
 
-/** Every year of the statement reports with short output, and the row is named. */
-function expectNamedAndShort(st: Statement): void {
-  // The parser itself wrote no long number: every field of every row is short.
+/**
+ * Every year of the statement reports with short output, and the row is named
+ * by `named`: the report's out-of-range warning, or the parser message that
+ * keeps the number out of every trade.
+ */
+function expectNamedAndShort(st: Statement, named = "report.trade_out_of_range"): void {
+  // The parser itself wrote no long number: every field of every row and
+  // every parser message is short.
   for (const row of [...st.trades, ...st.cashTransactions]) {
     for (const value of Object.values(row)) {
       if (typeof value === "string") expect(value.length).toBeLessThan(200);
     }
   }
+  for (const m of st.parserMessages ?? []) expect(m.message.length).toBeLessThan(2000);
   const years = new Set([...st.trades.map((t) => t.tradeDate), ...st.cashTransactions.map((c) => c.dateTime)]
     .map((d) => Number(d.replace(/-/g, "").slice(0, 4))));
-  const ids = new Set<string>();
+  const ids = new Set<string>((st.parserMessages ?? []).map((m) => m.id));
   for (const year of years) {
     const r = generateTaxReport(st, RATES, year);
     for (const m of r.messages) ids.add(m.id);
@@ -70,7 +76,7 @@ function expectNamedAndShort(st: Statement): void {
       expect(text.length).toBeLessThan(200_000);
     }
   }
-  expect(ids).toContain("report.trade_out_of_range");
+  expect(ids).toContain(named);
 }
 
 function workbook(sheets: Record<string, (string | number)[][]>): Uint8Array {
@@ -106,10 +112,14 @@ describe.each(hugeCases)("a cell of %s", (huge) => {
     }
   });
 
+  // A leg that far from its fill does not square with it: no fill gets a
+  // fee from it, and the order is named with the leg in exponent form (#467).
   it("Flatex, the cash leg the commission comes from", () => {
     const konto = setCell(fixture("flatex-kontoumsaetze-sample.csv"), "Ausführung ORDER Kauf US94106L1098", ";", 6, `-${huge}`);
     const st = statementOf([[flatexParser.parse(fixture("flatex-depotumsaetze-sample.csv")), "Flatex"], [flatexParser.parse(konto), "Flatex"]]);
-    expectNamedAndShort(st);
+    expect(st.trades.filter((t) => t.isin === "US94106L1098").map((t) => t.commission)).toEqual(["0"]);
+    expect(st.parserMessages?.find((m) => m.id === "flatex.commission.not_recovered")?.message).toMatch(/e\+/);
+    expectNamedAndShort(st, "flatex.commission.not_recovered");
   });
 
   it("Revolut, the cost basis and the fees of a closed position", async () => {

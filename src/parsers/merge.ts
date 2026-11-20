@@ -391,7 +391,7 @@ function legsWithoutFillRow(orderKey: string, legs: readonly OrderLeg[]): string
   const sums = new Map<string, Decimal>();
   for (const leg of legs) sums.set(leg.currency, (sums.get(leg.currency) ?? new Decimal(0)).plus(leg.netAmount));
   if (unreadable.length === 0 && [...sums.values()].every((sum) => sum.isZero())) return undefined;
-  const amounts = unreadable.length > 0 ? unreadable.join(", ") : [...sums].map(([currency, sum]) => `${sum.toFixed()} ${currency}`).join(", ");
+  const amounts = unreadable.length > 0 ? unreadable.join(", ") : [...sums].map(([currency, sum]) => `${plainOrExponent(sum)} ${currency}`).join(", ");
   const day = legs.flatMap((leg) => readableDay(leg.tradeDate) ?? []).sort()[0] ?? "—";
   const isin = legs.find((leg) => leg.isin)?.isin ?? "—";
   return `${orderKey} ${isin} ${day} [${sides.length > 0 ? `${sides.join("/")}: ` : ""}${amounts}]`;
@@ -405,7 +405,7 @@ function orderRow(orderKey: string, legs: readonly OrderLeg[], trades: readonly 
   const net = legs.reduce((sum, leg) => sum.plus(leg.netAmount), new Decimal(0));
   const cells = unreadable.length > 0
     ? unreadable.join(", ")
-    : `${gross.toFixed()} ${first.currency} / ${net.toFixed()} ${legs[0]!.currency}`;
+    : `${plainOrExponent(gross)} ${first.currency} / ${plainOrExponent(net)} ${legs[0]!.currency}`;
   return `${orderKey} ${first.isin || first.symbol} ${first.tradeDate} [${cells}]`;
 }
 
