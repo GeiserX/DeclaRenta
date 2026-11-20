@@ -1170,6 +1170,10 @@ const gl: TranslationKeys = {
     "Trade Republic: {{count}} dividendo(s) non teñen unha retención (tax) lexible e calcúlanse sen retención: {{rows}}.",
   "trade_republic.tax_unreadable.hint":
     "Entre corchetes vai a cela da retención (tax). Non é un número. DeclaRenta suma o dividendo completo, pero non sabe canto che retiveron. Así non pagas de menos, pero perdes a dedución por esa retención (casilla 0588, ou 0597 se o valor é español). Se a fila anula un dividendo (un importe negativo), DeclaRenta non a resta e o dividendo anulado segue sumado. Toma a retención do informe fiscal de Trade Republic e engádea a man en Renta Web.",
+  "trade_republic.trade_tax_positive":
+    "Trade Republic: {{count}} compra(s) ou venda(s) traen un imposto (tax) positivo, e DeclaRenta non o conta: {{rows}}.",
+  "trade_republic.trade_tax_positive.hint":
+    "Trade Republic escribe en negativo o imposto que pagas nunha compra ou nunha venda. Un imposto positivo é diñeiro que che devolven, así que non é un gasto da operación. DeclaRenta non o suma ao custo nin o resta da venda. Así non pagas de menos. Se é a devolución dun imposto que DeclaRenta restou noutra operación, esa operación ten un gasto de máis: corríxea a man en Renta Web.",
   "trade_republic.cash_type_not_read":
     "Trade Republic: {{count}} movemento(s) de diñeiro dun tipo que DeclaRenta non recoñece non se calculan: {{rows}}.",
   "trade_republic.cash_type_not_read.hint":

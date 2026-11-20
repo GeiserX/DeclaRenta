@@ -793,7 +793,11 @@ práctico Renta 2025. The decisions, each pinned in
       cell: read a second time, "1.2,3,4" (first read "12.3,4") became
       123.4, and as a price its raw text stopped the report. Now such a
       price is |`amount`| ÷ `shares`, such an amount names the row, and
-      such a fee is not booked, which can only raise the tax.
+      such a fee is not booked, which can only raise the tax. A buy's or
+      sale's `tax` is a cost only when it is negative, as TR writes a paid
+      tax. A positive one is money paid back: booked by its absolute value,
+      it lowered the gain by twice the refund. It is not booked, and
+      `trade_republic.trade_tax_positive` names the row.
     - DEGIRO: a row with no ISIN but a readable quantity or price, or an
       order id. When the product name has the shape of an option
       (`AAPL C200.00 20DEC24`) or a future (`FDAX MAR25`), the row is kept as

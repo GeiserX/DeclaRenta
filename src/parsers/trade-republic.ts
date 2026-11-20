@@ -139,6 +139,8 @@ function parseTrCsv(lines: string[]): Statement {
   // Dividends whose tax cell cannot be read (#467).
   const unreadableTax: string[] = [];
   // CASH rows of a type the parser does not know that name a security (#467).
+  // Buys and sales with a positive tax, which is not booked (#467).
+  const positiveTradeTax: string[] = [];
   const unknownCash: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
@@ -247,7 +249,13 @@ function parseTrCsv(lines: string[]): Statement {
       const absShares = absSharesDec.toString();
       const absAmount = absAmountDec.toString();
       const absFee = toFiniteDecimal(field(fields, cols.fee)).abs();
-      const absTax = toFiniteDecimal(taxStr).abs();
+      // TR writes a paid tax as a negative number. A positive one is money
+      // paid back, no cost: booked by its absolute value, it lowered the gain
+      // by twice the refund. It is not booked, and the row is named (#467).
+      // An unreadable tax cell is no tax (taxDec is 0), as before.
+      if (taxDec.isPositive() && !taxDec.isZero()) {
+        positiveTradeTax.push(`${field(fields, cols.type)} ${dividendSecurity(name, symbol)} ${tradeDate || "—"} [${unreadableCell(headers[cols.tax] ?? "tax", fields[cols.tax])}]`);
+      }
       // FIFO values the lot from tradePrice, not amount. When the price column
       // is empty, unreadable or negative, take it from amount / shares (amount
       // excludes the fee): a negative price sold the shares at a loss (#467).
@@ -284,7 +292,7 @@ function parseTrCsv(lines: string[]): Statement {
         exchange: "TRADE_REPUBLIC",
         commissionCurrency: currency,
         commission: absFee.isZero() ? "0" : absFee.neg().toString(),
-        taxes: absTax.isZero() ? "0" : absTax.neg().toString(),
+        taxes: taxDec.isNegative() ? taxDec.toString() : "0",
         multiplier: "1",
       });
       continue;
@@ -511,6 +519,16 @@ function parseTrCsv(lines: string[]): Statement {
       message: `Trade Republic: ${unknownCash.length} movimiento(s) de dinero de un tipo que DeclaRenta no reconoce no se calculan: ${rows}.`,
       hint: "Cada fila nombra un valor y trae un importe, pero DeclaRenta no sabe qué es. Puede ser un cupón, un dividendo, una devolución de capital, un interés o una comisión. Por eso no lo suma. Un ingreso del año que declaras tienes que declararlo igualmente. Añádelo a mano en Renta Web. Una comisión que falta solo puede hacerte pagar más.",
       context: { count: String(unknownCash.length), rows },
+    });
+  }
+  if (positiveTradeTax.length > 0) {
+    const rows = positiveTradeTax.join("; ");
+    parserMessages.push({
+      id: "trade_republic.trade_tax_positive",
+      severity: "warning",
+      message: `Trade Republic: ${positiveTradeTax.length} compra(s) o venta(s) traen un impuesto (tax) positivo, y DeclaRenta no lo cuenta: ${rows}.`,
+      hint: "Trade Republic escribe en negativo el impuesto que pagas en una compra o una venta. Un impuesto positivo es dinero que te devuelven, así que no es un gasto de la operación. DeclaRenta no lo suma al coste ni lo resta de la venta. Así no pagas de menos. Si es la devolución de un impuesto que DeclaRenta restó en otra operación, esa operación tiene un gasto de más: corrígela a mano en Renta Web.",
+      context: { count: String(positiveTradeTax.length), rows },
     });
   }
   markUndatedTrades(trades, headers[cols.date] ?? "date");

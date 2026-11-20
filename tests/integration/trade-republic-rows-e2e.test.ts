@@ -19,6 +19,7 @@
  * - A negative price cell sold the shares at a negative price.
  * - A price, amount or fee cell was read twice: "1.2,3,4" became 123.4, or
  *   its raw text stopped the report.
+ * - A positive tax on a buy or a sale (money paid back) was booked as a cost.
  */
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
@@ -335,3 +336,33 @@ describe("Trade Republic price, amount and fee cells are read once: a cell that 
   });
 });
 
+
+describe("Trade Republic trade tax: only a paid (negative) tax is a cost; a positive one is no cost and is named", () => {
+  it.each(METHODS)("[%s] control: a sale tax of -30.00 lowers the gain to 18.00; a buy tax of -5.00 raises the cost to 106.00", (method) => {
+    const sale = tr(BUY(), SELL({ tax: "-30.00" }));
+    expect(sale.parserMessages).toBeUndefined();
+    expect(report(sale, method).capitalGains.netGainLoss.toFixed(2)).toBe("18.00");
+    const buy = tr(BUY({ tax: "-5.00" }), SELL());
+    expect(buy.parserMessages).toBeUndefined();
+    const r = report(buy, method);
+    expect([r.capitalGains.acquisitionValue.toFixed(2), r.capitalGains.netGainLoss.toFixed(2)]).toEqual(["106.00", "43.00"]);
+  });
+
+  it.each(METHODS)("[%s] a sale tax of 30.00 or a buy tax of 5.00 (money paid back) is no cost: the gain stays 48.00, and both rows are named", (method) => {
+    const s = tr(BUY({ tax: "5.00" }), SELL({ tax: "30.00" }));
+    expect(s.trades.map((t) => t.taxes)).toEqual(["0", "0"]);
+    expect(rowsOf(s, "trade_republic.trade_tax_positive")).toBe(
+      'BUY Acme Corp (US0000001001) 20250201 [tax: "5.00"]; SELL Acme Corp (US0000001001) 20250601 [tax: "30.00"]');
+    const r = report(s, method);
+    expect([r.capitalGains.transmissionValue.toFixed(2), r.capitalGains.acquisitionValue.toFixed(2), r.capitalGains.netGainLoss.toFixed(2)])
+      .toEqual(["149.00", "101.00", "48.00"]);
+  });
+
+  it("a written zero or an empty tax cell is no tax and no warning", () => {
+    for (const tax of ["", "0", "0.00"]) {
+      const s = tr(BUY({ tax }), SELL({ tax }));
+      expect(s.trades.map((t) => t.taxes), tax).toEqual(["0", "0"]);
+      expect(s.parserMessages, tax).toBeUndefined();
+    }
+  });
+});
