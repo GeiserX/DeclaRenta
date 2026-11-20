@@ -185,12 +185,14 @@ describe("#469 crypto parsers: a 0 or unreadable quantity never books an empty l
     ["Binance Executed unreadable", () => binanceParser.parse(binance("--")), "Binance", true],
   ];
 
+  // The parsers lane (#467) keeps such a row as an unreadable row, named with
+  // its cell in parser.trade_row_unreadable, before the trade is built.
   for (const [name, parse, broker, unknown] of cases) {
     it(`${name}: the parser ${unknown ? "flags the row and warns" : "keeps the explicit 0 for FIFO to name"}`, () => {
       const parsed = parse();
       const first = parsed.trades.find((t) => t.tradeDate === "20250201")!;
       expect(first.quantityUnknown === true).toBe(unknown);
-      expect((parsed.parserMessages ?? []).some((m) => m.id === "parser.crypto_quantity_unknown")).toBe(unknown);
+      expect((parsed.parserMessages ?? []).some((m) => m.id === "parser.trade_row_unreadable")).toBe(unknown);
     });
 
     for (const method of METHODS) {
@@ -210,7 +212,7 @@ describe("#469 crypto parsers: a 0 or unreadable quantity never books an empty l
       ["ETH", "BUY", true],
       ["BTC", "SELL", true],
     ]);
-    expect(parsed.parserMessages?.find((m) => m.id === "parser.crypto_quantity_unknown")?.context?.count).toBe("2");
+    expect(parsed.parserMessages?.find((m) => m.id === "parser.trade_row_unreadable")?.context?.count).toBe("2");
   });
 
   it("Binance: an unreadable Executed on a crypto-quoted pair flags both coins instead of dropping the row", () => {
@@ -228,10 +230,13 @@ describe("#469 crypto parsers: a 0 or unreadable quantity never books an empty l
 2025-03-01T10:00:00Z,Buy,SOL,10,EUR,20.00,200.00,200.00,0.00,Bought 10 SOL
 2025-06-01T10:00:00Z,Sell,SOL,10,EUR,30.00,300.00,300.00,0.00,Sold 10 SOL`;
 
-  it("Coinbase: a Convert to 0 units creates no buy and is named as an unparsed destination", () => {
+  // The parsers lane (#467) keeps the 0 SOL received as an unreadable row
+  // that books nothing, named by its Notes cell.
+  it("Coinbase: a Convert to 0 units creates no buy and is named by its Notes cell", () => {
     const parsed = coinbaseParser.parse(COINBASE);
-    expect(parsed.trades.filter((t) => t.symbol === "SOL").map((t) => t.quantity)).toEqual(["10", "-10"]);
-    expect(parsed.parserMessages?.map((m) => m.id)).toContain("coinbase.convert_dest_unparsed");
+    expect(parsed.trades.filter((t) => t.symbol === "SOL" && !t.quantityUnknown).map((t) => t.quantity)).toEqual(["10", "-10"]);
+    expect(parsed.trades.filter((t) => t.symbol === "SOL" && t.quantityUnknown).map((t) => t.quantity)).toEqual(["0"]);
+    expect(parsed.parserMessages?.find((m) => m.id === "parser.trade_row_unreadable")?.context?.rows).toContain("Converted 0.005 BTC to 0 SOL");
   });
 
   for (const method of METHODS) {

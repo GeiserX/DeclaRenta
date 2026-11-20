@@ -1620,13 +1620,19 @@ function parseBinanceCsv(lines: string[]): Statement {
       : -1;
     if (badCell >= 0) {
       const cell = unreadableCell((headers[badCell] ?? "").trim(), fields[badCell]);
-      const legs = [{ symbol, currency }];
-      if (!isFiat(currency)) legs.push({ symbol: currency, currency: symbol });
+      // The side when the row gives one: the coin bought, and on a
+      // crypto-quoted pair the quote coin given up for it (or the reverse).
+      const side = sideLower === "buy" || sideLower === "sell" ? sideLower : undefined;
+      const legs: { symbol: string; currency: string; buySell?: "BUY" | "SELL" }[] = [
+        { symbol, currency, ...(side ? { buySell: side === "buy" ? "BUY" as const : "SELL" as const } : {}) },
+      ];
+      if (!isFiat(currency)) legs.push({ symbol: currency, currency: symbol, ...(side ? { buySell: side === "buy" ? "SELL" as const : "BUY" as const } : {}) });
       const key = occurrenceKey(seenKeys, [dateStr, pairStr, ...[cols.side, cols.price, cols.executed, cols.amount, cols.fee].map((c) => (fields[c] ?? "").trim())].join("|"));
       for (const leg of legs) {
         trades.push(unreadableTrade({
           tradeID: `binance-${tradeDate}-${leg.symbol}-${key}`, symbol: leg.symbol, description: `${symbol}/${currency}`, isin: "",
           assetCategory: "CRYPTO", currency: leg.currency, tradeDate, tradeTime, exchange: "BINANCE",
+          ...(leg.buySell ? { buySell: leg.buySell } : {}),
         }, cell));
       }
       continue;
