@@ -320,8 +320,10 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     // books nothing for each coin it names, and named (#467).
     // Kraken writes vol positive on both sides. A buy of a negative vol says
     // the coins went out, so it contradicts its side: read with its sign
-    // dropped it was one more lot, with no word (#467). It is named by vol.
-    const badCol = quantityUnreadable(fields[cols.vol]) || (type === "buy" && toFiniteDecimal(fields[cols.vol]!).lt(0)) ? "vol"
+    // dropped it was one more lot, with no word. A sale of a negative vol is
+    // no row Kraken writes either, and read with its sign dropped it sold
+    // coins the file does not show leaving (#467). Both are named by vol.
+    const badCol = quantityUnreadable(fields[cols.vol]) || toFiniteDecimal(fields[cols.vol]!).lt(0) ? "vol"
       : !isFiat(quote) && quantityUnreadable(fields[cols.cost]) ? "cost"
       : !priceUsable && !volDec.isZero() && (quantityUnreadable(fields[cols.cost]) || costDec.isZero()) ? "price"
       : "";

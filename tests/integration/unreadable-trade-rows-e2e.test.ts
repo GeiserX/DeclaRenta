@@ -1500,6 +1500,9 @@ describe("#467 a crypto buy or sale whose quantity, side or coin cannot be read 
     { label: "Binance Trade History, Executed 1,5BTC with no quotes", broker: "Binance", parse: () => binance(bnBuy, bnSell("SELL", "1,5BTC")), rows: 'BTC 20250301 [Price,Executed,Amount,Fee: "90000.00,1,5BTC,9000.00,0EUR"]' },
     { label: "Kraken trades, vol empty", broker: "Kraken", parse: () => kraken(krBuy, krSell("")), rows: 'BTC 20250301 [vol: ""]' },
     { label: "Kraken trades, vol 'abc'", broker: "Kraken", parse: () => kraken(krBuy, krSell("abc")), rows: 'BTC 20250301 [vol: "abc"]' },
+    // Kraken writes vol positive on both sides: a sale of "-0.1" was read with
+    // its sign dropped (#467).
+    { label: "Kraken trades, vol '-0.1' on the sale", broker: "Kraken", parse: () => kraken(krBuy, krSell("-0.1")), rows: 'BTC 20250301 [vol: "-0.1"]' },
   ];
 
   describe.each(cases)("$label", ({ broker, parse, rows }) => {
@@ -1604,8 +1607,10 @@ describe("#467 a crypto buy or sale whose quantity, side or coin cannot be read 
     expect(parsed.trades.filter((t) => t.tradeDate === "20250201").map((t) => [t.buySell, t.quantityUnknown])).toEqual([["BUY", true]]);
     expect(krGain(parsed, method)).toEqual(["2400.00", "2000.00", "400.00"]);
   });
-  it("a crypto-quoted Kraken buy of a negative vol names both coins, and a vol of -0 stays a written zero", () => {
+  it("a crypto-quoted Kraken buy or sale of a negative vol names both coins, and a vol of -0 stays a written zero", () => {
     expect(unreadableRows(krLots("-0.05", "XETHXXBT"))).toBe('ETH 20250201 [vol: "-0.05"]; BTC 20250201 [vol: "-0.05"]');
+    expect(unreadableRows(kraken(`"T3","O3","XETHXXBT","2025-03-01 10:00:00","sell","market","0.05","0.05","0","-1","0.0","","L3"`)))
+      .toBe('ETH 20250301 [vol: "-1"]; BTC 20250301 [vol: "-1"]');
     expect(krLots("-0.0").parserMessages ?? []).toEqual([]);
   });
 
