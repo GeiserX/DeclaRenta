@@ -623,7 +623,9 @@ práctico Renta 2025. The decisions, each pinned in
       the Total is never read in the price currency. A buy or sale with no
       readable price and an empty `Currency (Total)` is an unreadable row
       named by both cells, never valued from that Total; one with a
-      readable price does not need the cell. A fee with no currency of its
+      readable price does not need the cell. A buy or sale with a negative
+      `Price / share` is an unreadable row named by that cell; booked, a
+      sale had negative proceeds. A fee with no currency of its
       own takes `Currency (Total)`, and with neither it is not added. `Dividend (Tax exempted)` is
       a dividend; it was booked as a withholding. `Lending interest` is
       interest (casilla 0027); it was dropped with no word. A withholding

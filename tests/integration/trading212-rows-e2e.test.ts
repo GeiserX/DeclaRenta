@@ -399,3 +399,33 @@ describe("Trading 212 money rows of an unknown action are named, never dropped w
     expect([s.trades, s.cashTransactions, s.parserMessages]).toEqual([[], [], undefined]);
   });
 });
+
+describe("Trading 212 price: a negative price is never booked", () => {
+  it.each(METHODS)("[%s] control: a readable sale at 50 gives a 550 € loss", (method) => {
+    expect(report([buy(), sell("50", "500")], method).capitalGains.netGainLoss.toFixed(2)).toBe("-550.00");
+  });
+
+  // Booked, a sale at -150 had proceeds of -1500: a 550 € gain became a
+  // 2,750 € loss. A parenthesized "(150)" reads as negative too.
+  it.each(METHODS)("[%s] a sale or buy at a negative price is named by its price cell and books nothing", (method) => {
+    for (const [rows, named] of [
+      [[buy(), sell("-150")], `AAPL (${AAPL}) 20250610 [Price / share: "-150"]`],
+      [[buy(), sell("\"(150)\"")], `AAPL (${AAPL}) 20250610 [Price / share: "(150)"]`],
+      [[buy(), sell("-150", "1363.64", "USD", "EUR")], `AAPL (${AAPL}) 20250610 [Price / share: "-150"]`],
+      [[buy(), sell("-50", "500")], `AAPL (${AAPL}) 20250610 [Price / share: "-50"]`],
+      [[buy("-100"), sell()], `AAPL (${AAPL}) 20250110 [Price / share: "-100"]`],
+    ] as const) {
+      const s = parse([...rows]);
+      expect(msg(s, "parser.trade_row_unreadable"), named).toBe(named);
+      expect(s.trades.filter((t) => t.unreadableRow).map((t) => [t.quantityUnknown, t.tradeMoney]), named).toEqual([[true, "0"]]);
+      // With the sale named, nothing is sold. With the buy named, the sale
+      // has no lot: cost 0 and fifo.sell_without_lots, never a cost of -1000.
+      const r = report([...rows], method);
+      const buyNamed = named.includes("20250110");
+      expect(r.capitalGains.transmissionValue.toFixed(2), named).toBe(buyNamed ? "1650.00" : "0.00");
+      expect(r.capitalGains.acquisitionValue.toFixed(2), named).toBe("0.00");
+      expect(r.capitalGains.netGainLoss.toFixed(2), named).toBe(buyNamed ? "1650.00" : "0.00");
+      expect(r.messages.some((m) => m.id === "fifo.sell_without_lots"), named).toBe(buyNamed);
+    }
+  });
+});

@@ -460,6 +460,19 @@ function parseTrading212Csv(lines: string[]): Statement {
       continue;
     }
 
+    // A price is never negative (#467): booked, a sale at -150 had proceeds
+    // of -1500, so a 550 € gain became a 2,750 € loss. "(150)" reads as
+    // negative too. The row books nothing and is named by that cell, as in
+    // DEGIRO and Flatex.
+    if (new Decimal(priceStr).isNegative()) {
+      trades.push(unreadableTrade({
+        tradeID: `trading212-row-${uniqueId}`,
+        symbol: ticker, description: name, isin, assetCategory: "STK", currency, tradeDate, tradeTime,
+        buySell: sell ? "SELL" : "BUY", exchange: "TRADING212",
+      }, unreadableCell(headers[cols.pricePerShare] ?? "Price / share", fields[cols.pricePerShare])));
+      continue;
+    }
+
     const priceDec = new Decimal(priceStr).div(priceDivisor);
     const totalDec = new Decimal(totalStr).abs().div(cashDivisor);
     // A row valued from its Total needs the Total's own currency: with an
