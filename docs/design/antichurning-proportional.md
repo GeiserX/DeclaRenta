@@ -826,6 +826,12 @@ práctico Renta 2025. The decisions, each pinned in
       stakingtospot, spotfromstaking, spotfromfutures, spottofutures) stay
       skipped; any other transfer, and an airdrop that is not a credit, is
       named by `kraken.ledger_rows_ignored` by type and subtype.
+      A staking or Earn row that takes coins away (a negative amount, or a
+      fee larger than the reward) was booked as negative income and cut
+      casilla 0027 with no word. DeclaRenta does not know which reward it
+      cancels, so it books nothing and `kraken.income_negative` names it
+      by type, coin, amount, fee and date, as at Binance. A reward whose
+      fee equals its amount is booked as 0, as before.
     - Coinbase: a buy, sale or Convert whose `Asset` is empty or whose
       `Quantity Transacted` cannot be read is an unreadable row, named by
       that cell (with no Asset, by its type and quantity). A Convert still

@@ -470,6 +470,8 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
   const unidentifiedIncome: string[] = [];
   // Staking rewards whose amount cell cannot be read, named (#467).
   const unreadableIncome: string[] = [];
+  // Staking and Earn rows that take coins away, named (#467).
+  const negativeIncome: string[] = [];
   // Trade rows by refid: the date and each leg, "XXBT -0.1" (#467).
   const ledgerTrades = new Map<string, { date: string; legs: string[] }>();
 
@@ -525,6 +527,16 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
         ignoredTypes.set("transfer/airdrop", (ignoredTypes.get("transfer/airdrop") ?? 0) + 1);
         continue;
       }
+      // A staking or Earn row that takes coins away (a negative amount, or a
+      // fee larger than the reward) was booked as negative income and cut
+      // the year's income with no word. DeclaRenta does not know which
+      // reward it cancels, so it books nothing and is named (#467).
+      if (netAmount.isNegative()) {
+        const rawType = [(fields[cols.type] ?? "").trim(), cols.subtype >= 0 ? (fields[cols.subtype] ?? "").trim() : ""].filter(Boolean).join(" ");
+        const shownDate = isReadableTradeDate(tradeDate) ? tradeDate : timeStr || "—";
+        negativeIncome.push(`${rawType} ${symbol} ${(fields[cols.amount] ?? "").trim()} (fee ${(cols.fee >= 0 ? fields[cols.fee] ?? "" : "").trim() || "0"}) ${shownDate}`);
+        continue;
+      }
 
       // Staking rewards are NOT foreign dividends (no issuer/withholding country,
       // not in the Art. 80 double-taxation pool). They are rendimiento del capital
@@ -573,7 +585,15 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
   }
 
   const ignoredCount = [...ignoredTypes.values()].reduce((a, b) => a + b, 0);
-  const parserMessages: TaxMessage[] = [...dropUndatedCash("Kraken", cashTransactions, "time"), ...cryptoIncomeUnidentifiedMessages("Kraken", unidentifiedIncome), ...cryptoIncomeAmountUnreadableMessages("Kraken", unreadableIncome), ...(ignoredCount > 0
+  const parserMessages: TaxMessage[] = [...dropUndatedCash("Kraken", cashTransactions, "time"), ...cryptoIncomeUnidentifiedMessages("Kraken", unidentifiedIncome), ...cryptoIncomeAmountUnreadableMessages("Kraken", unreadableIncome), ...(negativeIncome.length > 0
+    ? [{
+        id: "kraken.income_negative",
+        severity: "warning" as const,
+        message: `Kraken: ${negativeIncome.length} recompensa(s) de staking o Earn son negativas y no se calculan: ${negativeIncome.join("; ")}.`,
+        hint: "Una recompensa negativa suele ser una recompensa que Kraken te ha retirado. También sale negativa cuando la comisión (fee) es mayor que el importe (amount). DeclaRenta no sabe qué recompensa anula, así que no cambia ningún importe. Sigue contando las demás recompensas como ingreso y sus monedas como compradas a su valor de ese día. Si la fila anula un ingreso del año que declaras, quítalo a mano en Renta Web. Si después vendiste esa criptomoneda, el coste de la venta puede ser demasiado alto. Revisa en Renta Web el coste de esas ventas.",
+        context: { count: String(negativeIncome.length), rows: negativeIncome.join("; ") },
+      }]
+    : []), ...(ignoredCount > 0
     ? [{
         id: "kraken.ledger_rows_ignored",
         severity: "info" as const,

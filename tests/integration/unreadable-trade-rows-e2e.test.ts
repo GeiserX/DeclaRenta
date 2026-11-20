@@ -4017,6 +4017,52 @@ describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and a
     });
   });
 
+  describe("a reward row that takes coins away", () => {
+    // 1 ETH of staking (2000 €, casilla 0027). A staking or Earn row of
+    // -0.5 ETH, or a reward whose fee is larger than its amount, was booked
+    // as negative income and cut the year's income with no word.
+    const KL_H = `"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"`;
+    const ledger = (...rows: string[]): Statement => krakenParser.parse([KL_H, ...rows].join("\n"));
+    const reward = `"L0","R0","2025-02-01 00:00:00","staking","","currency","XETH","1.0","0","5"`;
+    const income = (r: TaxReport): string => r.interest.entries.reduce((sum, e) => sum.plus(e.amountEur), new Decimal(0)).toFixed(2);
+    const named = (m: readonly TaxMessage[] | undefined): TaxMessage | undefined => m?.find((x) => x.id === "kraken.income_negative");
+    const coins = manual({ ETH: "2000", DOT: "5" });
+
+    it.each(METHODS)("[%s] control: one reward of 1 ETH is 2000 € of income", (method) => {
+      const parsed = ledger(reward);
+      expect(named(parsed.parserMessages)).toBeUndefined();
+      expect(income(runWith([[parsed, "Kraken"]], 2025, method, coins))).toBe("2000.00");
+    });
+
+    it.each(METHODS)("[%s] a staking row of -0.5 ETH, an Earn reward of -0.5 ETH and a fee larger than its reward book nothing and are named", (method) => {
+      const parsed = ledger(reward,
+        `"L1","R1","2025-03-01 00:00:00","staking","","currency","XETH","-0.5","0","5"`,
+        `"L2","R2","2025-03-02 00:00:00","earn","reward","currency","ETH","-0.5","0","5"`,
+        `"L3","R3","2025-03-03 00:00:00","staking","","currency","DOT.S","0.1","0.3","5"`);
+      expect(parsed.cashTransactions.map((c) => c.transactionID)).toEqual(["kraken-staking-L0"]);
+      expect(named(parsed.parserMessages)?.context).toEqual({ count: "3", rows: "staking ETH -0.5 (fee 0) 20250301; earn reward ETH -0.5 (fee 0) 20250302; staking DOT 0.1 (fee 0.3) 20250303" });
+      const r = runWith([[parsed, "Kraken"]], 2025, method, coins);
+      expect(income(r)).toBe("2000.00");
+      expect(named(r.messages)?.severity).toBe("warning");
+    });
+
+    it("a reward whose fee equals its amount stays as before, with no word", () => {
+      const parsed = ledger(`"L3","R3","2025-03-03 00:00:00","staking","","currency","DOT.S","0.3","0.3","5"`);
+      expect([parsed.cashTransactions.map((c) => c.amount), named(parsed.parserMessages)]).toEqual([["0"], undefined]);
+    });
+
+    it("the warning is the es locale and exists in the five locales", () => {
+      const m = named(ledger(`"L1","R1","2025-03-01 00:00:00","staking","","currency","XETH","-0.5","0","5"`).parserMessages)!;
+      const fill = (text: string): string => text.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => m.context?.[k] ?? "");
+      expect(m.message).toBe(fill((es as Record<string, string>)["kraken.income_negative"]!));
+      expect(m.hint).toBe((es as Record<string, string>)["kraken.income_negative.hint"]);
+      for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+        expect(locale["kraken.income_negative"]).toContain("{{rows}}");
+        expect(locale["kraken.income_negative.hint"]).toContain("Renta Web");
+      }
+    });
+  });
+
   describe("ledger transfer rows", () => {
     // Kraken books an airdrop (FLR, SGB) as a ledger row of type transfer and
     // subtype airdrop. Every transfer was skipped with no word, so 1500 FLR

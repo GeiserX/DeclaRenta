@@ -1027,6 +1027,10 @@ const en: TranslationKeys = {
     "Kraken: {{count}} trade(s) exchange one fiat currency for another (for example, euros for dollars) and are not calculated: {{rows}}.",
   "kraken.fiat_conversion_not_booked.hint":
     "Each row shows the pair, the type (buy or sell), the quantity (vol), the amount (cost) and the date. DeclaRenta does not calculate the exchange-rate gain or loss of these Kraken exchanges. Exchanging a currency for euros or for another currency can give a gain or a loss. It is the difference between its value in euros when you exchange it and what it cost you in euros. Calculate it and add it by hand in Renta Web.",
+  "kraken.income_negative":
+    "Kraken: {{count}} staking or Earn reward(s) are negative and are not calculated: {{rows}}.",
+  "kraken.income_negative.hint":
+    "A negative reward is usually a reward that Kraken took back. It is also negative when the fee is larger than the amount. DeclaRenta does not know which reward it cancels, so it changes no amount. It still counts the other rewards as income, and their coins as bought at their value on that day. If the row cancels income of the year you file, remove it by hand in Renta Web. If you later sold that cryptocurrency, the cost of the sale may be too high. Check the cost of those sales in Renta Web.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} trade(s) have no calculated commission, because their cash entries do not match the trade: {{rows}}.",
   "flatex.commission.not_recovered.hint":

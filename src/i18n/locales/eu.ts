@@ -1031,6 +1031,10 @@ const eu: TranslationKeys = {
     "Kraken: {{count}} eragiketak moneta ofizial bat beste batengatik aldatzen dute (adibidez, euroak dolarrengatik), eta ez dira kalkulatzen: {{rows}}.",
   "kraken.fiat_conversion_not_booked.hint":
     "Errenkada bakoitzak bikotea, mota (buy edo sell), kantitatea (vol), zenbatekoa (cost) eta data ditu. DeclaRentak ez du kalkulatzen Krakeneko aldaketa horien truke-tasagatiko irabazia edo galera. Dibisa bat euroengatik edo beste dibisa batengatik aldatzeak irabazi edo galera bat eman dezake. Aldatzean eurotan duen balioaren eta eurotan kostatu zitzaizunaren arteko aldea da. Kalkulatu eta gehitu eskuz Renta Web-en.",
+  "kraken.income_negative":
+    "Kraken: staking edo Earn {{count}} sari negatiboak dira, eta ez dira kalkulatzen: {{rows}}.",
+  "kraken.income_negative.hint":
+    "Sari negatibo bat Krakenek kendu dizun sari bat izan ohi da. Komisioa (fee) zenbatekoa (amount) baino handiagoa denean ere negatiboa da. DeclaRentak ez daki zein sari baliogabetzen duen, beraz, ez du zenbatekorik aldatzen. Beste sariak diru-sarreratzat hartzen jarraitzen du, eta haien monetak egun horretako balioan erositakotzat. Errenkadak aitortzen duzun urteko diru-sarrera bat baliogabetzen badu, kendu eskuz Renta Web-en. Gero kriptomoneta hori saldu bazenuen, salmentaren kostua handiegia izan daiteke. Berrikusi Renta Web-en salmenta horien kostua.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} eragiketak ez dute komisio kalkulaturik, haien kutxa-idazpenak eragiketarekin bat ez datozelako: {{rows}}.",
   "flatex.commission.not_recovered.hint":

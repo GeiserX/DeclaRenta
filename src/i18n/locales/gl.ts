@@ -1029,6 +1029,10 @@ const gl: TranslationKeys = {
     "Kraken: {{count}} operación(s) cambian unha moeda oficial por outra (por exemplo, euros por dólares) e non se calculan: {{rows}}.",
   "kraken.fiat_conversion_not_booked.hint":
     "Cada fila trae o par, o tipo (buy ou sell), a cantidade (vol), o importe (cost) e a data. DeclaRenta non calcula a ganancia ou a perda por tipo de cambio destes cambios de Kraken. Cambiar unha divisa por euros ou por outra divisa pode dar unha ganancia ou unha perda. É a diferenza entre o seu valor en euros ao cambiala e o que che custou en euros. Calcúlaa e engádea a man en Renta Web.",
+  "kraken.income_negative":
+    "Kraken: {{count}} recompensa(s) de staking ou Earn son negativas e non se calculan: {{rows}}.",
+  "kraken.income_negative.hint":
+    "Unha recompensa negativa adoita ser unha recompensa que Kraken che retirou. Tamén sae negativa cando a comisión (fee) é maior que o importe (amount). DeclaRenta non sabe que recompensa anula, así que non cambia ningún importe. Segue contando as demais recompensas como ingreso e as súas moedas como compradas ao seu valor dese día. Se a fila anula un ingreso do ano que declaras, quítao a man en Renta Web. Se despois vendiches esa criptomoeda, o custo da venda pode ser demasiado alto. Revisa en Renta Web o custo desas vendas.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} operación(s) non teñen a comisión calculada, porque os seus apuntamentos de caixa non cadran coa operación: {{rows}}.",
   "flatex.commission.not_recovered.hint":
