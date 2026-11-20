@@ -1028,7 +1028,7 @@ const ca: TranslationKeys = {
   "flatex.commission.not_recovered":
     "Flatex: {{count}} operació(ns) no tenen la comissió calculada, perquè els seus apunts de caixa no quadren amb l'operació: {{rows}}.",
   "flatex.commission.not_recovered.hint":
-    "Cada fila porta el número d'ordre, el valor i la data. Entre claudàtors hi ha l'import de l'operació i la suma dels seus apunts de caixa, o la cel·la de l'import que no es pot llegir. Pot faltar un apunt, sobrar-ne un o tenir un import que no es pot llegir. DeclaRenta deixa aquesta comissió a 0. No la suma al cost de les compres ni la resta del valor de les vendes. Consulta la comissió a la liquidació de l'ordre a Flatex. Si la vols deduir, afegeix-la a mà a Renta Web.",
+    "Cada fila porta el número d'ordre, el valor i la data. Entre claudàtors hi ha l'import de l'operació i la suma dels seus apunts de caixa, o la cel·la de l'import que no es pot llegir. Pot faltar un apunt o sobrar-ne un. Un apunt pot tenir un import o una data que no es pot llegir, o una data que no és la de l'operació. També hi pot haver una execució de l'ordre que no es pot llegir. DeclaRenta deixa aquesta comissió a 0. No la suma al cost de les compres ni la resta del valor de les vendes. Consulta la comissió a la liquidació de l'ordre a Flatex. Si la vols deduir, afegeix-la a mà a Renta Web.",
   "flatex.commission.multi_fill_prorated":
     "Ordres de Flatex executades en diverses parts: {{orders}}. La seva comissió s'ha repartit entre les execucions en proporció al seu import.",
   "flatex.commission.multi_fill_prorated.hint":

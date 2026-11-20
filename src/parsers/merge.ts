@@ -222,41 +222,71 @@ function dateUndatedRowsAtUploadStart(statement: Statement): void {
  * the two files), emit an info message — commission can't be recovered then.
  *
  * One order filled in parts has several trades (and usually several legs) with
- * the same order number. Equal counts → pair them 1:1 by date, then by amount
- * within a day. Different counts → recover the order's total fee and split it
- * pro rata by trade value.
+ * the same order number. Flatex books a fill and its cash leg on the same
+ * Buchtag, so legs and fills are matched day by day (#467): every day of the
+ * order must have both, every leg a readable day, and no fill of the order may
+ * be a row the parser kept unreadable (its leg would have no fill). A day with
+ * as many legs as fills pairs them 1:1 by amount. A day with a different
+ * count (one combined leg for several fills) recovers the day's total fee and
+ * splits it pro rata by trade value. Legs paired with fills of another
+ * execution booked a fill's whole value as a fee with no word.
  * The fee is only derived when leg and trade share a currency: a USD-priced
  * trade settled in EUR would otherwise book the whole FX difference as a fee.
  *
  * A fee is kept only when the legs can give one (#467): every leg's amount is
  * readable, and the fee is not below zero (a buy pays at least its gross, a
  * sale gets at most its gross; one cent of rounding is allowed) and is below
- * the gross. Otherwise the fills keep a fee of 0 and `flatex.commission.not_recovered`
- * names the order: a leg with an empty amount made the whole trade a fee
- * (a 1194 € gain became a 1006 € loss), and a missing or extra leg a fee as
- * large as a fill. The legs are summed with their sign, so a Storno cancels
- * the leg it reverses.
+ * the gross. A split fee is also below the day's smallest fill: a missing or
+ * extra leg (a sale leg not exported, a leg uploaded twice with no TA-Nr.)
+ * moves the fee by at least the value of the fill it belongs to. Otherwise
+ * the fills keep a fee of 0 and `flatex.commission.not_recovered` names the
+ * order: a leg with an empty amount made the whole trade a fee (a 1194 € gain
+ * became a 1006 € loss), and a missing or extra leg a fee as large as a fill.
+ * The legs are summed with their sign, so a Storno cancels the leg it reverses.
  */
 const FLATEX_ORDER_PREFIX = "flatex-order:";
 
 type Trade = Statement["trades"][number];
 type OrderLeg = NonNullable<Statement["pendingOrderLegs"]>[number];
 
-// Pair fills with cash legs by date, and same-day fills by size: sorting both
-// sides by amount minimises the total |net − gross| and the largest single
-// gap, so no same-day fill is booked more than the order's largest real fee.
-// File order is not used: the Depot and Konto exports need not list same-day
-// fills in the same order.
+// Pair same-day fills with cash legs by size: sorting both sides by amount
+// minimises the total |net − gross| and the largest single gap, so no fill
+// is booked more than the day's largest real fee. File order is not used:
+// the Depot and Konto exports need not list same-day fills in the same order.
 function tradeOrder(a: Trade, b: Trade): number {
-  const dateCmp = normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate));
-  if (dateCmp !== 0) return dateCmp;
   return new Decimal(a.tradeMoney).abs().cmp(new Decimal(b.tradeMoney).abs());
 }
 
 function legOrder(a: OrderLeg, b: OrderLeg): number {
-  const dateCmp = normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate));
-  if (dateCmp !== 0) return dateCmp;
   return new Decimal(a.netAmount).abs().cmp(new Decimal(b.netAmount).abs());
+}
+
+/**
+ * The fills and legs of one order, by day (oldest first), or undefined when
+ * they cannot be the same executions: a leg or fill with no readable day, or
+ * a day with fills and no leg or with legs and no fill (#467).
+ */
+function executionDays(trades: readonly Trade[], legs: readonly OrderLeg[]): { trades: Trade[]; legs: OrderLeg[] }[] | undefined {
+  const days = new Map<string, { trades: Trade[]; legs: OrderLeg[] }>();
+  const dayOf = (date: string): { trades: Trade[]; legs: OrderLeg[] } | undefined => {
+    const day = readableDay(date);
+    if (day === undefined) return undefined;
+    const entry = days.get(day) ?? { trades: [], legs: [] };
+    days.set(day, entry);
+    return entry;
+  };
+  for (const trade of trades) {
+    const day = dayOf(trade.tradeDate);
+    if (!day) return undefined;
+    day.trades.push(trade);
+  }
+  for (const leg of legs) {
+    const day = dayOf(leg.tradeDate);
+    if (!day) return undefined;
+    day.legs.push(leg);
+  }
+  const sorted = [...days].sort(([a], [b]) => a.localeCompare(b)).map(([, day]) => day);
+  return sorted.every((day) => day.trades.length > 0 && day.legs.length > 0) ? sorted : undefined;
 }
 
 // One cent: Flatex rounds the cash leg to cents, but not the gross (qty × Kurs).
@@ -265,12 +295,13 @@ const FEE_ROUNDING = new Decimal("0.01");
 /**
  * The fee readable legs give fills of one side and `gross` value, or
  * undefined when they give none: a buy pays gross + fee (its legs are
- * debits), a sale gets gross − fee (its legs are credits).
+ * debits), a sale gets gross − fee (its legs are credits). The fee must be
+ * below `limit` (the gross, or a split fee's smallest fill).
  */
-function legFee(legs: readonly OrderLeg[], side: Trade["buySell"], gross: Decimal): Decimal | undefined {
+function legFee(legs: readonly OrderLeg[], side: Trade["buySell"], gross: Decimal, limit: Decimal = gross): Decimal | undefined {
   const signed = legs.reduce((sum, leg) => sum.plus(leg.netAmount), new Decimal(0));
   const fee = side === "SELL" ? gross.minus(signed) : signed.negated().minus(gross);
-  return fee.greaterThan(FEE_ROUNDING.negated()) && fee.lessThan(gross) ? fee : undefined;
+  return fee.greaterThan(FEE_ROUNDING.negated()) && fee.lessThan(limit) ? fee : undefined;
 }
 
 /** How `flatex.commission.not_recovered` names an order's fills and legs. */
@@ -313,6 +344,10 @@ function reconcileOrderLegs(statement: Statement): void {
   // booking number, or FIFO would count every buy and sell twice.
   const seenFills = new Set<string>();
   const repeatedFills = new Set<Trade>();
+  // Orders with a fill the parser kept as a row that books nothing (a Kurs or
+  // Nominal it cannot read): that fill's leg is in the Konto export, so the
+  // legs cannot give the readable fills a fee (#467).
+  const keptFillOrders = new Set<string>();
   for (const trade of statement.trades) {
     const key = trade.notes ?? "";
     if (!key.startsWith(FLATEX_ORDER_PREFIX)) continue;
@@ -320,6 +355,10 @@ function reconcileOrderLegs(statement: Statement): void {
     // mistaken for an IBKR notes flag (AFx, P) downstream.
     delete trade.notes;
     const orderKey = key.slice(FLATEX_ORDER_PREFIX.length);
+    if (trade.quantityUnknown === true) {
+      keptFillOrders.add(orderKey);
+      continue;
+    }
     if (trade.tradeID) {
       const fill = `${orderKey}:${trade.tradeID}`;
       if (seenFills.has(fill)) {
@@ -352,53 +391,61 @@ function reconcileOrderLegs(statement: Statement): void {
       continue;
     }
 
-    // A leg that cannot be read could be any fill's: no fill of the order
-    // gets a fee from it, and the order is named.
-    if (legs.some((leg) => leg.unreadableCell !== undefined)) {
+    // A leg that cannot be read could be any fill's, and a fill that cannot
+    // be read has its leg among them: no fill of the order gets a fee from
+    // them, and the order is named. So is an order whose legs and fills do
+    // not fall on the same days: they are not the same executions.
+    const days = executionDays(trades, legs);
+    if (legs.some((leg) => leg.unreadableCell !== undefined) || keptFillOrders.has(orderKey) || days === undefined) {
       notRecovered.push(orderRow(orderKey, legs, trades));
       continue;
     }
 
-    if (legs.length === trades.length) {
-      // One cash leg per fill: pair by date, then by amount within a day.
-      const sortedTrades = [...trades].sort(tradeOrder);
-      const sortedLegs = [...legs].sort(legOrder);
-      sortedTrades.forEach((trade, i) => {
-        const leg = sortedLegs[i]!;
-        if (leg.currency !== trade.currency) {
-          crossCurrencyTrades++;
-          return;
-        }
-        const fee = legFee([leg], trade.buySell, new Decimal(trade.tradeMoney));
-        if (fee === undefined) {
-          notRecovered.push(orderRow(orderKey, [leg], [trade]));
-          return;
-        }
-        trade.commission = fee.abs().negated().toFixed();
-        trade.commissionCurrency = leg.currency || trade.commissionCurrency || trade.currency;
-      });
-      continue;
-    }
+    let prorated = false;
+    for (const day of days) {
+      if (day.legs.length === day.trades.length) {
+        // One cash leg per fill: pair them by amount.
+        const sortedTrades = [...day.trades].sort(tradeOrder);
+        const sortedLegs = [...day.legs].sort(legOrder);
+        sortedTrades.forEach((trade, i) => {
+          const leg = sortedLegs[i]!;
+          if (leg.currency !== trade.currency) {
+            crossCurrencyTrades++;
+            return;
+          }
+          const fee = legFee([leg], trade.buySell, new Decimal(trade.tradeMoney));
+          if (fee === undefined) {
+            notRecovered.push(orderRow(orderKey, [leg], [trade]));
+            return;
+          }
+          trade.commission = fee.abs().negated().toFixed();
+          trade.commissionCurrency = leg.currency || trade.commissionCurrency || trade.currency;
+        });
+        continue;
+      }
 
-    // Counts differ (e.g. one combined cash leg for several fills): we can't
-    // tell which leg belongs to which fill, so split the order's total fee
-    // across its fills in proportion to their gross value.
-    if (legs.some((leg) => trades.some((trade) => leg.currency !== trade.currency))) {
-      crossCurrencyTrades += trades.length;
-      continue;
+      // Counts differ (e.g. one combined cash leg for several fills): we can't
+      // tell which leg belongs to which fill, so split the day's total fee
+      // across its fills in proportion to their gross value.
+      if (day.legs.some((leg) => day.trades.some((trade) => leg.currency !== trade.currency))) {
+        crossCurrencyTrades += day.trades.length;
+        continue;
+      }
+      const gross = day.trades.reduce((sum, trade) => sum.plus(trade.tradeMoney), new Decimal(0));
+      const smallest = Decimal.min(...day.trades.map((trade) => trade.tradeMoney));
+      const sides = new Set(day.trades.map((trade) => trade.buySell));
+      const totalFee = sides.size === 1 ? legFee(day.legs, day.trades[0]!.buySell, gross, smallest) : undefined;
+      if (totalFee === undefined) {
+        notRecovered.push(orderRow(orderKey, day.legs, day.trades));
+        continue;
+      }
+      for (const trade of day.trades) {
+        trade.commission = totalFee.mul(trade.tradeMoney).div(gross).abs().negated().toFixed();
+        trade.commissionCurrency = day.legs[0]!.currency || trade.commissionCurrency || trade.currency;
+      }
+      prorated = true;
     }
-    const gross = trades.reduce((sum, trade) => sum.plus(trade.tradeMoney), new Decimal(0));
-    const sides = new Set(trades.map((trade) => trade.buySell));
-    const totalFee = sides.size === 1 ? legFee(legs, trades[0]!.buySell, gross) : undefined;
-    if (totalFee === undefined) {
-      notRecovered.push(orderRow(orderKey, legs, trades));
-      continue;
-    }
-    for (const trade of trades) {
-      trade.commission = totalFee.mul(trade.tradeMoney).div(gross).abs().negated().toFixed();
-      trade.commissionCurrency = legs[0]!.currency || trade.commissionCurrency || trade.currency;
-    }
-    proratedOrders++;
+    if (prorated) proratedOrders++;
   }
 
   if (repeatedFills.size > 0) {
@@ -442,7 +489,7 @@ function reconcileOrderLegs(statement: Statement): void {
       id: "flatex.commission.not_recovered",
       severity: "warning",
       message: `Flatex: ${count} operación(es) no tienen la comisión calculada, porque sus apuntes de caja no cuadran con la operación: ${rows}.`,
-      hint: "Cada fila trae el número de orden, el valor y la fecha. Entre corchetes va el importe de la operación y la suma de sus apuntes de caja, o la celda del importe que no se puede leer. Puede faltar un apunte, sobrar uno o tener un importe que no se puede leer. DeclaRenta deja esa comisión en 0. No la suma al coste de las compras ni la resta del valor de las ventas. Consulta la comisión en la liquidación de la orden en Flatex. Si quieres deducirla, añádela a mano en Renta Web.",
+      hint: "Cada fila trae el número de orden, el valor y la fecha. Entre corchetes va el importe de la operación y la suma de sus apuntes de caja, o la celda del importe que no se puede leer. Puede faltar un apunte o sobrar uno. Un apunte puede tener un importe o una fecha que no se puede leer, o una fecha que no es la de la operación. También puede haber una ejecución de la orden que no se puede leer. DeclaRenta deja esa comisión en 0. No la suma al coste de las compras ni la resta del valor de las ventas. Consulta la comisión en la liquidación de la orden en Flatex. Si quieres deducirla, añádela a mano en Renta Web.",
       context: { count, rows },
     });
   }

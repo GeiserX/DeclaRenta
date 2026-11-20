@@ -1026,7 +1026,7 @@ const en: TranslationKeys = {
   "flatex.commission.not_recovered":
     "Flatex: {{count}} trade(s) have no calculated commission, because their cash entries do not match the trade: {{rows}}.",
   "flatex.commission.not_recovered.hint":
-    "Each row gives the order number, the security and the date. The square brackets show the trade amount and the sum of its cash entries, or the amount cell that cannot be read. A cash entry may be missing, there may be one too many, or its amount cannot be read. DeclaRenta leaves that commission at 0. It does not add it to the cost of purchases or subtract it from the value of sales. Look up the commission in the order's settlement note in Flatex. If you want to deduct it, add it by hand in Renta Web.",
+    "Each row gives the order number, the security and the date. The square brackets show the trade amount and the sum of its cash entries, or the amount cell that cannot be read. A cash entry may be missing, or there may be one too many. An entry may have an amount or a date that cannot be read, or a date that is not the trade's date. An execution of the order may also be unreadable. DeclaRenta leaves that commission at 0. It does not add it to the cost of purchases or subtract it from the value of sales. Look up the commission in the order's settlement note in Flatex. If you want to deduct it, add it by hand in Renta Web.",
   "flatex.commission.multi_fill_prorated":
     "Flatex orders executed in several parts: {{orders}}. Their commission has been split across the executions in proportion to their amount.",
   "flatex.commission.multi_fill_prorated.hint":

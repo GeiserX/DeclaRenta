@@ -712,6 +712,18 @@ práctico Renta 2025. The decisions, each pinned in
       written 0 stays a zero. A positive Habenzinsen, Zinsen or Zinszahlung
       row is interest received (casilla 0027); it was dropped with no word.
       A negative one stays out, which can only raise the tax.
+    - Flatex orders: a fill and its cash leg fall on the same Buchtag, so
+      the legs and fills of an order are matched day by day. A day with a
+      fill and no leg, or a leg and no fill, a leg with no readable Buchtag,
+      or a fill the parser keeps unreadable gives the whole order no fee,
+      and `flatex.commission.not_recovered` names it. Before, a leg of
+      another day, of a fill missing from the Depot export, or of an
+      unreadable fill became the fee of another fill. A day with one
+      combined leg for several fills splits the fee pro rata only when the
+      fee is below the day's smallest fill: a missing or extra leg (one
+      uploaded twice with no TA-Nr.) moves the fee by at least that fill's
+      value. A combined leg for fills of two days is no longer split, which
+      can only raise the tax.
     - Trade Republic: a buy or sale with no amount, or that names no
       security (crypto with no `symbol`, any other with no `symbol` and no
       `name`), named by that cell: under an empty symbol unrelated

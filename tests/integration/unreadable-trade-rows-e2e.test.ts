@@ -2966,6 +2966,98 @@ describe("#467 Flatex: a cash leg, income row, currency, Kurs or order number th
     });
   });
 
+  // Round 1 of the merge sweep (#467): a fee was derived from legs and fills
+  // that are not the same executions. Flatex writes a fill and its cash leg
+  // on the same Buchtag, so the legs of each day must match the fills of
+  // that day, and no fill of the order may be a row the parser could not read.
+  describe("an order whose legs and fills are not the same executions", () => {
+    const BUY_INFO = `Ausführung ORDER Kauf ${ISIN} 333333`;
+    const SELL_INFO = `Ausführung ORDER Verkauf ${ISIN} 222222`;
+    const fill = (date: string, qty: string, ta: string, kurs = "100,00"): string => drow(date, qty, BUY_INFO, ta, kurs);
+    const leg = (date: string, ta: string, amount: string): string => krow(date, BUY_INFO, ta, amount);
+    const sell = (qty: string, ta = "9002"): string => drow("03.06.2024", `-${qty}`, SELL_INFO, ta, "120,00");
+    const sellLeg = (amount: string, ta = "8002"): string => krow("03.06.2024", SELL_INFO, ta, amount);
+    const booked = (s: Statement): string[][] => s.trades.filter((t) => t.quantityUnknown !== true).map((t) => [t.quantity, t.commission]);
+
+    it.each(METHODS)("[%s] a fill the parser cannot read gives the order no fee: its leg never becomes the other fill's fee", (method) => {
+      // Order 333333 filled 6 + 4 at 100 €, each charged its share of 5.90 €.
+      const control = merged(depot(fill("01.03.2024", "6", "9101"), fill("01.03.2024", "4", "9102"), sell("6")),
+        konto(leg("01.03.2024", "8101", "-603,54"), leg("01.03.2024", "8102", "-402,36"), sellLeg("714,10")));
+      expect(booked(control)).toEqual([["6", "-3.54"], ["4", "-2.36"], ["-6", "-5.9"]]);
+      expect(gains(report(control, method))).toEqual(["714.10", "603.54", "110.56"]);
+      const statement = merged(depot(fill("01.03.2024", "6", "9101"), fill("01.03.2024", "4", "9102", "abc"), sell("6")),
+        konto(leg("01.03.2024", "8101", "-603,54"), leg("01.03.2024", "8102", "-402,36"), sellLeg("714,10")));
+      expect(booked(statement)).toEqual([["6", "0"], ["-6", "-5.9"]]);
+      expect(message(statement, FEE)?.context?.rows).toBe(`333333 ${ISIN} 20240301 [600 EUR / -1005.9 EUR]`);
+      expect(message(statement, "flatex.commission.multi_fill_prorated")).toBeUndefined();
+      expect(gains(report(statement, method))).toEqual(["714.10", "600.00", "114.10"]);
+    });
+
+    it.each(METHODS)("[%s] a leg on a day with no fill in the Depot export gives the order no fee", (method) => {
+      const control = merged(depot(fill("01.03.2024", "6", "9101"), sell("6")), konto(leg("01.03.2024", "8101", "-603,54"), sellLeg("714,10")));
+      expect(gains(report(control, method))).toEqual(["714.10", "603.54", "110.56"]);
+      const statement = merged(depot(fill("01.03.2024", "6", "9101"), sell("6")),
+        konto(leg("01.03.2024", "8101", "-603,54"), leg("04.03.2024", "8102", "-402,36"), sellLeg("714,10")));
+      expect(booked(statement)).toEqual([["6", "0"], ["-6", "-5.9"]]);
+      expect(message(statement, FEE)?.context?.rows).toBe(`333333 ${ISIN} 20240301 [600 EUR / -1005.9 EUR]`);
+      expect(gains(report(statement, method))).toEqual(["714.10", "600.00", "114.10"]);
+    });
+
+    it.each(METHODS)("[%s] one fill and one leg of another day are other executions: no fee, named", (method) => {
+      const control = merged(depot(fill("01.03.2024", "4", "9101"), sell("4")), konto(leg("01.03.2024", "8101", "-402,36"), sellLeg("474,10")));
+      expect(gains(report(control, method))).toEqual(["474.10", "402.36", "71.74"]);
+      const statement = merged(depot(fill("01.03.2024", "4", "9101"), sell("4")), konto(leg("04.03.2024", "8102", "-603,54"), sellLeg("474,10")));
+      expect(booked(statement)).toEqual([["4", "0"], ["-4", "-5.9"]]);
+      expect(message(statement, FEE)?.context?.rows).toBe(`333333 ${ISIN} 20240301 [400 EUR / -603.54 EUR]`);
+      expect(gains(report(statement, method))).toEqual(["474.10", "400.00", "74.10"]);
+    });
+
+    describe.each(["xx.03.2024", ""])("a leg whose Buchtag is %j", (cell) => {
+      it.each(METHODS)("[%s] cannot be paired with a fill: the order gets no fee and is named by that cell", (method) => {
+        // Order 333333 filled 5 on 01.03 and 6 on 04.03, 5.90 € each.
+        const fills = (): Statement => depot(fill("01.03.2024", "5", "9101"), fill("04.03.2024", "6", "9102"), sell("11"));
+        const control = merged(fills(), konto(leg("01.03.2024", "8101", "-505,90"), leg("04.03.2024", "8102", "-605,90"), sellLeg("1314,10")));
+        expect(gains(report(control, method))).toEqual(["1314.10", "1111.80", "202.30"]);
+        const statement = merged(fills(), konto(leg(cell, "8101", "-505,90"), leg("04.03.2024", "8102", "-605,90"), sellLeg("1314,10")));
+        expect(booked(statement)).toEqual([["5", "0"], ["6", "0"], ["-11", "-5.9"]]);
+        expect(message(statement, FEE)?.context?.rows).toBe(`333333 ${ISIN} 20240301 [Buchtag: ${JSON.stringify(cell)}]`);
+        expect(gains(report(statement, method))).toEqual(["1314.10", "1100.00", "214.10"]);
+      });
+    });
+
+    it.each(METHODS)("[%s] one leg for fills of two days could be a missing leg: no fee, named; on one day it is split pro rata", (method) => {
+      const twoDays = merged(depot(fill("01.03.2024", "5", "9101"), fill("04.03.2024", "5", "9102"), SELL),
+        konto(leg("04.03.2024", "8101", "-1011,80"), legSell()));
+      expect(booked(twoDays)).toEqual([["5", "0"], ["5", "0"], ["-10", "-5.9"]]);
+      expect(message(twoDays, FEE)?.context?.rows).toBe(`333333 ${ISIN} 20240301 [1000 EUR / -1011.8 EUR]`);
+      expect(gains(report(twoDays, method))).toEqual(["1194.10", "1000.00", "194.10"]);
+      const oneDay = merged(depot(fill("04.03.2024", "5", "9101"), fill("04.03.2024", "5", "9102"), SELL),
+        konto(leg("04.03.2024", "8101", "-1011,80"), legSell()));
+      expect(oneDay.parserMessages?.map((m) => m.id)).toEqual(["flatex.commission.multi_fill_prorated"]);
+      expect(gains(report(oneDay, method))).toEqual(["1194.10", "1011.80", "182.30"]);
+    });
+
+    it.each(METHODS)("[%s] a sale filled twice in one day with one leg missing keeps its proceeds: no fee as large as a fill", (method) => {
+      const fills = (): Statement => depot(BUY, sell("4", "9002"), sell("6", "9003"));
+      const control = merged(fills(), konto(legBuy(), sellLeg("474,10", "8002"), sellLeg("714,10", "8003")));
+      expect(gains(report(control, method))).toEqual(["1188.20", "1005.90", "182.30"]);
+      const statement = merged(fills(), konto(legBuy(), sellLeg("714,10", "8003")));
+      expect(booked(statement)).toEqual([["10", "-5.9"], ["-4", "0"], ["-6", "0"]]);
+      expect(message(statement, FEE)?.context?.rows).toBe(`222222 ${ISIN} 20240603 [1200 EUR / 714.1 EUR]`);
+      expect(gains(report(statement, method))).toEqual(["1200.00", "1005.90", "194.10"]);
+    });
+
+    it.each(METHODS)("[%s] a leg with no TA-Nr. uploaded twice makes no fee as large as a fill", (method) => {
+      const fills = (): Statement => depot(fill("01.03.2024", "6", "9101"), fill("01.03.2024", "4", "9102"), sell("6"));
+      const legs = [leg("01.03.2024", "", "-603,54"), leg("01.03.2024", "", "-402,36"), sellLeg("714,10")];
+      expect(gains(report(merged(fills(), konto(...legs)), method))).toEqual(["714.10", "603.54", "110.56"]);
+      const statement = merged(fills(), konto(...legs), konto(leg("01.03.2024", "", "-402,36")));
+      expect(booked(statement)).toEqual([["6", "0"], ["4", "0"], ["-6", "-5.9"]]);
+      expect(message(statement, FEE)?.context?.rows).toBe(`333333 ${ISIN} 20240301 [1000 EUR / -1408.26 EUR]`);
+      expect(gains(report(statement, method))).toEqual(["714.10", "600.00", "114.10"]);
+    });
+  });
+
   it.each(METHODS)("[%s] a row with no order number gets no key from the digits of its ISIN: two orders never pool their legs", (method) => {
     const row = (date: string, qty: string, side: string, ta: string, kurs: string, key: string): string =>
       drow(date, qty, `Ausführung ORDER ${side} ${AAPL}${key}`, ta, kurs, "EUR", AAPL);

@@ -99,8 +99,9 @@ export interface OrderLeg {
   /** Booking number of the cash leg (Flatex TA-Nr.), used to drop the same leg uploaded twice. */
   bookingId?: string;
   /**
-   * The amount cell of a leg whose amount cannot be read (`Betrag: "abc"`).
-   * Such a leg's `netAmount` is "0", and its order gets no fee (#467).
+   * The cell of a leg whose amount or date cannot be read (`Betrag: "abc"`,
+   * `Buchtag: ""`). A leg with no readable amount has `netAmount` "0". Its
+   * order gets no fee (#467).
    */
   unreadableCell?: string;
 }

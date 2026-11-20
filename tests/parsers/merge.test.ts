@@ -218,10 +218,13 @@ describe("statement merge utilities", () => {
     expect(statement.parserMessages ?? []).toEqual([]);
   });
 
-  it("splits one combined cash leg across the fills pro rata and says so", () => {
+  it("splits one combined cash leg across the same day's fills pro rata and says so", () => {
+    // Flatex books a fill and its leg on the same day. A combined leg for
+    // fills of two days could be a missing leg: that order gets no fee and is
+    // named (tests/integration/unreadable-trade-rows-e2e.test.ts).
     const statement = makeStatement({
       trades: [
-        makeTrade({ tradeID: "F1", currency: "EUR", tradeDate: "20250310", tradeMoney: "1000", notes: "flatex-order:329000001" }),
+        makeTrade({ tradeID: "F1", currency: "EUR", tradeDate: "20250311", tradeMoney: "1000", notes: "flatex-order:329000001" }),
         makeTrade({ tradeID: "F2", currency: "EUR", tradeDate: "20250311", tradeMoney: "3000", notes: "flatex-order:329000001" }),
       ],
       pendingOrderLegs: [
