@@ -56,8 +56,12 @@ const DESCRIPTION_HEADERS = ["descripción", "description", "omschrijving", "bes
 /** Known header keywords for the Account CSV value-date column */
 const VALUE_DATE_HEADERS = ["fecha valor", "value date", "valutadatum", "wertdatum"];
 
-/** Dividend description patterns (Account CSV) */
-const DIVIDEND_PATTERNS = [/dividendo/i, /dividend/i];
+/**
+ * Dividend description patterns (Account CSV). "Fondsausschüttung" is how the
+ * German export names a fund (ETF) distribution: dividend income (casilla
+ * 0029), dropped with no word before (#467).
+ */
+const DIVIDEND_PATTERNS = [/dividendo/i, /dividend/i, /fondsaussch[üu]ttung/i];
 
 /** Withholding tax description patterns (Account CSV) */
 const WITHHOLDING_PATTERNS = [

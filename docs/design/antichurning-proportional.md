@@ -1028,6 +1028,8 @@ práctico Renta 2025. The decisions, each pinned in
       with no Descripción that names a security and moves money is named by
       `degiro.cash_row_undescribed` and not booked; it was dropped with no
       word.
+      A German `Fondsausschüttung` (an ETF distribution) is a dividend,
+      like `Dividende`; it was dropped with no word.
     - DEGIRO Transactions CSV: a buy or sale with an empty price-currency
       cell is an unreadable row named by that cell, never a trade in euros
       (a yen buy made a loss of thousands). An empty costs-currency cell is

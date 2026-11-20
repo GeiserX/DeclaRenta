@@ -2810,6 +2810,23 @@ describe("#467 DEGIRO: a cash row or a trade the file does not fully give is nam
     expect(emitted.hint).toBe(esText[`${UNDESCRIBED}.hint`]);
   });
 
+  // The German export names an ETF distribution "Fondsausschüttung": it is a
+  // dividend (casilla 0029), dropped with no word before.
+  const ACDE = "Datum,Uhrzeit,Valutadatum,Produkt,ISIN,Beschreibung,FX,Änderung,,Saldo,,Order-ID";
+  const VWRL = "IE00B3RBWM25";
+  const german = (...rows: string[]): Statement => degiroParser.parse([ACDE, ...rows].join("\n"));
+  it.each(METHODS)("[%s] a German Fondsausschüttung is booked as a dividend, like a Dividende", (method) => {
+    const etf = (desc: string): Statement => german(arow(desc, "50.00", "USD", "VANGUARD FTSE ALL-WORLD", VWRL));
+    expect(cash(report(etf("Dividende"), method))).toEqual(["46.00", "0.00", "0.00"]);
+    const parsed = etf("Fondsausschüttung");
+    expect(parsed.cashTransactions.map((c) => `${c.type} ${c.isin} ${c.amount} ${c.currency}`)).toEqual([`Dividends ${VWRL} 50.00 USD`]);
+    expect(parsed.parserMessages).toBeUndefined();
+    expect(cash(report(parsed, method))).toEqual(["46.00", "0.00", "0.00"]);
+    // Its withholding keeps its type: checked before the dividend.
+    expect(cash(report(german(arow("Fondsausschüttung", "50.00", "USD", "VANGUARD FTSE ALL-WORLD", VWRL),
+      arow("Quellensteuer", "-7.50", "USD", "VANGUARD FTSE ALL-WORLD", VWRL)), method))).toEqual(["46.00", "6.90", "0.00"]);
+  });
+
   // Transactions CSV, 19-col layout.
   const TX = "Fecha,Hora,Producto,ISIN,Bolsa de,Centro de ejecución,Número,Precio,,Valor local,,Valor,,Tipo de cambio,Costes de transacción,,Total,,ID Orden";
   type Row = { d?: string; q?: string; p?: string; ccy?: string; lv?: string; ev?: string; fx?: string; cc?: string; id?: string };
