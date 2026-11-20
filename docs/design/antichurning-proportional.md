@@ -1024,6 +1024,10 @@ práctico Renta 2025. The decisions, each pinned in
       units × (close − open), the other way round for a short, within 1 USD
       or 2%. Any other row, or one with no readable Profit, is kept as an
       unreadable row named by its Open Rate, Close Rate and Profit cells.
+    - eToro: a number cell formatted `#,##0` was read as its text "3,000",
+      which reads as 3, so a price, a unit count or a dividend of 1000 or
+      more was booked 1000 times too small. A number cell whose text has a
+      comma is now read at its value.
     - eToro: an Account Activity row whose Type names staking was dropped
       with no word, because only interest was read. DeclaRenta does not
       import eToro crypto, so the reward is not booked and its value is not

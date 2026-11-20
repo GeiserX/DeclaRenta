@@ -96,6 +96,29 @@ function sheetToRows(xlsx: typeof import("xlsx"), sheet: WorkSheet): string[][] 
 }
 
 /**
+ * Make every number cell whose shown text has a comma read as its value. The
+ * rows are read as the text each cell shows (`raw: false`, so date cells read
+ * as days), and a number formatted "#,##0" shows "3,000", which
+ * {@link parseNumber} reads as 3: its lone comma is a decimal one in a European
+ * file. A price, a unit count or a dividend of 1000 or more was booked 1000
+ * times too small (#467). The cell holds the number itself (`v`), so its text
+ * becomes that number. A cell whose text has no comma, a date and a percentage
+ * keep their text.
+ */
+function plainNumberCells(xlsx: typeof import("xlsx"), sheet: WorkSheet): void {
+  // xlsx types SSF as `any`; this is the call it documents.
+  const ssf = xlsx.SSF as { is_date(format: string): boolean };
+  for (const [address, value] of Object.entries(sheet)) {
+    if (address.startsWith("!")) continue;
+    const cell = value as import("xlsx").CellObject;
+    if (cell.t !== "n" || typeof cell.v !== "number" || !Number.isFinite(cell.v)) continue;
+    if (typeof cell.w !== "string" || !cell.w.includes(",") || cell.w.includes("%")) continue;
+    if (typeof cell.z === "string" && ssf.is_date(cell.z)) continue;
+    cell.w = new Decimal(cell.v).toFixed();
+  }
+}
+
+/**
  * Whether a column the sheet needs is missing (`columns`: index and the name
  * shown to the user). eToro renames its columns between export versions; a
  * sheet whose rows hold data but whose needed columns are not found is named
@@ -730,7 +753,9 @@ export async function parseEtoroXlsx(data: Buffer | Uint8Array): Promise<Stateme
   const wb = xlsx.read(data, { type: "buffer", cellNF: true });
   for (const name of wb.SheetNames) {
     const sheet = wb.Sheets[name];
-    if (sheet) isoDateCells(xlsx, sheet, wb.Workbook?.WBProps?.date1904 === true);
+    if (!sheet) continue;
+    isoDateCells(xlsx, sheet, wb.Workbook?.WBProps?.date1904 === true);
+    plainNumberCells(xlsx, sheet);
   }
 
   const closedSheet = getSheet(wb, ["closed positions", "posiciones cerradas"]);

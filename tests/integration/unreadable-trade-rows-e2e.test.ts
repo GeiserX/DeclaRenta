@@ -3327,6 +3327,29 @@ describe("#467 eToro sweep 3: FX rates of 1, CFD lots, quotes with no FX column 
       expect(gain(report(parsed, method))).toBe(expected);
     }
   });
+
+  // A number cell formatted #,##0 shows "3,000": its value is 3000, never 3.
+  const formatted = (rows: (string | number)[][], formats: Record<string, string>): XLSX.WorkSheet => {
+    const sheet = XLSX.utils.aoa_to_sheet(rows);
+    for (const [address, z] of Object.entries(formats)) (sheet[address] as XLSX.CellObject).z = z;
+    return sheet;
+  };
+  const booking = (units: number, open: number, close: number, profit: number): (string | number)[] =>
+    ["Buy BKNG", 3000, units, open, close, profit, "15/03/2025 09:30:00", "20/09/2025 14:00:00", "Stocks", 1, "US09857L1089"];
+  describe.each(["General", "#,##0", "#,##0.00"])("number cells in the format %j", (z) => {
+    it.each(METHODS)("[%s] are read at their value: prices, units and a dividend of 1000 or more", async (method) => {
+      const fmt: Record<string, string> = z === "General" ? {} : { D2: z, E2: z };
+      const rates = await workbook([["Closed Positions", formatted([OLD_H, booking(1, 3000, 4500, 1500)], fmt)]]);
+      expect(prices(rates)).toEqual([["1", "3000"], ["-1", "4500"]]);
+      expect(gain(report(rates, method))).toBe("1380.00");
+      const units = await workbook([["Closed Positions", formatted([OLD_H, booking(1500, 2, 3, 1500)], z === "General" ? {} : { C2: z })]]);
+      expect(prices(units)).toEqual([["1500", "2"], ["-1500", "3"]]);
+      expect(gain(report(units, method))).toBe("1380.00");
+      const DV = ["Date of Payment", "Instrument Name", "Net Dividend Received (USD)", "Withholding Tax Amount (USD)", "ISIN"];
+      const dividend = await workbook([["Dividends", formatted([DV, ["15/06/2025", "Apple", 1500, 0, AAPL]], z === "General" ? {} : { C2: z })]]);
+      expect(new Decimal(report(dividend, method).dividends.grossIncome).toFixed(2)).toBe("1380.00");
+    });
+  });
 });
 
 describe("#467 Flatex: a cash leg, income row, currency, Kurs or order number the parser cannot read is named, never booked as a fee, as 0, as euros or a crash", () => {
