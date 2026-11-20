@@ -84,8 +84,8 @@ async function waitFor<T>(probe: () => T | null | undefined, label: string): Pro
   throw new Error(`timed out waiting for ${label}`);
 }
 
-async function openResults(): Promise<void> {
-  const file = new File([XML], "statement.xml", { type: "text/xml" });
+async function openResults(xml = XML): Promise<void> {
+  const file = new File([xml], "statement.xml", { type: "text/xml" });
   const input = document.getElementById("file-input") as HTMLInputElement;
   Object.defineProperty(input, "files", { value: [file], configurable: true });
   input.dispatchEvent(new Event("change"));
@@ -153,8 +153,8 @@ function redrawOnLocaleChange(): void {
 const redrawn = (panel: () => HTMLElement | null, old: HTMLElement, what: string) =>
   waitFor(() => (panel() && panel() !== old ? panel() : null), what);
 
-/** Load the real app on the results step; `seed` writes to storage first. */
-async function startApp(seed: () => void = () => {}): Promise<void> {
+/** Load the real app on the results step; `seed` writes to storage first, `xml` is the statement. */
+async function startApp(seed: () => void = () => {}, xml = XML): Promise<void> {
   refuseWrites = false;
   refuseRemoves = false;
   vi.resetModules();
@@ -166,7 +166,7 @@ async function startApp(seed: () => void = () => {}): Promise<void> {
   Element.prototype.scrollIntoView = () => {};
   vi.stubGlobal("fetch", () => Promise.reject(new Error("no network in tests")));
   await import("../../src/web/main.js");
-  await openResults();
+  await openResults(xml);
 }
 
 describe("«Guardado» after a Save in the real app (#472)", () => {
@@ -623,22 +623,33 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
     expect(cryptoLabel().hidden).toBe(true);
   });
 
-  it("opening lots: an edit while the Save rerun waits hides «Guardado», and the kept panel stays without it", async () => {
+  // The Save covers the missing lot, so the run's report lists ACME as a saved
+  // lot, not a missing one: the run draws the panel again for that report, with
+  // the typed value, the focus and no «Guardado» (#472 review of e4e439e).
+  it("opening lots: an edit while the Save rerun waits hides «Guardado», and the redrawn panel keeps the edit without it", async () => {
     const before = await waitFor(lotsPanel, "opening lots panel");
     const strip = document.getElementById("results-split");
-    const field = (f: string) => before.querySelector<HTMLInputElement>(`[data-field='${f}']`)!;
+    const field = (f: string, p: HTMLElement = before) => p.querySelector<HTMLInputElement>(`[data-field='${f}']`)!;
     field("acquireDate").value = `${YEAR}-01-15`;
     field("quantity").value = "10";
     field("pricePerShare").value = "100";
     before.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn")!.click();
     expect(lotsLabel().hidden).toBe(false);
+    field("quantity").focus();
     field("quantity").value = "11";
     field("quantity").dispatchEvent(new Event("input", { bubbles: true }));
+    field("quantity").setSelectionRange(1, 1);
     expect(lotsLabel().hidden).toBe(true);
     await runLands(strip);
-    expect(lotsPanel()).toBe(before);
-    expect(field("quantity").value).toBe("11");
+    const after = lotsPanel()!;
+    expect(after).not.toBe(before);
+    expect(field("quantity", after).value).toBe("11");
+    expect(document.activeElement).toBe(field("quantity", after));
+    expect([field("quantity", after).selectionStart, field("quantity", after).selectionEnd]).toEqual([1, 1]);
     expect(lotsLabel().hidden).toBe(true);
+    // Still unsaved: the stored lot is the one the Save wrote.
+    const stored = JSON.parse(localStorage.getItem("declarenta_manual_opening_lots")!) as { quantity: string }[];
+    expect(stored.map((lot) => lot.quantity)).toEqual(["10"]);
   });
 
   it("opening lots: a typed value or an added row in the redrawn panel hides «Guardado»", async () => {
@@ -1084,6 +1095,8 @@ describe("Clear in each panel (#472 review)", () => {
     await runLands(stripBeforeSave, "rerun after Save");
   });
 
+  // The Clear brings the missing lot back, so the run draws the panel again
+  // for that report, with the two empty rows on screen (#472 review of e4e439e).
   it("opening lots: Clear, then an added row while the rerun waits: the next Save does not restore the cleared lot", async () => {
     const before = await waitFor(lotsPanel, "opening lots panel");
     expect(before.querySelector<HTMLInputElement>("[data-field='quantity']")!.value).toBe("10");
@@ -1091,8 +1104,10 @@ describe("Clear in each panel (#472 review)", () => {
     before.querySelector<HTMLButtonElement>("#manual-opening-lots-clear-btn")!.click();
     before.querySelector<HTMLButtonElement>(".manual-opening-lot-add")!.click();
     await runLands(strip);
-    expect(lotsPanel()).toBe(before);
-    before.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn")!.click();
+    const after = lotsPanel()!;
+    const values = [...after.querySelectorAll<HTMLInputElement>(".manual-opening-lot-input")].map((input) => input.value);
+    expect(values).toEqual(["", "", "", "", "", ""]);
+    after.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn")!.click();
     expect(localStorage.getItem("declarenta_manual_opening_lots")).toBeNull();
   });
 });
@@ -1185,6 +1200,27 @@ describe("a kept anti-churning panel and the rows a run adds or drops (#472 revi
     expect(windowLabel().hidden).toBe(true);
   });
 
+  it("a window choice made while an opening-lot Save reruns: the redrawn panel keeps the choice and the focus", async () => {
+    const win = await waitFor(windowPanel, "window panel");
+    const lots = await waitFor(lotsPanel, "opening lots panel");
+    const field = (f: string) => lots.querySelector<HTMLInputElement>(`[data-field='${f}']`)!;
+    field("acquireDate").value = `${YEAR}-01-15`;
+    field("quantity").value = "10";
+    field("pricePerShare").value = "150";
+    const strip = document.getElementById("results-split");
+    lots.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn")!.click();
+    windowSelect(win).focus();
+    windowSelect(win).value = "12";
+    windowSelect(win).dispatchEvent(new Event("change", { bubbles: true }));
+    await runLands(strip, "rerun after the opening-lot Save");
+
+    const after = windowPanel()!;
+    expect(after).not.toBe(win);
+    expect(isins(after)).toContain(ACME_ISIN);
+    expect(windowSelect(after).value).toBe("12");
+    expect(document.activeElement).toBe(windowSelect(after));
+  });
+
   it("an unsaved window choice and a run that changes no row keeps the same panel (control)", async () => {
     const win = await waitFor(windowPanel, "window panel");
     windowSelect(win).value = "12";
@@ -1196,6 +1232,162 @@ describe("a kept anti-churning panel and the rows a run adds or drops (#472 revi
     await runLands(strip, "rerun after the crypto Save");
     expect(windowPanel()).toBe(win);
     expect(windowSelect(win).value).toBe("12");
+  });
+});
+
+/**
+ * The statement above plus a sale of the BTC that the SOL swap bought. While the
+ * swap has no price it is left out of the calculations, so the BTC sale has no
+ * purchase and the opening-lots panel asks for it next to ACME. A saved SOL
+ * price values the swap, which then supplies the BTC lot, and the BTC row goes.
+ */
+const XML_BTC_SALE = XML.replace(
+  "</Trades>",
+  `<Trade tradeID="7" accountId="U0000001" symbol="BTC" description="BTC sold for EUR"
+          isin="" assetCategory="CRYPTO" currency="EUR"
+          tradeDate="${YEAR}0601" settlementDate="" quantity="-0.01" tradePrice="500"
+          tradeMoney="-5" proceeds="5" cost="0" fifoPnlRealized="0" fxRateToBase="1"
+          buySell="SELL" openCloseIndicator="C" exchange="BINANCE"
+          ibCommissionCurrency="EUR" ibCommission="0" taxes="0" />
+      </Trades>`,
+);
+
+describe("a kept opening-lots panel and the rows a crypto price adds or drops (#472 review)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const LOTS_KEY = "declarenta_manual_opening_lots";
+  const groups = (p: HTMLElement) => [...p.querySelectorAll<HTMLElement>(".manual-opening-lot-group")].map((g) => g.dataset.symbol);
+  const group = (p: HTMLElement, symbol: string) =>
+    [...p.querySelectorAll<HTMLElement>(".manual-opening-lot-group")].find((g) => g.dataset.symbol === symbol)!;
+  const values = (g: HTMLElement) =>
+    [...g.querySelectorAll<HTMLTableRowElement>(".manual-opening-lot-row")].map((row) =>
+      ["acquireDate", "quantity", "pricePerShare"].map((f) => row.querySelector<HTMLInputElement>(`[data-field='${f}']`)!.value),
+    );
+  const type = (g: HTMLElement, row: number, f: string, v: string) => {
+    const input = g.querySelectorAll<HTMLTableRowElement>(".manual-opening-lot-row")[row]!.querySelector<HTMLInputElement>(`[data-field='${f}']`)!;
+    input.value = v;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const runLands = async (strip: Element | null, what: string) => {
+    await waitFor(() => (document.getElementById("results-split") !== strip ? true : null), what);
+    await new Promise((r) => setTimeout(r, 50));
+  };
+  const saveCrypto = async (price: string) => {
+    const crypto = await waitFor(cryptoPanel, "crypto panel");
+    for (const input of crypto.querySelectorAll<HTMLInputElement>(".crypto-rate-input")) input.value = price;
+    const strip = document.getElementById("results-split");
+    crypto.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    await runLands(strip, "rerun after the crypto Save");
+  };
+
+  // A typed ACME lot, then a SOL price saved in the crypto panel: the swap now
+  // supplies the BTC lot, so the run lists only ACME. A kept panel would still
+  // offer a BTC row, and a lot typed there would enter FIFO and lower the base.
+  it("an unsaved lot, then a crypto Save that values the swap: the panel drops the BTC row and keeps the typed lot", async () => {
+    await startApp(undefined, XML_BTC_SALE);
+    const lots = await waitFor(lotsPanel, "opening lots panel");
+    expect(groups(lots)).toEqual(["ACME", "BTC"]);
+    type(group(lots, "ACME"), 0, "acquireDate", `${YEAR}-01-15`);
+    type(group(lots, "ACME"), 0, "quantity", "10");
+    const quantity = (p: HTMLElement) => group(p, "ACME").querySelector<HTMLInputElement>("[data-field='quantity']")!;
+    quantity(lots).focus();
+
+    await saveCrypto("150");
+    const after = lotsPanel()!;
+    expect(groups(after)).toEqual(["ACME"]);
+    expect(values(group(after, "ACME"))).toEqual([[`${YEAR}-01-15`, "10", ""]]);
+    // The user can keep typing where they were.
+    expect(document.activeElement).toBe(quantity(after));
+    expect((after as HTMLDetailsElement).open).toBe(true);
+    expect(lotsLabel().hidden).toBe(true);
+    expect(localStorage.getItem(LOTS_KEY)).toBeNull();
+
+    // Still unsaved: a run from another panel keeps it as it is.
+    const win = await waitFor(windowPanel, "window panel");
+    windowSelect(win).value = "12";
+    const strip = document.getElementById("results-split");
+    win.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    await runLands(strip, "rerun after the anti-churning Save");
+    expect(lotsPanel()).toBe(after);
+    expect(values(group(after, "ACME"))).toEqual([[`${YEAR}-01-15`, "10", ""]]);
+
+    // The panel's own Save stores the ACME lot and nothing for BTC.
+    type(group(after, "ACME"), 0, "pricePerShare", "150");
+    const strip2 = document.getElementById("results-split");
+    after.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn")!.click();
+    const stored = JSON.parse(localStorage.getItem(LOTS_KEY)!) as { symbol: string }[];
+    expect(stored.map((lot) => lot.symbol)).toEqual(["ACME"]);
+    await runLands(strip2, "rerun after the opening-lot Save");
+  });
+
+  // The reverse: a saved price, a typed lot, then a Clear of the prices. The
+  // swap is left out again, the BTC sale has no purchase, and the run lists BTC.
+  it("a saved price, an unsaved lot, then a crypto Clear: the panel shows the new BTC row and keeps the typed lot", async () => {
+    await startApp(undefined, XML_BTC_SALE);
+    await saveCrypto("150");
+    const lots = lotsPanel()!;
+    expect(groups(lots)).toEqual(["ACME"]);
+    type(group(lots, "ACME"), 0, "quantity", "10");
+
+    const crypto = cryptoPanel()!;
+    const strip = document.getElementById("results-split");
+    crypto.querySelector<HTMLButtonElement>("#crypto-rates-clear-btn")!.click();
+    await runLands(strip, "rerun after the crypto Clear");
+    const after = lotsPanel()!;
+    expect(groups(after)).toEqual(["ACME", "BTC"]);
+    expect(values(group(after, "ACME"))).toEqual([["", "10", ""]]);
+    expect(values(group(after, "BTC"))).toEqual([["", "", ""]]);
+    expect((after as HTMLDetailsElement).open).toBe(true);
+    expect(lotsLabel().hidden).toBe(true);
+  });
+
+  // A flagged row and its error, an added row, and a panel the user closed all
+  // survive the redraw.
+  it("a refused Save with an added row in a closed panel, then a crypto Save: the redraw keeps the rows, the flag, the error and the closed panel", async () => {
+    await startApp(undefined, XML_BTC_SALE);
+    const lots = await waitFor(lotsPanel, "opening lots panel");
+    const acme = group(lots, "ACME");
+    type(acme, 0, "acquireDate", `${YEAR}-01-15`);
+    type(acme, 0, "quantity", "6");
+    type(acme, 0, "pricePerShare", "150");
+    acme.querySelector<HTMLButtonElement>(".manual-opening-lot-add")!.click();
+    type(acme, 1, "quantity", "4");
+    lots.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn")!.click();
+    const error = () => lotsPanel()!.querySelector<HTMLElement>(".manual-opening-lots-error-msg")!;
+    expect(error().hidden).toBe(false);
+    const errorText = error().textContent;
+    expect(localStorage.getItem(LOTS_KEY)).toBeNull();
+    (lots as HTMLDetailsElement).open = false;
+
+    await saveCrypto("150");
+    const after = lotsPanel()!;
+    expect(after).not.toBe(lots);
+    expect(groups(after)).toEqual(["ACME"]);
+    const rows = values(group(after, "ACME"));
+    expect(rows).toEqual([
+      [`${YEAR}-01-15`, "6", "150"],
+      ["", "4", ""],
+    ]);
+    const flags = [...group(after, "ACME").querySelectorAll<HTMLTableRowElement>(".manual-opening-lot-row")].map(
+      (row) => row.querySelector("[data-field='quantity']")!.getAttribute("aria-invalid"),
+    );
+    expect(flags).toEqual([null, "true"]);
+    expect(error().hidden).toBe(false);
+    expect(error().textContent).toBe(errorText);
+    expect((after as HTMLDetailsElement).open).toBe(false);
+    expect(lotsLabel().hidden).toBe(true);
+  });
+
+  it("an unsaved lot and a crypto Save that changes no lot row keeps the same panel (control)", async () => {
+    await startApp();
+    const lots = await waitFor(lotsPanel, "opening lots panel");
+    expect(groups(lots)).toEqual(["ACME"]);
+    type(group(lots, "ACME"), 0, "quantity", "10");
+    await saveCrypto("150");
+    expect(lotsPanel()).toBe(lots);
+    expect(values(group(lots, "ACME"))).toEqual([["", "10", ""]]);
   });
 });
 

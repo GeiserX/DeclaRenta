@@ -114,12 +114,14 @@ export function antichurningRowsKey(securities: readonly AntichurningSecurity[] 
 
 /**
  * What a panel holds that nobody saved: each select's choice by canonical ISIN
- * and the error on screen, plus whether the user left it open.
+ * and the error on screen, plus whether the user left it open and the ISIN of
+ * the select they are on, so a redraw does not take the focus away.
  */
 export interface AntichurningDraft {
   windows: Map<string, string>;
   error: string | null;
   open: boolean;
+  focus: string | null;
 }
 
 /** Read the choices and the visible error of a drawn panel. */
@@ -129,21 +131,31 @@ export function readAntichurningDraft(panel: HTMLElement): AntichurningDraft {
     windows.set(canonicalIsin(select.dataset.isin), select.value);
   }
   const error = panel.querySelector<HTMLElement>(".antichurning-window-error");
-  return { windows, error: error && !error.hidden ? error.textContent : null, open: panel instanceof HTMLDetailsElement && panel.open };
+  const active = panel.ownerDocument.activeElement;
+  const focus =
+    active instanceof HTMLSelectElement && active.matches(".antichurning-window-select") && panel.contains(active)
+      ? canonicalIsin(active.dataset.isin)
+      : null;
+  return { windows, error: error && !error.hidden ? error.textContent : null, open: panel instanceof HTMLDetailsElement && panel.open, focus };
 }
 
 /**
  * Put a draft back into a panel drawn from a newer report: each row whose ISIN
  * the draft holds gets the user's choice, a new row keeps what is stored, and
  * the error stays on screen, and the panel stays open or closed as the user
- * left it. «Guardado» stays hidden: the panel shows values nobody saved.
+ * left it. The select the user was on keeps the focus, if its row is still
+ * there. «Guardado» stays hidden: the panel shows values nobody saved.
  */
 export function applyAntichurningDraft(panel: HTMLElement, draft: AntichurningDraft): void {
   if (panel instanceof HTMLDetailsElement) panel.open = draft.open;
+  let focus: HTMLSelectElement | null = null;
   for (const select of panel.querySelectorAll<HTMLSelectElement>(".antichurning-window-select")) {
-    const value = draft.windows.get(canonicalIsin(select.dataset.isin));
+    const isin = canonicalIsin(select.dataset.isin);
+    const value = draft.windows.get(isin);
     if (value !== undefined) select.value = value;
+    if (isin === draft.focus) focus = select;
   }
+  focus?.focus();
   const saved = panel.querySelector<HTMLElement>(".antichurning-window-saved");
   if (saved) saved.hidden = true;
   const error = panel.querySelector<HTMLElement>(".antichurning-window-error");

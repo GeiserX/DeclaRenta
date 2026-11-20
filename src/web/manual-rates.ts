@@ -472,11 +472,10 @@ function renderOpeningLotRows(issue: ManualOpeningLotIssue): string {
 }
 
 /**
- * `saved` shows the «Guardado» label in the panel a Save redraws (#472). A
- * Save that emptied the last saved group with no missing lot left draws only
- * the title and the label, with no rows and no buttons (#472 review).
+ * The groups the opening-lots panel shows for `messages`: one per missing lot
+ * the report names, or the saved groups when it names none.
  */
-export function renderManualOpeningLotsPanel(messages: TaxMessage[], { saved = false }: { saved?: boolean } = {}): string {
+function openingLotIssues(messages: TaxMessage[]): { issues: ManualOpeningLotIssue[]; hasActiveIssues: boolean } {
   const issuesFromMessages = messages
     .map((msg) => manualOpeningIssueFromMessage(msg))
     .filter((issue): issue is ManualOpeningLotIssue => issue !== null)
@@ -484,9 +483,150 @@ export function renderManualOpeningLotsPanel(messages: TaxMessage[], { saved = f
       (issue, index, arr) =>
         arr.findIndex((i) => i.groupKey === issue.groupKey && i.sellDate === issue.sellDate) === index,
     );
-
-  const issues = issuesFromMessages.length > 0 ? issuesFromMessages : collectStoredOpeningLotIssues();
   const hasActiveIssues = issuesFromMessages.length > 0;
+  return { issues: hasActiveIssues ? issuesFromMessages : collectStoredOpeningLotIssues(), hasActiveIssues };
+}
+
+/**
+ * What the groups of a panel drawn from `messages` show besides their inputs,
+ * in order. A run keeps a panel the user is editing only while this is the
+ * same for its report (#472 review of e4e439e): a crypto price saved or
+ * cleared in another panel puts a swap into the calculations or leaves it out,
+ * which can drop a sale's missing lot or add one. List every field a group
+ * shows, except the inputs, which read storage.
+ */
+export function openingLotsRowsKey(messages: TaxMessage[]): string {
+  const { issues, hasActiveIssues } = openingLotIssues(messages);
+  return JSON.stringify([
+    hasActiveIssues,
+    issues.map((i) => [i.groupKey, i.symbol, i.description, i.isin, i.conid ?? null, i.assetCategory, i.currency, i.sellDate ?? null, i.missingQuantity ?? null]),
+  ]);
+}
+
+const OPENING_LOT_FIELDS = ["acquireDate", "quantity", "pricePerShare"] as const;
+
+/** One typed row of a group: its three inputs and whether a refused Save flagged it. */
+type OpeningLotDraftRow = { values: string[]; invalid: boolean };
+
+/** The input the user is typing in: its group (key and which group with that key), row and field, and the caret. */
+type OpeningLotFocus = { key: string; index: number; row: number; field: string; start: number | null; end: number | null };
+
+/**
+ * What a panel holds that nobody saved: the typed rows of each group by group
+ * key (a list, one entry per group with that key, in screen order), the error
+ * on screen, whether the user left the panel open, and the input they are
+ * typing in, so a redraw does not take their keystrokes away.
+ */
+export interface OpeningLotsDraft {
+  groups: Map<string, OpeningLotDraftRow[][]>;
+  error: string | null;
+  open: boolean;
+  focus: OpeningLotFocus | null;
+}
+
+/** The groups of a panel with their key and which group with that key each one is. */
+function keyedGroups(panel: HTMLElement): { group: HTMLElement; key: string; index: number }[] {
+  const seen = new Map<string, number>();
+  return [...panel.querySelectorAll<HTMLElement>(".manual-opening-lot-group")].map((group) => {
+    const key = group.dataset.groupKey ?? "";
+    const index = seen.get(key) ?? 0;
+    seen.set(key, index + 1);
+    return { group, key, index };
+  });
+}
+
+function lotRows(group: HTMLElement): HTMLTableRowElement[] {
+  return [...group.querySelectorAll<HTMLTableRowElement>(".manual-opening-lot-row")];
+}
+
+function readOpeningLotFocus(panel: HTMLElement, groups: ReturnType<typeof keyedGroups>): OpeningLotFocus | null {
+  const active = panel.ownerDocument.activeElement;
+  if (!(active instanceof HTMLInputElement) || !active.matches(".manual-opening-lot-input") || !panel.contains(active)) return null;
+  const at = groups.find(({ group }) => group.contains(active));
+  const row = active.closest<HTMLTableRowElement>(".manual-opening-lot-row");
+  if (!at || !row) return null;
+  const text = active.type === "text";
+  return {
+    key: at.key,
+    index: at.index,
+    row: lotRows(at.group).indexOf(row),
+    field: active.dataset.field ?? "",
+    start: text ? active.selectionStart : null,
+    end: text ? active.selectionEnd : null,
+  };
+}
+
+/** Read the typed rows and the visible error of a drawn panel. */
+export function readOpeningLotsDraft(panel: HTMLElement): OpeningLotsDraft {
+  const groups = new Map<string, OpeningLotDraftRow[][]>();
+  const keyed = keyedGroups(panel);
+  for (const { group, key } of keyed) {
+    const rows = lotRows(group).map((row) => ({
+      values: OPENING_LOT_FIELDS.map((f) => row.querySelector<HTMLInputElement>(`[data-field='${f}']`)?.value ?? ""),
+      invalid: row.querySelector(".manual-opening-lot-input[aria-invalid='true']") !== null,
+    }));
+    groups.set(key, [...(groups.get(key) ?? []), rows]);
+  }
+  const error = panel.querySelector<HTMLElement>(".manual-opening-lots-error-msg");
+  return {
+    groups,
+    error: error && !error.hidden ? error.textContent : null,
+    open: panel instanceof HTMLDetailsElement && panel.open,
+    focus: readOpeningLotFocus(panel, keyed),
+  };
+}
+
+/**
+ * Put a draft back into a panel drawn from a newer report: each group the draft
+ * holds gets the user's rows, with their flags, a new group keeps what is
+ * stored, a group the report no longer names is gone, the error stays on
+ * screen, and the panel stays open or closed as the user left it. The input
+ * the user was typing in keeps the focus and the caret, if its group is still
+ * there. «Guardado» stays hidden: the panel shows values nobody saved.
+ */
+export function applyOpeningLotsDraft(panel: HTMLElement, draft: OpeningLotsDraft): void {
+  if (panel instanceof HTMLDetailsElement) panel.open = draft.open;
+  const keyed = keyedGroups(panel);
+  for (const { group, key, index } of keyed) {
+    const rows = draft.groups.get(key)?.[index];
+    const tbody = group.querySelector<HTMLTableSectionElement>("tbody");
+    if (!rows || rows.length === 0 || !tbody) continue;
+    let drawn = lotRows(group);
+    drawn.slice(rows.length).forEach((row) => row.remove());
+    for (let i = drawn.length; i < rows.length; i++) tbody.insertAdjacentHTML("beforeend", renderEmptyOpeningLotRow(group));
+    drawn = lotRows(group);
+    rows.forEach((row, i) => {
+      OPENING_LOT_FIELDS.forEach((f, j) => {
+        const input = drawn[i]!.querySelector<HTMLInputElement>(`[data-field='${f}']`);
+        if (!input) return;
+        input.value = row.values[j] ?? "";
+        if (row.invalid) input.setAttribute("aria-invalid", "true");
+        else input.removeAttribute("aria-invalid");
+      });
+    });
+  }
+  const saved = panel.querySelector<HTMLElement>(".manual-opening-lots-saved-msg");
+  if (saved) saved.hidden = true;
+  const error = panel.querySelector<HTMLElement>(".manual-opening-lots-error-msg");
+  if (error && draft.error !== null) {
+    error.hidden = false;
+    error.textContent = draft.error;
+  }
+  const focus = draft.focus;
+  const at = focus && keyed.find(({ key, index }) => key === focus.key && index === focus.index);
+  const input = at ? lotRows(at.group)[focus.row]?.querySelector<HTMLInputElement>(`[data-field='${focus.field}']`) : null;
+  if (!focus || !input) return;
+  input.focus();
+  if (focus.start !== null && focus.end !== null) input.setSelectionRange(focus.start, focus.end);
+}
+
+/**
+ * `saved` shows the «Guardado» label in the panel a Save redraws (#472). A
+ * Save that emptied the last saved group with no missing lot left draws only
+ * the title and the label, with no rows and no buttons (#472 review).
+ */
+export function renderManualOpeningLotsPanel(messages: TaxMessage[], { saved = false }: { saved?: boolean } = {}): string {
+  const { issues, hasActiveIssues } = openingLotIssues(messages);
 
   if (issues.length === 0) {
     if (!saved) return "";

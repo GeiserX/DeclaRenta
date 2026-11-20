@@ -57,6 +57,10 @@ import {
   getManualOpeningLots,
   renderManualOpeningLotsPanel,
   bindManualOpeningLotsPanel,
+  openingLotsRowsKey,
+  readOpeningLotsDraft,
+  applyOpeningLotsDraft,
+  type OpeningLotsDraft,
 } from "./manual-rates.js";
 import { initSection720, renderSection720, rerenderSection720 } from "./section-720.js";
 import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
@@ -1010,10 +1014,12 @@ let panelTouchSeq = 0;
 const panelUnsaved = new WeakSet<Element>();
 
 /**
- * The rows each drawn anti-churning panel shows (`antichurningRowsKey` of the
- * report it was drawn from). A run keeps an edited panel only while its report
- * lists the same rows; otherwise it draws the panel from the new report and
- * puts the user's unsaved choices back by ISIN (#472 review of 99f969f).
+ * The rows each drawn anti-churning and opening-lots panel shows
+ * (`antichurningRowsKey` or `openingLotsRowsKey` of the report it was drawn
+ * from). A run keeps an edited panel only while its report lists the same
+ * rows; otherwise it draws the panel from the new report and puts back what
+ * the user had not saved: the window choices by ISIN, the typed lots by group
+ * (#472 review of 99f969f and of e4e439e).
  */
 const panelRows = new WeakMap<Element, string>();
 
@@ -1368,6 +1374,18 @@ function renderResults(report: TaxSummary, labelled: ReadonlySet<SavedPanel> = n
     windowDraft = { from: staleWindow, draft: readAntichurningDraft(staleWindow) };
     kept.delete("antichurning");
   }
+  // The same for a kept opening-lots panel: a crypto price saved or cleared in
+  // another panel puts a swap into the calculations or leaves it out, which
+  // drops a sale's missing lot or adds one. A kept panel would hide the new
+  // row, or offer a row whose lot would enter FIFO for a sale that has its
+  // purchase already (#472 review of e4e439e).
+  const lotsRows = openingLotsRowsKey(report.messages);
+  const staleLots = kept.get("openingLots");
+  let lotsDraft: { from: Element; draft: OpeningLotsDraft } | null = null;
+  if (staleLots && panelRows.get(staleLots) !== lotsRows) {
+    lotsDraft = { from: staleLots, draft: readOpeningLotsDraft(staleLots) };
+    kept.delete("openingLots");
+  }
   const keptEls = new Set<Element>(kept.values());
   resultsSectionEl.querySelectorAll(".crypto-rates-panel, .manual-opening-lots-panel, .antichurning-window-panel").forEach((el) => {
     if (!keptEls.has(el)) el.remove();
@@ -1389,6 +1407,13 @@ function renderResults(report: TaxSummary, labelled: ReadonlySet<SavedPanel> = n
   // counts before a Save handler starts a run. The same touch hides «Guardado»:
   // after an edit the panel shows values nobody saved, and a good Save shows the
   // label again from its own handler, which runs after this one.
+  // A panel drawn again with a draft keeps the marks that keep it through the next run.
+  const carryUnsaved = (from: Element, to: Element) => {
+    if (panelUnsaved.has(from)) panelUnsaved.add(to);
+    const stamp = panelTouched.get(from);
+    if (stamp !== undefined) panelTouched.set(to, stamp);
+  };
+
   const placePanel = (p: SavedPanel, html: string, bind: (el: HTMLElement) => void) => {
     if (kept.has(p) || !html) return;
     const anchor = panelOrder.slice(panelOrder.indexOf(p) + 1).map((q) => kept.get(q)).find((el) => el !== undefined) ?? casillasDiv;
@@ -1419,6 +1444,10 @@ function renderResults(report: TaxSummary, labelled: ReadonlySet<SavedPanel> = n
 
   placePanel("openingLots", renderManualOpeningLotsPanel(report.messages, { saved: labelled.has("openingLots") }), (panel) => {
     bindManualOpeningLotsPanel(panel, rerunAfter("openingLots", panel));
+    panelRows.set(panel, lotsRows);
+    if (!lotsDraft) return;
+    applyOpeningLotsDraft(panel, lotsDraft.draft);
+    carryUnsaved(lotsDraft.from, panel);
   });
 
   // Re-run the full pipeline so the newly-entered manual rates take
@@ -1435,9 +1464,7 @@ function renderResults(report: TaxSummary, labelled: ReadonlySet<SavedPanel> = n
     panelRows.set(panel, windowRows);
     if (!windowDraft) return;
     applyAntichurningDraft(panel, windowDraft.draft);
-    if (panelUnsaved.has(windowDraft.from)) panelUnsaved.add(panel);
-    const stamp = panelTouched.get(windowDraft.from);
-    if (stamp !== undefined) panelTouched.set(panel, stamp);
+    carryUnsaved(windowDraft.from, panel);
   });
 
   // «Acciones / Divisa / Total», then the closed comparison with the other methods.
