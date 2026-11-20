@@ -181,6 +181,14 @@ describe("issue #438 — the real IBKR correction-only export", () => {
     const m = r.messages.find((x) => x.id === MSG_ID);
     expect(m?.context).toEqual({ year: "2022", reportYear: "2023", amount: new Decimal("0.39").mul("0.92").toFixed(2) });
   });
+
+  it("the 2022 and 2023 reports name the three refunds, which join no dividend (issue #467)", () => {
+    const rows = "EXMPL (01/04/2022, 0.66 USD), EXMPL (30/04/2022, 0.66 USD), EXMPL (01/12/2022, 0.66 USD)";
+    for (const year of [2022, 2023]) {
+      const m = generateTaxReport(st, rates, year).messages.find((x) => x.id === "report.withholding_refund_unjoined");
+      expect(m?.context, String(year)).toEqual({ count: "3", rows });
+    }
+  });
 });
 
 // Review of #438: corrections the first fix still got wrong, end to end in the
@@ -503,5 +511,180 @@ describe("issue #438 — the warning leaves out a reversed dividend, as the repo
     ]);
     expect(drop(filed, y2025, rates)).toBe("0.00");
     expect(warnings(generateTaxReport(merged(filed, y2025), rates, 2025))).toEqual([]);
+  });
+});
+
+describe("issue #467 — a refund dated more than 7 days from its dividend", () => {
+  const UNJOINED_ID = "report.withholding_refund_unjoined";
+  const rates = rateMap(2024, 2026);
+  /** One IBKR cash row of any security; a Spanish ISIN is booked in EUR. */
+  const row = (symbol: string, isin: string, type: string, amount: string, date: string, reportDate = date) => {
+    const ccy = isin.startsWith("ES") ? "EUR" : "USD";
+    const desc = `${symbol}(${isin}) CASH DIVIDEND ${ccy} 1 PER SHARE${type === "Withholding Tax" ? ` - ${isin.slice(0, 2)} TAX` : ""}`;
+    return `<CashTransaction transactionID="${id++}" accountId="U1" symbol="${symbol}" description="${desc}" isin="${isin}" currency="${ccy}" dateTime="${date};202000" settleDate="${date}" reportDate="${reportDate}" amount="${amount}" fxRateToBase="${ccy === "EUR" ? "1" : "0.9"}" type="${type}" levelOfDetail="DETAIL" />`;
+  };
+  const MSFT = "US5949181045";
+  const GOOG = "US02079K3059";
+  const SAN = "ES0113900J37";
+  const msft = (type: string, amount: string, date: string, reportDate?: string) => row("MSFT", MSFT, type, amount, date, reportDate);
+  const goog = [row("GOOG", GOOG, "Dividends", "200", "20250901"), row("GOOG", GOOG, "Withholding Tax", "-20", "20250901")];
+  const paid = [msft("Dividends", "100", "20250601"), msft("Withholding Tax", "-10", "20250601")];
+  /** MSFT's dividend reversed with its withholding on `date`. */
+  const reversed = (date: string) => [msft("Dividends", "-100", date), msft("Withholding Tax", "10", date)];
+  const unjoined = (r: TaxSummary) => r.messages.find((m) => m.id === UNJOINED_ID);
+
+  for (const method of METHODS) {
+    const opts = reportOptionsForMethod(method);
+    it(`control: reversed 3 days later, 0588 is GOOG's 20 USD = 18.00 € (${method})`, () => {
+      const r = generateTaxReport(merged(statement([...paid, ...reversed("20250604"), ...goog])), rates, 2025, opts);
+      expect(r.dividends.grossIncome.toFixed(2)).toBe("180.00");
+      expect(r.doubleTaxation.deduction.toFixed(2)).toBe("18.00");
+      expect(unjoined(r)).toBeUndefined();
+    });
+
+    it(`reversed 30 days later: the refund goes back to MSFT's dividend, 0588 = 18.00 € (${method})`, () => {
+      const r = generateTaxReport(merged(statement([...paid, ...reversed("20250701"), ...goog])), rates, 2025, opts);
+      expect(r.dividends.grossIncome.toFixed(2)).toBe("180.00");
+      expect(r.doubleTaxation.deduction.toFixed(2)).toBe("18.00");
+      expect(unjoined(r)).toBeUndefined();
+    });
+
+    it(`a Spanish dividend reversed 30 days later withholds nothing: 0597 = 0.00 (${method})`, () => {
+      const r = generateTaxReport(
+        merged(statement([row("SAN", SAN, "Dividends", "100", "20250601"), row("SAN", SAN, "Withholding Tax", "-19", "20250601"), row("SAN", SAN, "Dividends", "-100", "20250701"), row("SAN", SAN, "Withholding Tax", "19", "20250701")])),
+        rates,
+        2025,
+        opts,
+      );
+      expect(r.dividends.grossIncome.toFixed(2)).toBe("0.00");
+      expect(r.dividends.spanishWithholding.toFixed(2)).toBe("0.00");
+      expect(unjoined(r)).toBeUndefined();
+    });
+
+    it(`a refund whose dividend is not in the data is named, and 0588 keeps the tax (${method})`, () => {
+      const r = generateTaxReport(merged(statement([msft("Withholding Tax", "10", "20250701"), ...goog])), rates, 2025, opts);
+      expect(r.doubleTaxation.deduction.toFixed(2)).toBe("18.00");
+      expect(unjoined(r)?.severity).toBe("warning");
+      expect(unjoined(r)?.context).toEqual({ count: "1", rows: "MSFT (01/07/2025, 10.00 USD)" });
+    });
+
+    it(`a refund larger than the tax its dividend still has: the rest is named (${method})`, () => {
+      const r = generateTaxReport(merged(statement([...paid, msft("Withholding Tax", "15", "20250701"), ...goog])), rates, 2025, opts);
+      expect(r.doubleTaxation.deduction.toFixed(2)).toBe("18.00");
+      expect(unjoined(r)?.context).toEqual({ count: "1", rows: "MSFT (01/07/2025, 5.00 USD)" });
+    });
+
+    it(`a refund dated next year never lowers this year's 0588; next year's report names it (${method})`, () => {
+      const both = merged(statement([msft("Dividends", "100", "20250901"), msft("Withholding Tax", "-10", "20250901"), msft("Withholding Tax", "10", "20260120")], "20250101", "20261231"));
+      const r2025 = generateTaxReport(both, rates, 2025, opts);
+      expect(r2025.doubleTaxation.deduction.toFixed(2)).toBe("9.00");
+      expect(unjoined(r2025)).toBeUndefined();
+      expect(unjoined(generateTaxReport(both, rates, 2026, opts))?.context).toEqual({ count: "1", rows: "MSFT (20/01/2026, 10.00 USD)" });
+    });
+
+    it(`a refund at another broker never lowers this broker's 0588 (${method})`, () => {
+      let acc = createEmptyStatement();
+      acc = mergeStatement(acc, statement(paid), ibkrParser.name);
+      acc = mergeStatement(acc, statement([msft("Withholding Tax", "10", "20250701")]), "Other broker");
+      const r = generateTaxReport(finalizeMergedStatement(acc), rates, 2025, opts);
+      expect(r.doubleTaxation.deduction.toFixed(2)).toBe("9.00");
+      expect(unjoined(r)?.context).toEqual({ count: "1", rows: "MSFT (01/07/2025, 10.00 USD)" });
+    });
+
+    it(`an IBKR late refund dated 19 days after its 2024 dividend lowers 2024 and warns in 2025 (${method})`, () => {
+      const y2024 = statement([cash("Dividends", "10.00", "20240601"), cash("Withholding Tax", "-1.50", "20240601")], "20240101", "20241231");
+      const y2025 = statement([cash("Withholding Tax", "0.50", "20240620", "20250120")]);
+      const both = merged(y2024, y2025);
+      expect(generateTaxReport(both, rates, 2024, opts).doubleTaxation.deduction.toFixed(2)).toBe("0.90");
+      const r2025 = generateTaxReport(both, rates, 2025, opts);
+      expect(r2025.messages.filter((m) => m.id === MSG_ID).map((m) => m.context)).toEqual([{ year: "2024", reportYear: "2025", amount: "0.45" }]);
+      expect(unjoined(r2025)).toBeUndefined();
+    });
+  }
+
+  // A refund dated 30 December, 3 days before next year's dividend of the same
+  // ISIN, for this year's June dividend: it lowers this year's 0588, never next
+  // year's.
+  const yearEnd = (rows: string[]) => merged(statement(rows, "20250101", "20261231"));
+  const nextDividend = [msft("Dividends", "100", "20260102"), msft("Withholding Tax", "-10", "20260102")];
+  for (const method of METHODS) {
+    const opts = reportOptionsForMethod(method);
+    it(`a refund of 30 December lowers its own year's 0588, not next year's dividend 3 days later (${method})`, () => {
+      const st = yearEnd([...paid, msft("Withholding Tax", "10", "20251230"), ...nextDividend, ...goog]);
+      const r2025 = generateTaxReport(st, rates, 2025, opts);
+      const r2026 = generateTaxReport(st, rates, 2026, opts);
+      expect(r2025.doubleTaxation.deduction.toFixed(2)).toBe("18.00");
+      expect(r2026.doubleTaxation.deduction.toFixed(2)).toBe("9.00");
+      expect(unjoined(r2025)).toBeUndefined();
+      expect(unjoined(r2026)).toBeUndefined();
+    });
+
+    it(`control: with no June dividend, the 30 December refund still lowers next year's dividend 3 days later (${method})`, () => {
+      const st = yearEnd([msft("Withholding Tax", "10", "20251230"), ...nextDividend, ...goog]);
+      expect(generateTaxReport(st, rates, 2025, opts).doubleTaxation.deduction.toFixed(2)).toBe("18.00");
+      const r2026 = generateTaxReport(st, rates, 2026, opts);
+      expect(r2026.doubleTaxation.deduction.toFixed(2)).toBe("0.00");
+      expect(unjoined(r2026)).toBeUndefined();
+    });
+  }
+
+  // A refund dated 5 January, 35 days after its 1 December dividend: the
+  // prior-year warning tells the user to upload 2024's file and recalculate
+  // 2024, so 2024 must then lose the refunded tax.
+  const dec2024 = statement([msft("Dividends", "100", "20241201"), msft("Withholding Tax", "-10", "20241201")], "20240101", "20241231");
+  for (const method of METHODS) {
+    const opts = reportOptionsForMethod(method);
+    const priorYear = (r: TaxSummary) => r.messages.filter((m) => m.id === MSG_ID).map((m) => m.context);
+    it(`a refund dated 5 January lowers the 1 December dividend's 2024 tax, as the 2025 warning says (${method})`, () => {
+      const both = merged(dec2024, statement([msft("Withholding Tax", "10", "20250105"), ...goog]));
+      expect(generateTaxReport(both, rates, 2024, opts).doubleTaxation.deduction.toFixed(2)).toBe("0.00");
+      const r2025 = generateTaxReport(both, rates, 2025, opts);
+      expect(r2025.doubleTaxation.deduction.toFixed(2)).toBe("18.00");
+      expect(priorYear(r2025)).toEqual([{ year: "2024", reportYear: "2025", amount: "9.00" }]);
+      expect(unjoined(r2025)).toBeUndefined();
+    });
+
+    it(`control: a refund dated 8 January leaves 2024's tax, no prior-year warning, and 2025 names it (${method})`, () => {
+      const both = merged(dec2024, statement([msft("Withholding Tax", "10", "20250108"), ...goog]));
+      const r2024 = generateTaxReport(both, rates, 2024, opts);
+      expect(r2024.doubleTaxation.deduction.toFixed(2)).toBe("9.00");
+      expect(unjoined(r2024)).toBeUndefined();
+      const r2025 = generateTaxReport(both, rates, 2025, opts);
+      expect(priorYear(r2025)).toEqual([]);
+      expect(unjoined(r2025)?.context).toEqual({ count: "1", rows: "MSFT (08/01/2025, 10.00 USD)" });
+    });
+
+    it(`a 5 January refund larger than the 2024 tax: 2024 names the rest, as the 2025 warning counts it (${method})`, () => {
+      const both = merged(dec2024, statement([msft("Withholding Tax", "15", "20250105"), ...goog]));
+      const r2024 = generateTaxReport(both, rates, 2024, opts);
+      expect(r2024.doubleTaxation.deduction.toFixed(2)).toBe("0.00");
+      expect(unjoined(r2024)?.context).toEqual({ count: "1", rows: "MSFT (05/01/2025, 5.00 USD)" });
+      const r2025 = generateTaxReport(both, rates, 2025, opts);
+      expect(priorYear(r2025)).toEqual([{ year: "2024", reportYear: "2025", amount: "13.50" }]);
+      expect(unjoined(r2025)?.context).toEqual({ count: "1", rows: "MSFT (05/01/2025, 5.00 USD)" });
+    });
+  }
+
+  // Limit: a refund dated 20 February of a 15 December dividend reaches no
+  // dividend of 2024. When the ISIN paid again on 15 January, pass 3c gives
+  // the refund to that dividend: 2025's 0588 loses it, 2024 keeps the tax.
+  for (const method of METHODS) {
+    const opts = reportOptionsForMethod(method);
+    it(`limit: a 20 February refund of a 15 December dividend lowers January's dividend, not 2024 (${method})`, () => {
+      const dec15 = statement([msft("Dividends", "100", "20241215"), msft("Withholding Tax", "-10", "20241215")], "20240101", "20241231");
+      const both = merged(dec15, statement([msft("Dividends", "100", "20250115"), msft("Withholding Tax", "-10", "20250115"), msft("Withholding Tax", "10", "20250220"), ...goog]));
+      expect(generateTaxReport(both, rates, 2024, opts).doubleTaxation.deduction.toFixed(2)).toBe("9.00");
+      const r2025 = generateTaxReport(both, rates, 2025, opts);
+      expect(r2025.doubleTaxation.deduction.toFixed(2)).toBe("18.00");
+      expect(unjoined(r2025)).toBeUndefined();
+    });
+  }
+
+  it("the Spanish text is the es locale's, byte for byte", () => {
+    const r = generateTaxReport(merged(statement([msft("Withholding Tax", "10", "20250701")])), rates, 2025);
+    const m = unjoined(r)!;
+    const fill = (s: string) => s.replace(/\{\{(\w+)\}\}/g, (_x, k: string) => m.context![k]!);
+    expect(m.message).toBe(fill(es[UNJOINED_ID as keyof typeof es] as string));
+    expect(m.hint).toBe(fill(es[`${UNJOINED_ID}.hint` as keyof typeof es] as string));
   });
 });
