@@ -890,6 +890,12 @@ práctico Renta 2025. The decisions, each pinned in
       only when it has no ISIN and its name is exactly `Total` or
       `Totales`: an undated TotalEnergies dividend is named by
       `parser.cash_row_undated`, never skipped as a total.
+      On a sheet with only `Withholding Tax Rate (%)`, only a rate
+      strictly between 0 and 100 grosses the net up. A rate of 100 or more
+      made the gross infinite or negative and stopped the report; such a
+      row is now booked at its net with no withholding, which can only
+      raise the tax. A reversal (a negative net) refunds its withholding:
+      the text "--7.5000" stopped the report.
     - DEGIRO Account CSV: a Dividendo, a Retención del dividendo or an
       interest row whose amount cannot be read, or whose currency cell is
       empty, is not booked, and neither are the withholdings of such a

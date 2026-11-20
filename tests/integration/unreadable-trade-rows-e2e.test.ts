@@ -2930,6 +2930,26 @@ describe("#467 eToro: a row or a sheet the parser cannot read is named, never bo
     });
   });
 
+  // A sheet with only the withholding rate: gross = net ÷ (1 − rate).
+  const DVR = ["Date of Payment", "Instrument Name", "Net Dividend Received (USD)", "Withholding Tax Rate (%)", "ISIN"];
+  const byRate = (...rows: [string, string][]): Promise<Statement> =>
+    book([["Dividends", [DVR, ...rows.map(([net, rate], i) => [`${15 + i}/06/2025`, "AAPL", net, rate, AAPL])]]]);
+  describe.each(["100", "100%", "150", "-15"])("a dividend whose Withholding Tax Rate (%%) is %j", (rate) => {
+    it.each(METHODS)("[%s] is booked at its net with no withholding, never an infinite or crashing gross", async (method) => {
+      const parsed = await byRate(["42.50", rate]);
+      expect(parsed.cashTransactions.map((c) => [c.type, c.amount])).toEqual([["Dividends", "42.50"]]);
+      expect(nums(report(parsed, method))).toEqual(["39.10", "0.00", "0.00", "0.00"]);
+    });
+  });
+  it.each(METHODS)("[%s] a reversal on the rate path refunds its withholding, never a \"--7.5\" that stops the report", async (method) => {
+    // Control: 42.50 net at 15 % is 50 gross with 7.50 withheld.
+    expect(nums(report(await byRate(["42.50", "15%"]), method))).toEqual(["46.00", "6.90", "0.00", "0.00"]);
+    const reversal = await byRate(["-42.50", "15%"]);
+    expect(reversal.cashTransactions.map((c) => [c.type, c.amount])).toEqual([["Dividends", "-50.0000"], ["Withholding Tax", "7.5000"]]);
+    const both = await byRate(["42.50", "15%"], ["-42.50", "15%"]);
+    expect(nums(report(both, method))).toEqual(["0.00", "0.00", "0.00", "0.00"]);
+  });
+
   const AA = ["Date", "Type", "Details", "Amount"];
   const interest = (amount: string): Promise<Statement> => book([["Account Activity", [AA, ["15/06/2025", "Interest Payment", "", amount]]]]);
   describe.each(["abc", "", "$"])("an interest payment whose Amount is %j", (cell) => {

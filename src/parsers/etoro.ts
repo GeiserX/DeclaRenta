@@ -519,11 +519,17 @@ function parseDividends(
       // Fall back to percentage rate column
       const pctRaw = (row[whtRateCol] ?? "0").replace(/%/g, "").trim();
       const pctNum = parseFloat(parseNumber(pctRaw));
-      if (!isNaN(pctNum) && pctNum > 0) {
+      // Only a rate strictly between 0 and 100 grosses the net up. At 100 or
+      // more, net ÷ (1 − rate) is infinite or negative (it crashed the
+      // report), so the row is booked like an unreadable rate: at its net,
+      // with no withholding, which can only raise the tax. The withholding is
+      // the gross's rate, negated as a Decimal: a reversal's negative gross
+      // gives a refund, never the text "--7.5000" that stopped the report.
+      if (!isNaN(pctNum) && pctNum > 0 && pctNum < 100) {
         const pct = toFiniteDecimal(pctRaw);
         const gross = net.div(new Decimal(1).minus(pct.div(100)));
         grossAmount = gross.toFixed(4);
-        taxAmount = `-${gross.mul(pct.div(100)).toFixed(4)}`;
+        taxAmount = gross.mul(pct.div(100)).neg().toFixed(4);
       } else {
         grossAmount = parseNumber(netAmount);
       }
