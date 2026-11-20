@@ -2827,6 +2827,37 @@ describe("#467 DEGIRO: a cash row or a trade the file does not fully give is nam
       arow("Quellensteuer", "-7.50", "USD", "VANGUARD FTSE ALL-WORLD", VWRL)), method))).toEqual(["46.00", "6.90", "0.00"]);
   });
 
+  // A capital return lowers the cost of the shares, and the part above the
+  // cost is income (art. 25.1.e LIRPF): DeclaRenta books neither, so the row
+  // is named, never dropped with no word.
+  const NOT_BOOKED = "parser.cash_row_not_booked";
+  describe.each([
+    ["Capital Return", AC, "Variación"],
+    ["Return of Capital", AC, "Variación"],
+    ["Remboursement de capital", AC, "Variación"],
+    ["Kapitalrückzahlung", ACDE, "Änderung"],
+    ["Kapitaalsuitkering", AC, "Variación"],
+    ["Devolución de capital", AC, "Variación"],
+  ])("a %s row of 50 USD with an ISIN", (desc, header, column) => {
+    it.each(METHODS)("[%s] is named and not booked; a Dividendo on the same row is booked", (method) => {
+      const row = (d: string): Statement => degiroParser.parse([header, arow(d, "50.00")].join("\n"));
+      expect(cash(report(row("Dividendo"), method))).toEqual(["46.00", "0.00", "0.00"]);
+      const parsed = row(desc);
+      expect(parsed.cashTransactions).toEqual([]);
+      expect(message(parsed, NOT_BOOKED)?.context).toEqual({ broker: "DEGIRO", count: "1", rows: `${desc} APPLE INC (${AAPL}) USD 20240112 [${column}: "50.00"]` });
+      const r = report(parsed, method);
+      expect([...cash(r), ...gains(r)]).toEqual(["0.00", "0.00", "0.00", "0.00", "0.00", "0.00"]);
+    });
+  });
+  it("a capital return with an amount that cannot be read is named by its cell", () => {
+    expect(message(account(arow("Capital Return", "abc")), NOT_BOOKED)?.context?.rows).toBe(`Capital Return APPLE INC (${AAPL}) USD 20240112 [Variación: "abc"]`);
+  });
+  it("controls: a capital return with a written 0 or no security, and a trade leg naming the words, stay skipped with no warning", () => {
+    expect(account(arow("Capital Return", "0,00")).parserMessages).toBeUndefined();
+    expect(account(arow("Capital Return", "50.00", "USD", "", "")).parserMessages).toBeUndefined();
+    expect(account(arow("Compra 10 CAPITAL RETURN FUND@10 USD", "-100.00")).parserMessages).toBeUndefined();
+  });
+
   // Transactions CSV, 19-col layout.
   const TX = "Fecha,Hora,Producto,ISIN,Bolsa de,Centro de ejecución,Número,Precio,,Valor local,,Valor,,Tipo de cambio,Costes de transacción,,Total,,ID Orden";
   type Row = { d?: string; q?: string; p?: string; ccy?: string; lv?: string; ev?: string; fx?: string; cc?: string; id?: string };

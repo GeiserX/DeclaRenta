@@ -37,6 +37,7 @@ import {
   cashIncomeRowText,
   cashIncomeAmountUnreadableMessages,
   cashRowsUnidentifiedMessages,
+  cashRowsNotBookedMessages,
 } from "./csv-utils.js";
 import { formatDateDmy } from "../engine/dates.js";
 
@@ -62,6 +63,15 @@ const VALUE_DATE_HEADERS = ["fecha valor", "value date", "valutadatum", "wertdat
  * 0029), dropped with no word before (#467).
  */
 const DIVIDEND_PATTERNS = [/dividendo/i, /dividend/i, /fondsaussch[üu]ttung/i];
+
+/**
+ * Capital return description patterns (Account CSV), EN, FR, DE, NL and ES.
+ * It lowers the cost of the shares, and any part above that cost is income
+ * (art. 25.1.e LIRPF): DeclaRenta cannot book either, so the row is named,
+ * never dropped with no word (#467). Anchored, so a trade leg whose product
+ * name holds the words is not caught.
+ */
+const CAPITAL_RETURN_PATTERN = /^(?:capital return|return of capital|remboursement de capital|kapitalr[üu]ckzahlung|kapitaalsuitkering|devoluci[oó]n de capital)/i;
 
 /** Withholding tax description patterns (Account CSV) */
 const WITHHOLDING_PATTERNS = [
@@ -617,6 +627,8 @@ function parseAccountCsv(lines: string[], delimiter: string): Statement {
   const unidentified: { key: string; dividend: boolean; type: string; product: string; amount: string; date: string; withheld: string[] }[] = [];
   // Rows with no Descripción that name a security and move money (#467).
   const undescribed: string[] = [];
+  // Capital returns that name a security and move money (#467).
+  const notBooked: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -684,7 +696,18 @@ function parseAccountCsv(lines: string[], delimiter: string): Statement {
       }
     }
 
-    if (!type) continue; // Skip deposits, cash sweeps, fees and other rows
+    if (!type) {
+      // A capital return is named, not booked: DeclaRenta does not lower the
+      // cost of the shares, and the part above the cost is income (#467). A
+      // written zero or no security stays skipped.
+      const security = isin ? (product ? `${product} (${isin})` : isin) : product;
+      const amountCell = (fields[cols.amount] ?? "").trim();
+      if (CAPITAL_RETURN_PATTERN.test(description) && security
+        && (quantityUnreadable(amountCell) || !toFiniteDecimal(amount, "0", false).isZero())) {
+        notBooked.push(cashIncomeRowText(description, security, currencyCell, tradeDate, [unreadableCell(amountName, fields[cols.amount])]));
+      }
+      continue; // Skip deposits, cash sweeps, fees and other rows
+    }
 
     // An amount that cannot be read ("", "€", "abc") is no zero, and a row
     // with no currency is not in euros: the row and the withholdings of its
@@ -759,6 +782,7 @@ function parseAccountCsv(lines: string[], delimiter: string): Statement {
   const parserMessages: TaxMessage[] = dropUndatedCash("DEGIRO", cashTransactions, headers[cols.date] ?? "Fecha");
   parserMessages.push(...cashIncomeAmountUnreadableMessages("DEGIRO", unreadableRows));
   parserMessages.push(...cashRowsUnidentifiedMessages("DEGIRO", unidentifiedRows));
+  parserMessages.push(...cashRowsNotBookedMessages("DEGIRO", notBooked));
   if (undescribed.length > 0) {
     const count = String(undescribed.length);
     const rows = undescribed.join("; ");

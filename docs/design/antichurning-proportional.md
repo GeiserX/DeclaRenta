@@ -1029,7 +1029,13 @@ práctico Renta 2025. The decisions, each pinned in
       `degiro.cash_row_undescribed` and not booked; it was dropped with no
       word.
       A German `Fondsausschüttung` (an ETF distribution) is a dividend,
-      like `Dividende`; it was dropped with no word.
+      like `Dividende`; it was dropped with no word. A capital return
+      (Capital Return, Return of Capital, Remboursement de capital,
+      Kapitalrückzahlung, Kapitaalsuitkering, Devolución de capital) that
+      names a security and moves money is named by
+      `parser.cash_row_not_booked` and not booked: it lowers the cost of
+      the shares, and the part above that cost is income (art. 25.1.e
+      LIRPF). DeclaRenta books neither. It was dropped with no word.
     - DEGIRO Transactions CSV: a buy or sale with an empty price-currency
       cell is an unreadable row named by that cell, never a trade in euros
       (a yen buy made a loss of thousands). An empty costs-currency cell is
