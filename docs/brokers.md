@@ -156,7 +156,7 @@ La web muestra la misma guía de cada broker bajo «¿No se detectó tu broker?�
 
 **Datos extraídos:** Compras, ventas, conversiones y posiciones de criptomonedas.
 
-**Limitaciones:** Solo operaciones de criptoactivos. Los staking rewards se interpretan como ingresos. Un ingreso en dólares u otra divisa se pasa a euros con el tipo del BCE de ese día. Si el precio de una operación no se puede leer, DeclaRenta lo calcula con el subtotal dividido por la cantidad. Si tampoco hay subtotal, o si falta la divisa de la fila (`Price Currency`), DeclaRenta no calcula esa fila y te avisa con la celda que falla.
+**Limitaciones:** Solo operaciones de criptoactivos. Los staking rewards se interpretan como ingresos. Un ingreso en dólares u otra divisa se pasa a euros con el tipo del BCE de ese día. Si el precio de una operación no se puede leer, DeclaRenta lo calcula con el subtotal dividido por la cantidad. Si tampoco hay subtotal, si el subtotal es 0 o si falta la divisa de la fila (`Price Currency`), DeclaRenta no calcula esa fila y te avisa con la celda que falla. Coinbase escribe los números en el formato de EE. UU.: la coma separa los miles, así que 30,000 son 30.000. Si una conversión no dice cuántas monedas recibiste, o dice 0, DeclaRenta no calcula la compra de esa moneda y te avisa con la celda `Notes`.
 
 ### Binance
 

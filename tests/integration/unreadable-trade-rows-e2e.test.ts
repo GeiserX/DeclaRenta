@@ -2422,7 +2422,9 @@ describe("#467 Coinbase: a price, currency or money column that cannot be read i
 
   it.each(METHODS)("[%s] a Convert of a written 0 quantity whose Spot Price is text never stops the report", (method) => {
     const parsed = coinbase(cbBuy, "2025-03-01T10:00:00Z,Convert,BTC,0,EUR,abc,abc,abc,0,Converted 0 BTC to 0 ETH");
-    expect(parsed.trades.map((t) => t.tradePrice)).toEqual(["30000.00", "0", "0"]);
+    // Both counts are a written 0: no ETH is booked, and no row is named.
+    expect(parsed.trades.map((t) => t.tradePrice)).toEqual(["30000.00", "0"]);
+    expect(parsed.parserMessages ?? []).toEqual([]);
     expect(net(run([[parsed, "Coinbase"]], 2025, method))).toBe("0.00");
   });
 
@@ -2529,6 +2531,106 @@ describe("#467 Coinbase: a price, currency or money column that cannot be read i
     it.each(METHODS)("[%s] control: two positive income rows give two lots and no gain", (method) => {
       const r = run([[rows("2025-05-01T10:00:00Z,Staking Income,ETH,0.01,EUR,3000.00,30.00,30.00,0,"), "Coinbase"]], 2025, method);
       expect([r.interest.earned.toFixed(2), r.capitalGains.acquisitionValue.toFixed(2), net(r)]).toEqual(["60.00", "60.00", "0.00"]);
+    });
+  });
+
+  // Coinbase writes US numbers. A lone thousands comma ("90,000") was read as
+  // a decimal point: the sale was booked at 90 € (a full loss), a quantity of
+  // "1,500" as 1.5 and an income of "1,500" as 1.5 €, all with no word.
+  describe("a US thousands comma with no decimals", () => {
+    it.each(METHODS)("[%s] control: the same sale written \"90,000.00\" gains 6000 €", (method) => {
+      const parsed = coinbase(cbBuy, `2025-03-01T10:00:00Z,Sell,BTC,0.1,EUR,"90,000.00","9,000.00","9,000.00",0,`);
+      expect(parsed.parserMessages ?? []).toEqual([]);
+      expect(net(run([[parsed, "Coinbase"]], 2025, method))).toBe("6000.00");
+    });
+    describe.each([["\"90,000\"", "\"9,000\""], ["\"€90,000\"", "\"€9,000\""], ["\"$90,000\"", "\"$9,000\""]])("Spot Price %s, Subtotal %s", (price, subtotal) => {
+      it.each(METHODS)("[%s] the sale is read in thousands: the 6000 € gain", (method) => {
+        const parsed = coinbase(cbBuy, `2025-03-01T10:00:00Z,Sell,BTC,0.1,EUR,${price},${subtotal},${subtotal},0,`);
+        expect(parsed.trades.map((t) => [t.tradePrice, t.proceeds])).toEqual([["30000.00", "0"], ["90000", "9000"]]);
+        expect(parsed.parserMessages ?? []).toEqual([]);
+        expect(net(run([[parsed, "Coinbase"]], 2025, method))).toBe("6000.00");
+      });
+    });
+    const xlm = (qty: string): Statement => coinbase(
+      `2024-03-15T10:30:00Z,Buy,XLM,${qty},EUR,0.10,150.00,150.00,0,`,
+      `2025-03-01T10:00:00Z,Sell,XLM,${qty},EUR,0.30,450.00,450.00,0,`,
+    );
+    it.each(METHODS)("[%s] a quantity of \"1,500\" is 1500 coins, the same 300 € gain as 1500", (method) => {
+      const parsed = xlm("\"1,500\"");
+      expect(parsed.trades.map((t) => t.quantity)).toEqual(["1500", "-1500"]);
+      expect(net(run([[parsed, "Coinbase"]], 2025, method))).toBe(net(run([[xlm("1500"), "Coinbase"]], 2025, method)));
+      expect(net(run([[parsed, "Coinbase"]], 2025, method))).toBe("300.00");
+    });
+    it.each(METHODS)("[%s] an income Total of \"1,500\" is 1500 €", (method) => {
+      const parsed = coinbase("2025-05-01T10:00:00Z,Staking Income,ETH,0.5,EUR,\"3,000\",\"1,500\",\"1,500\",0,");
+      expect(parsed.cashTransactions.map((c) => [c.amount, c.rewardCostBasisEur])).toEqual([["1500", "1500"]]);
+      expect(run([[parsed, "Coinbase"]], 2025, method).interest.earned.toFixed(2)).toBe("1500.00");
+    });
+    it("a comma that cannot be a thousands group stays a decimal comma", () => {
+      expect(xlm("\"0,5\"").trades.map((t) => t.quantity)).toEqual(["0.5", "-0.5"]);
+      // US format never writes a group after a bare 0, so "0,123" is 0.123.
+      expect(xlm("\"0,123\"").trades.map((t) => t.quantity)).toEqual(["0.123", "-0.123"]);
+    });
+  });
+
+  // A Spot Price that cannot be read is Subtotal ÷ Quantity. With a Subtotal
+  // of 0 that made the sale a full loss with no word.
+  it.each(METHODS)("[%s] a sale whose Spot Price cannot be read and whose Subtotal is 0 books nothing and is named", (method) => {
+    const parsed = coinbase(cbBuy, "2025-03-01T10:00:00Z,Sell,BTC,0.1,EUR,N/A,0.00,0.00,0,");
+    const r = run([[parsed, "Coinbase"]], 2025, method);
+    expect(r.capitalGains.disposals).toEqual([]);
+    expect(message(r.messages, "parser.trade_row_unreadable")?.context?.rows).toBe('BTC 20250301 [Spot Price at Transaction: "N/A"]');
+  });
+
+  // A negative price gave the sale negative proceeds. The side already says
+  // which way the coin moved, as for a price read from the Subtotal.
+  describe.each(["-90000.00", "(90000.00)"])("a Spot Price written %s", (price) => {
+    it.each(METHODS)("[%s] is read as its size: the 6000 € gain", (method) => {
+      const parsed = coinbase(cbBuy, cbSell(price));
+      expect(parsed.trades.map((t) => t.tradePrice)).toEqual(["30000.00", "90000"]);
+      expect(net(run([[parsed, "Coinbase"]], 2025, method))).toBe("6000.00");
+    });
+  });
+
+  // ETH bought on 15/03/2024 for 3000 €, sold on 01/03/2025 for 2000 € (a
+  // 1000 € loss), and bought again on 01/07/2025 through a Convert from BTC.
+  // A Convert whose Notes give no readable coin count for ETH booked a BUY of
+  // 0 ETH: the rebuy was hidden, the 1000 € loss was deducted with no word,
+  // and a later ETH sale stopped the report on a lot of 0 units that cost
+  // 9000 € (report.non_finite_total).
+  describe("a Convert whose Notes give no readable coin count received", () => {
+    const ethLoss = [
+      "2024-03-15T10:30:00Z,Buy,ETH,1,EUR,3000.00,3000.00,3000.00,0,",
+      "2025-03-01T10:00:00Z,Sell,ETH,1,EUR,2000.00,2000.00,2000.00,0,",
+      cbBuy,
+    ];
+    const convert = (dest: string): string => `2025-07-01T10:00:00Z,Convert,BTC,0.1,EUR,90000.00,9000.00,9000.00,0,Converted 0.1 BTC to ${dest} ETH`;
+    it.each(METHODS)("[%s] control: \"to 1 ETH\" is a rebuy that blocks the 1000 € loss", (method) => {
+      const parsed = coinbase(...ethLoss, convert("1"));
+      expect(parsed.parserMessages ?? []).toEqual([]);
+      expect(run([[parsed, "Coinbase"]], 2025, method).capitalGains.blockedLosses.toFixed(2)).toBe("1000.00");
+    });
+    describe.each([".", "1.2.3", "0", "0.00000000"])("\"to %s ETH\"", (dest) => {
+      it.each(METHODS)("[%s] books no ETH and names the row by its Notes, with the art. 33.5.e caveat", (method) => {
+        const parsed = coinbase(...ethLoss, convert(dest));
+        expect(parsed.trades.filter((t) => t.symbol === "ETH" && !t.quantityUnknown).map((t) => t.buySell)).toEqual(["BUY", "SELL"]);
+        const r = run([[parsed, "Coinbase"]], 2025, method);
+        const warning = message(r.messages, "parser.trade_row_unreadable");
+        expect(warning?.context?.rows).toBe(`ETH 20250701 [Notes: "Converted 0.1 BTC to ${dest} ETH"]`);
+        expect(warning?.hint).toContain("33.5.e");
+        // The BTC given up is still booked: the 6000 € gain.
+        expect(r.capitalGains.disposals.map((d) => d.symbol)).toContain("BTC");
+      });
+    });
+    it.each(METHODS)("[%s] \"to 0 ETH\" and a later ETH sale: no lot of 0 units, so no non-finite total; the sale has no lot and its 9000 € count as gain", (method) => {
+      const parsed = coinbase(cbBuy, "2025-04-01T10:00:00Z,Convert,BTC,0.1,EUR,90000.00,9000.00,9000.00,0,Converted 0.1 BTC to 0 ETH",
+        "2025-06-01T10:00:00Z,Sell,ETH,3,EUR,3000.00,9000.00,9000.00,0,");
+      const r = run([[parsed, "Coinbase"]], 2025, method);
+      expect(r.messages.some((m) => m.id === "report.non_finite_total")).toBe(false);
+      expect(r.messages.some((m) => m.id === "fifo.sell_without_lots")).toBe(true);
+      // BTC gains 6000 €, and the ETH sale with no known cost 9000 €.
+      expect(net(r)).toBe("15000.00");
+      expect(message(r.messages, "parser.trade_row_unreadable")?.context?.rows).toBe('ETH 20250401 [Notes: "Converted 0.1 BTC to 0 ETH"]');
     });
   });
 });

@@ -102,9 +102,25 @@ function resolveColumns(headers: string[]): CoinbaseColumns {
   };
 }
 
+/**
+ * A number cell as Coinbase writes it: US format, so a comma is a thousands
+ * separator. The shared reader takes a lone comma for a decimal point, so
+ * "30,000" was 30 and "1,500" was 1.5: a sale became a full loss and an income
+ * dropped 1000 times, with no word (#467). The commas are dropped when each
+ * one starts a group of three digits after a number that is not a bare 0; any
+ * other comma ("0,5", "0,123") is left for the shared reader.
+ */
+function usCell(cell: string | undefined): string | undefined {
+  if (cell === undefined || !cell.includes(",")) return cell;
+  const [head, ...groups] = cell.split(",");
+  const thousands = /\d$/.test(head!) && !/(^|\D)0$/.test(head!) && groups.every((g) => /^\d{3}(?!\d)/.test(g));
+  return thousands ? cell.replace(/,/g, "") : cell;
+}
+
 /** A money cell as a number string; one that cannot be read is "0", never its text. */
 function money(cell: string | undefined): string {
-  return quantityUnreadable(cell) ? "0" : parseNumber(cell!);
+  const text = usCell(cell);
+  return quantityUnreadable(text) ? "0" : parseNumber(text!);
 }
 
 // ---------------------------------------------------------------------------
@@ -225,7 +241,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     const timestamp = (fields[cols.timestamp] ?? "").trim();
     const txType = (fields[cols.transactionType] ?? "").trim().toLowerCase();
     const asset = (fields[cols.asset] ?? "").trim();
-    const quantity = parseNumber(fields[cols.quantity] ?? "0");
+    const quantity = parseNumber(usCell(fields[cols.quantity]) ?? "0");
     // The currency of the price and the money cells. An empty cell or no
     // column was read as EUR, so dollars were booked as euros: now such a
     // row is named, never booked under a guessed currency (#467). An older
@@ -236,10 +252,13 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     // stopped with a DecimalError on a price of "abc" (#467).
     const rawPrice = fields[cols.spotPrice];
     const rawSubtotal = cols.subtotal >= 0 ? fields[cols.subtotal] : undefined;
-    const priceReadable = !quantityUnreadable(rawPrice);
-    const subtotalReadable = !quantityUnreadable(rawSubtotal);
-    const spotPrice = priceReadable ? parseNumber(rawPrice!) : "0";
-    const subtotal = subtotalReadable ? parseNumber(rawSubtotal!) : "0";
+    const priceReadable = !quantityUnreadable(usCell(rawPrice));
+    const subtotalReadable = !quantityUnreadable(usCell(rawSubtotal));
+    // A negative price ("-30000", "(30000)") gave a sale negative proceeds:
+    // the side carries the sign, so the price is its size (#467).
+    const writtenPrice = priceReadable ? parseNumber(usCell(rawPrice)!) : "0";
+    const spotPrice = toFiniteDecimal(writtenPrice).isNegative() ? toFiniteDecimal(writtenPrice).abs().toString() : writtenPrice;
+    const subtotal = subtotalReadable ? parseNumber(usCell(rawSubtotal)!) : "0";
     const total = money(cols.total >= 0 ? fields[cols.total] : undefined);
     const fees = money(cols.fees >= 0 ? fields[cols.fees] : undefined);
     const notes = cols.notes >= 0 ? (fields[cols.notes] ?? "").trim() : "";
@@ -264,17 +283,19 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     const isTrade = SELL_TYPES.includes(txType) || BUY_TYPES.includes(txType) || txType === "convert";
     const rawType = (fields[cols.transactionType] ?? "").trim();
     const rawQty = cols.quantity >= 0 ? fields[cols.quantity] : undefined;
+    const qtyReadable = !quantityUnreadable(usCell(rawQty));
     // A Spot Price that cannot be read was booked as 0 (a sale became a full
     // loss) or as its text (the report stopped): the price is then Subtotal ÷
     // Quantity, the file's own numbers. With neither, or with no currency,
-    // the row is kept and named. A written zero quantity or price stays the
-    // file's word (#467).
-    const writtenZero = !quantityUnreadable(rawQty) && toFiniteDecimal(quantity).isZero();
+    // the row is kept and named. A Subtotal of 0 gives no price either: it
+    // made the sale a full loss with no word. A written zero quantity or
+    // price stays the file's word (#467).
+    const writtenZero = qtyReadable && toFiniteDecimal(quantity).isZero();
     const badCell = !asset ? unreadableCell(headers[cols.asset] ?? "Asset", "")
-      : quantityUnreadable(rawQty) ? unreadableCell(headers[cols.quantity] ?? "Quantity Transacted", rawQty)
+      : !qtyReadable ? unreadableCell(headers[cols.quantity] ?? "Quantity Transacted", rawQty)
       : writtenZero ? undefined
       : !spotCurrency ? unreadableCell(currencyHeader, rawCurrency)
-      : !priceReadable && !subtotalReadable ? unreadableCell(priceHeader, rawPrice)
+      : !priceReadable && (!subtotalReadable || toFiniteDecimal(subtotal).isZero()) ? unreadableCell(priceHeader, rawPrice)
       : undefined;
     if (isTrade && badCell !== undefined) {
       trades.push(unreadableTrade({
@@ -314,7 +335,8 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       // An income row with no currency is named the same way: its amount
       // was booked as euros whatever the currency was (#467).
       const rawTotal = cols.total >= 0 ? fields[cols.total] : undefined;
-      if ((quantityUnreadable(rawTotal) && !subtotalReadable) || !spotCurrency) {
+      const totalReadable = !quantityUnreadable(usCell(rawTotal));
+      if ((!totalReadable && !subtotalReadable) || !spotCurrency) {
         const shownDate = isReadableTradeDate(tradeDate) ? tradeDate : timestamp || "—";
         const cells = !spotCurrency ? unreadableCell(currencyHeader, rawCurrency)
           : `${unreadableCell(headers[cols.total] ?? "Total", rawTotal)}, ${unreadableCell(headers[cols.subtotal] ?? "Subtotal", rawSubtotal)}`;
@@ -322,7 +344,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
         continue;
       }
       if (txType === "rewards income") rewardsIncomeCount++;
-      const amount = quantityUnreadable(rawTotal) ? subtotal : total;
+      const amount = totalReadable ? total : subtotal;
       const amountDec = toFiniteDecimal(amount);
       const quantityDec = toFiniteDecimal(quantity);
       cashTransactions.push({
@@ -396,9 +418,24 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       } else if (convertMatch) {
         const destAsset = convertMatch[2]!;
         // Notes are US-formatted: a comma is a thousands separator ("2,000").
-        const destQuantityDec = toFiniteDecimal(convertMatch[1]!.replace(/,/g, "")).abs();
-        const subtotalDec = toFiniteDecimal(subtotal).abs();
-        const destPrice = destQuantityDec.isZero() ? "0" : subtotalDec.div(destQuantityDec).toString();
+        const destText = convertMatch[1]!.replace(/,/g, "");
+        const destQuantityDec = toFiniteDecimal(destText).abs();
+        // A count received of 0 or one that cannot be read (".", "1.2.3")
+        // booked a BUY of 0 coins: the rebuy was hidden from art. 33.5.e, and
+        // a later sale stopped the report on a lot of 0 units with a cost.
+        // The coin is kept and named by the Notes cell instead. A 0 written
+        // on both sides books nothing and is the file's word (#467).
+        if (!destQuantityDec.greaterThan(0)) {
+          if (!writtenZero || quantityUnreadable(destText)) {
+            trades.push(unreadableTrade({
+              tradeID: `coinbase-convert-buy-${tradeDate}-${destAsset}-${rowId}`,
+              symbol: destAsset, description: `Convert ${asset} to ${destAsset}`, isin: "", assetCategory: "CRYPTO",
+              currency: spotCurrency, tradeDate, tradeTime, exchange: "COINBASE", buySell: "BUY",
+            }, unreadableCell(headers[cols.notes] ?? "Notes", notes)));
+          }
+          continue;
+        }
+        const destPrice = toFiniteDecimal(subtotal).abs().div(destQuantityDec).toString();
 
         trades.push({
           tradeID: `coinbase-convert-buy-${tradeDate}-${destAsset}-${rowId}`,
