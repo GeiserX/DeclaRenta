@@ -3381,6 +3381,7 @@ describe("#467 Flatex: a cash leg, income row, currency, Kurs or order number th
   const cash = (r: TaxReport): string[] =>
     [r.dividends.grossIncome, r.doubleTaxation.deduction, r.interest.earned].map((d) => new Decimal(d).toFixed(2));
   const FEE = "flatex.commission.not_recovered";
+  const ABOVE = "flatex.commission.above_usual";
   const INCOME = "parser.cash_income_amount_unreadable";
 
   // Buy 10 at 100 € (order 111111), sell 10 at 120 € (order 222222); Flatex
@@ -3621,28 +3622,77 @@ describe("#467 Flatex: a cash leg, income row, currency, Kurs or order number th
       });
     });
 
-    it.each(METHODS)("[%s] a fill of Nominal 0 names its order even when its cash keeps the fee below the cap; with no row, nothing can tell", (method) => {
+    it.each(METHODS)("[%s] a fill of Nominal 0 names its order even when its cash keeps the fee below the cap; with no row, the fee is kept and named as above the usual", (method) => {
       // A 30 € execution inside the leg: a "fee" of 35.90 € is below 50 € plus 2 %.
       const legs = (): Statement => konto(leg("01.03.2024", "8101", "-1035,90"), sellLeg("1194,10"));
       const zero = merged(depot(fill("01.03.2024", "10", "9101"), drow("01.03.2024", "0", BUY_INFO, "9103", "3,00"), sell("10")), legs());
       expect(booked(zero)).toEqual([["10", "0"], ["-10", "-5.9"]]);
       expect(zero.parserMessages?.map((m) => [m.id, m.context?.rows])).toEqual([[FEE, `333333 ${ISIN} 20240301 [1000 EUR / -1035.9 EUR]`]]);
       expect(gains(report(zero, method))).toEqual(["1194.10", "1000.00", "194.10"]);
+      // With no row of the fill, nothing tells its 30 € from a fee: the 35.90 €
+      // stays below the cap and is booked, but it is above an ordinary Flatex
+      // fee (10 € plus 1 % of 1000 €), so the order is named (#467).
       const unlisted = merged(depot(fill("01.03.2024", "10", "9101"), sell("10")), legs());
       expect(booked(unlisted)).toEqual([["10", "-35.9"], ["-10", "-5.9"]]);
-      expect(unlisted.parserMessages ?? []).toEqual([]);
+      expect(unlisted.parserMessages?.map((m) => [m.id, m.context?.rows])).toEqual([[ABOVE, `333333 ${ISIN} 20240301 [1000 EUR / -1035.9 EUR]`]]);
+      const r = report(unlisted, method);
+      expect(gains(r)).toEqual(["1194.10", "1035.90", "158.20"]);
+      expect(r.messages.map((m) => m.id)).toContain(ABOVE);
     });
 
     it.each(METHODS)("[%s] a fee up to 50 € plus 2 % of the fill is kept; one above it could pay another fill: 0, named", (method) => {
       const at = (amount: string): Statement => merged(depot(fill("01.03.2024", "10", "9101"), sell("10")), konto(leg("01.03.2024", "8101", amount), sellLeg("1194,10")));
       const kept = at("-1069,99");
       expect(booked(kept)).toEqual([["10", "-69.99"], ["-10", "-5.9"]]);
-      expect(kept.parserMessages ?? []).toEqual([]);
+      expect(kept.parserMessages?.map((m) => [m.id, m.context?.rows])).toEqual([[ABOVE, `333333 ${ISIN} 20240301 [1000 EUR / -1069.99 EUR]`]]);
       expect(gains(report(kept, method))).toEqual(["1194.10", "1069.99", "124.11"]);
       const named = at("-1070,00");
       expect(booked(named)).toEqual([["10", "0"], ["-10", "-5.9"]]);
       expect(message(named, FEE)?.context?.rows).toBe(`333333 ${ISIN} 20240301 [1000 EUR / -1070 EUR]`);
       expect(gains(report(named, method))).toEqual(["1194.10", "1000.00", "194.10"]);
+    });
+
+    // Round 4 (#467): a fee below the cap but above an ordinary Flatex fee
+    // (10 € per leg plus 1 % of the gross) is kept and named; an ordinary one
+    // stays silent.
+    it.each(METHODS)("[%s] a fee up to 10 € plus 1 % of the fill is silent; one above it is kept and named", (method) => {
+      const at = (amount: string): Statement => merged(depot(fill("01.03.2024", "10", "9101"), sell("10")), konto(leg("01.03.2024", "8101", amount), sellLeg("1194,10")));
+      for (const [amount, fee] of [["-1005,90", "-5.9"], ["-1007,90", "-7.9"], ["-1020,00", "-20"]]) {
+        const silent = at(amount!);
+        expect(booked(silent), amount).toEqual([["10", fee], ["-10", "-5.9"]]);
+        expect(silent.parserMessages ?? [], amount).toEqual([]);
+      }
+      const above = at("-1020,01");
+      expect(booked(above)).toEqual([["10", "-20.01"], ["-10", "-5.9"]]);
+      expect(above.parserMessages?.map((m) => [m.id, m.context?.rows])).toEqual([[ABOVE, `333333 ${ISIN} 20240301 [1000 EUR / -1020.01 EUR]`]]);
+      expect(gains(report(above, method))).toEqual(["1194.10", "1020.01", "174.09"]);
+      // A sale's fee is measured the same way: 1200 € sold for 1169,99 € is a 30.01 € fee, above 22 €.
+      const sale = merged(depot(fill("01.03.2024", "10", "9101"), sell("10")), konto(leg("01.03.2024", "8101", "-1005,90"), sellLeg("1169,99")));
+      expect(booked(sale)).toEqual([["10", "-5.9"], ["-10", "-30.01"]]);
+      expect(sale.parserMessages?.map((m) => m.id)).toEqual([ABOVE]);
+    });
+
+    it.each(METHODS)("[%s] one combined leg for two fills is measured as one leg: 11.80 € on 1500 € is silent, 35.90 € is named", (method) => {
+      const fills = (): Statement => depot(fill("01.03.2024", "10", "9101"), fill("01.03.2024", "5", "9102"), sell("15"));
+      const usual = merged(fills(), konto(leg("01.03.2024", "", "-1511,80"), sellLeg("1794,10")));
+      expect(usual.parserMessages?.map((m) => m.id)).toEqual(["flatex.commission.multi_fill_prorated"]);
+      const above = merged(fills(), konto(leg("01.03.2024", "", "-1535,90"), sellLeg("1794,10")));
+      expect(above.parserMessages?.map((m) => [m.id, m.context?.rows])).toEqual([
+        [ABOVE, `333333 ${ISIN} 20240301 [1500 EUR / -1535.9 EUR]`], ["flatex.commission.multi_fill_prorated", undefined],
+      ]);
+      expect(gains(report(above, method))).toEqual(["1794.10", "1535.90", "258.20"]);
+    });
+
+    it("the above-usual warning is the es locale and exists in the five locales", () => {
+      const m = merged(depot(fill("01.03.2024", "10", "9101"), sell("10")), konto(leg("01.03.2024", "8101", "-1035,90"), sellLeg("1194,10")))
+        .parserMessages!.find((x) => x.id === ABOVE)!;
+      const fillIn = (text: string): string => text.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => m.context?.[k] ?? "");
+      expect(m.message).toBe(fillIn((es as Record<string, string>)[ABOVE]!));
+      expect(m.hint).toBe((es as Record<string, string>)[`${ABOVE}.hint`]);
+      for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+        expect(locale[ABOVE]).toContain("{{rows}}");
+        expect(locale[`${ABOVE}.hint`]).toContain("Renta Web");
+      }
     });
   });
 

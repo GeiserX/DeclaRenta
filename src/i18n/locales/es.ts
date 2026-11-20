@@ -1081,7 +1081,7 @@ const es = {
   "flatex.commission.not_recovered":
     "Flatex: {{count}} operación(es) no tienen la comisión calculada, porque sus apuntes de caja no cuadran con la operación: {{rows}}.",
   "flatex.commission.not_recovered.hint":
-    "Cada fila trae el número de orden, el valor y la fecha. Entre corchetes va el importe de la operación y la suma de sus apuntes de caja. Si un importe no se puede leer, va su celda. Puede faltar un apunte o sobrar uno. Un apunte puede tener un importe o una fecha que no se puede leer, o una fecha que no es la de la operación. También puede haber una ejecución de la orden que no se puede leer o que tiene un Nominal de 0. Una comisión de más de 50 € más el 2 % del importe tampoco se calcula: el apunte puede pagar también otra ejecución que no está en el archivo. DeclaRenta deja esa comisión en 0. No la suma al coste de las compras ni la resta del valor de las ventas. Consulta la comisión en la liquidación de la orden en Flatex. Si quieres deducirla, añádela a mano en Renta Web.",
+    "Cada fila trae el número de orden, el valor y la fecha. Entre corchetes va el importe de la operación y la suma de sus apuntes de caja. Si un importe no se puede leer, va su celda. Puede faltar un apunte o sobrar uno. Un apunte puede tener un importe o una fecha que no se puede leer, o una fecha que no es la de la operación. También puede haber una ejecución de la orden que no se puede leer o que tiene un Nominal de 0. Una comisión de 50 € más el 2 % del importe, o mayor, tampoco se calcula: el apunte puede pagar también otra ejecución que no está en el archivo. DeclaRenta deja esa comisión en 0. No la suma al coste de las compras ni la resta del valor de las ventas. Consulta la comisión en la liquidación de la orden en Flatex. Si quieres deducirla, añádela a mano en Renta Web.",
   "flatex.order_leg_without_fill":
     "Flatex: {{count}} orden(es) de compra o venta están en el CSV de Kontoumsätze pero no en ningún CSV de Depotumsätze subido, y no se calculan: {{rows}}.",
   "flatex.order_leg_without_fill.hint":
@@ -1094,6 +1094,10 @@ const es = {
     "Órdenes de Flatex ejecutadas en varias partes: {{orders}}. Su comisión se ha repartido entre las ejecuciones en proporción a su importe.",
   "flatex.commission.multi_fill_prorated.hint":
     "Flatex liquidó esas órdenes con un número de apuntes de caja distinto al de ejecuciones, así que no se puede saber qué comisión corresponde a cada una. El total sale de los apuntes de caja, y el reparto entre ejecuciones es aproximado. Si un apunte paga también una ejecución que no está en el CSV de Depotumsätze, la comisión sale mayor: revísala en la liquidación de la orden en Flatex.",
+  "flatex.commission.above_usual":
+    "Flatex: {{count}} orden(es) tienen una comisión mayor que la habitual de Flatex, y DeclaRenta la calcula: {{rows}}.",
+  "flatex.commission.above_usual.hint":
+    "Cada fila trae el número de orden, el valor y la fecha. Entre corchetes va el importe de la operación y la suma de sus apuntes de caja. La diferencia es la comisión. Una comisión habitual de Flatex es de 5,90 € por orden, más unos pocos euros de gastos de la bolsa y, en algunos países, un impuesto de hasta el 1 % del importe. Esta es mayor. Puede ser real, pero el apunte de caja puede pagar también otra ejecución que no está en el CSV de Depotumsätze. Entonces la comisión sale mayor de lo que pagaste: sube el coste de la compra o baja el valor de la venta, y así pagarías de menos. Consulta la comisión en la liquidación de la orden en Flatex. Si es menor, corrígela a mano en Renta Web. Si falta una ejecución, sube el CSV de Depotumsätze que la trae.",
   "flatex.depot.repeated_fills":
     "Operaciones de Flatex repetidas y contadas una sola vez: {{fills}}. Tenían el mismo número de orden y de apunte (TA-Nr.) que otra ya cargada.",
   "flatex.depot.repeated_fills.hint":

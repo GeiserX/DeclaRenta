@@ -1042,7 +1042,7 @@ const en: TranslationKeys = {
   "flatex.commission.not_recovered":
     "Flatex: {{count}} trade(s) have no calculated commission, because their cash entries do not match the trade: {{rows}}.",
   "flatex.commission.not_recovered.hint":
-    "Each row gives the order number, the security and the date. The square brackets show the trade amount and the sum of its cash entries. If an amount cannot be read, they show its cell. A cash entry may be missing, or there may be one too many. An entry may have an amount or a date that cannot be read, or a date that is not the trade's date. An execution of the order may also be unreadable or have a Nominal of 0. A commission above 50 € plus 2 % of the amount is not used either: the entry may also pay another execution that is not in the file. DeclaRenta leaves that commission at 0. It does not add it to the cost of purchases or subtract it from the value of sales. Look up the commission in the order's settlement note in Flatex. If you want to deduct it, add it by hand in Renta Web.",
+    "Each row gives the order number, the security and the date. The square brackets show the trade amount and the sum of its cash entries. If an amount cannot be read, they show its cell. A cash entry may be missing, or there may be one too many. An entry may have an amount or a date that cannot be read, or a date that is not the trade's date. An execution of the order may also be unreadable or have a Nominal of 0. A commission of 50 € plus 2 % of the amount, or more, is not used either: the entry may also pay another execution that is not in the file. DeclaRenta leaves that commission at 0. It does not add it to the cost of purchases or subtract it from the value of sales. Look up the commission in the order's settlement note in Flatex. If you want to deduct it, add it by hand in Renta Web.",
   "flatex.order_leg_without_fill":
     "Flatex: {{count}} purchase or sale order(s) are in the Kontoumsätze CSV but in no uploaded Depotumsätze CSV, and are not calculated: {{rows}}.",
   "flatex.order_leg_without_fill.hint":
@@ -1055,6 +1055,10 @@ const en: TranslationKeys = {
     "Flatex orders executed in several parts: {{orders}}. Their commission has been split across the executions in proportion to their amount.",
   "flatex.commission.multi_fill_prorated.hint":
     "Flatex settled those orders with a number of cash entries different from the number of executions, so it is not possible to tell which commission belongs to each one. The total comes from the cash entries, and the split between executions is approximate. If an entry also pays an execution that is not in the Depotumsätze CSV, the commission comes out too high: check it in the order's settlement note in Flatex.",
+  "flatex.commission.above_usual":
+    "Flatex: {{count}} order(s) have a commission larger than a usual Flatex commission, and DeclaRenta uses it: {{rows}}.",
+  "flatex.commission.above_usual.hint":
+    "Each row has the order number, the security and the date. The brackets show the amount of the trade and the sum of its cash entries. The difference is the commission. A usual Flatex commission is 5.90 € per order, plus a few euros of exchange fees and, in some countries, a tax of up to 1 % of the amount. This one is larger. It can be real, but the cash entry may also pay another execution that is not in the Depotumsätze CSV. Then the commission is larger than what you paid: it raises the cost of the buy or lowers the value of the sale, and you would underpay. Check the commission in the order statement in Flatex. If it is smaller, correct it by hand in Renta Web. If an execution is missing, upload the Depotumsätze CSV that has it.",
   "flatex.depot.repeated_fills":
     "Repeated Flatex trades counted only once: {{fills}}. They had the same order number and booking number (TA-Nr.) as one already loaded.",
   "flatex.depot.repeated_fills.hint":
