@@ -24,6 +24,26 @@ export interface FlexStatement {
    */
   pendingOrderLegs?: OrderLeg[];
   /**
+   * Kraken ledger rows of type "trade", one per refid, as `refid` and the
+   * text that names it (#467). The ledger parser books no trades: they come
+   * from the Trades CSV, whose txid is the refid. `finalizeMergedStatement`
+   * names each one that no Kraken trade of the upload books, then drops it.
+   */
+  krakenLedgerTrades?: { refid: string; row: string }[];
+  /**
+   * Txids of Kraken Trades CSV rows the parser named and did not book (a
+   * pair of two fiat currencies). Their ledger rows are not named again as
+   * missing from the Trades CSV. `finalizeMergedStatement` drops it.
+   */
+  krakenNamedTradeIds?: string[];
+  /**
+   * Order numbers of Flatex Depot rows that are a Kauf or Verkauf with a
+   * written Nominal of 0. The row books nothing (the file's word), but its
+   * cash may sit in a leg of the order, so `reconcileOrderLegs` gives that
+   * order no fee and names it (#467). `finalizeMergedStatement` drops it.
+   */
+  flatexZeroFillOrders?: string[];
+  /**
    * Optional EUR-per-unit valuation hints derived from a broker-supplied EUR
    * value column (e.g. a user-added `EUR_Value` column in a Binance Transaction
    * History CSV). Fed into the crypto-valuation pre-pass as a manual-rate source
@@ -91,6 +111,18 @@ export interface OrderLeg {
   tradeDate: string;
   /** Booking number of the cash leg (Flatex TA-Nr.), used to drop the same leg uploaded twice. */
   bookingId?: string;
+  /**
+   * The side the leg's text names, as the file writes it ("Kauf" or
+   * "Verkauf"; a Storno names the side it reverses). It names an order
+   * whose fill no uploaded Depot export has (#467).
+   */
+  side?: "Kauf" | "Verkauf";
+  /**
+   * The cell of a leg whose amount or date cannot be read (`Betrag: "abc"`,
+   * `Buchtag: ""`). A leg with no readable amount has `netAmount` "0". Its
+   * order gets no fee (#467).
+   */
+  unreadableCell?: string;
 }
 
 export interface Trade {
@@ -122,6 +154,28 @@ export interface Trade {
    * disposal).
    */
   quantityUnknown?: boolean;
+  /**
+   * Set with `quantityUnknown` on a trade row the parser could not read at
+   * all (#467, #468): a bad date, no ticker or ISIN, an operation type that is
+   * neither a buy nor a sale, no amount. It names the row for the user
+   * (security, date, the unreadable cell); `parser.trade_row_unreadable` lists
+   * it. The row books nothing, as with an unreadable quantity.
+   */
+  unreadableRow?: string;
+  /**
+   * Set with `quantityUnknown` on a row of a split, a merger, a delivery or
+   * another corporate action the parser does not apply (#467). It names the
+   * row (security, date, action, share count);
+   * `parser.corporate_action_not_applied` lists it. The row books nothing.
+   */
+  corporateActionRow?: string;
+  /**
+   * Set on a kept row whose date the file does not give. The parsed file
+   * leaves `tradeDate` ""; `finalizeMergedStatement` puts the earliest date
+   * of the whole upload there, so the row falls before or inside every
+   * anti-churning window and never after a year-end list (#467).
+   */
+  undatedRow?: boolean;
   tradePrice: string;
   tradeMoney: string;
   proceeds: string;

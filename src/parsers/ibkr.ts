@@ -22,7 +22,7 @@ import type { BrokerParser, Statement } from "../types/broker.js";
 import type { TaxMessage } from "../types/tax.js";
 import { ISIN_SHAPE } from "../engine/antichurning-window.js";
 import { cashEndingOf, hasSignConflict, heldCashBalances, readPositionNumber } from "../engine/ecb.js";
-import { tradeQuantityUnknownMessages } from "./csv-utils.js";
+import { tradeQuantityUnknownMessages, markUndatedTrades, dropUndatedCash } from "./csv-utils.js";
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -159,6 +159,11 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   }
 
   assertFlexDateFormat(trades.map((t) => t.tradeDate), cashTransactions.map((c) => c.dateTime));
+  // In a file of the right format, a trade whose date is no real day ("",
+  // "20251345") is kept as a row that books nothing, and such a cash row is
+  // taken out; each is named below (#467).
+  markUndatedTrades(trades, "tradeDate");
+  const undatedCashMessages = dropUndatedCash("IBKR", cashTransactions, "dateTime");
 
   // Detect important sections present in XML but not parsed
   const parserWarnings: string[] = [];
@@ -352,7 +357,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
 
   // An unreadable trade quantity reads "0" too (FIFO books no shares for it):
   // say which trades to check.
-  parserMessages.push(...tradeQuantityUnknownMessages("IBKR", trades));
+  parserMessages.push(...tradeQuantityUnknownMessages("IBKR", trades), ...undatedCashMessages);
 
   // Use first statement's metadata, combine accountIds for multi-account
   const first = statements[0]!;
@@ -389,7 +394,10 @@ const FLEX_DATE_PREFIX = /^(?:19|20)\d\d(-?)(?:0[1-9]|1[0-2])\1(?:0[1-9]|[12]\d|
  * The Flex Query "Date Format" setting also offers MM/dd/yyyy, dd/MM/yyyy,
  * dd-MMM-yy and more. Those dates never match the declaration year, so the
  * report would come out empty with no message. Refuse the file instead and say
- * which setting to change.
+ * which setting to change. A Flex export writes every date in that one
+ * setting, so a date of another shape means the setting, not a damaged row. A
+ * date of the right shape that is no real day ("20240231"), or an empty one,
+ * is a damaged row: kept and named, never a reason to refuse the file (#467).
  */
 function assertFlexDateFormat(tradeDates: string[], cashDateTimes: string[]): void {
   for (const raw of [...tradeDates, ...cashDateTimes]) {
@@ -477,7 +485,7 @@ function mapTrade(raw: Record<string, string>): Trade {
     // Canonical "BUY"/"SELL" after trimming and upper-casing. Cancel rows
     // ("SELL (Ca.)") never get here; any other value passes through and
     // FifoEngine skips it with a warning instead of treating it as a sale.
-    buySell: (raw.buySell ?? "BUY").trim().toUpperCase() as Trade["buySell"],
+    buySell: tradeSide(raw.buySell, quantity),
     openCloseIndicator: (raw.openCloseIndicator ?? "O") as Trade["openCloseIndicator"],
     exchange: raw.exchange ?? "",
     // The listing market, not the venue: it decides the anti-churning window (#452).
@@ -494,6 +502,21 @@ function mapTrade(raw: Record<string, string>): Trade {
     underlyingIsin: underlyingIsinOf(raw) || undefined,
     ibOrderID: raw.ibOrderID || undefined,
   };
+}
+
+/**
+ * A trade's side: its `buySell` when the row gives one, else the sign of its
+ * quantity (#468). A missing `buySell` is no "BUY": a sale read as a buy
+ * vanished, or covered a short that never existed. With neither a side nor a
+ * signed quantity it is "", which FifoEngine skips and names
+ * (`fifo.unknown_direction`); a row of unknown quantity books nothing anyway.
+ */
+function tradeSide(buySell: string | undefined, quantity: string | undefined): Trade["buySell"] {
+  const side = (buySell ?? "").trim().toUpperCase();
+  if (side) return side as Trade["buySell"];
+  const qty = quantity === undefined ? new Decimal(0) : new Decimal(quantity);
+  if (qty.isZero()) return "" as Trade["buySell"];
+  return qty.isNegative() ? "SELL" : "BUY";
 }
 
 /** IBKR notes code for a cancelled execution. */
@@ -817,6 +840,20 @@ function isCashSummaryRow(raw: Record<string, string>): boolean {
   return (raw.transactionID ?? "") === "" && (raw.accountId ?? "") === SUMMARY_ACCOUNT_PLACEHOLDER;
 }
 
+/**
+ * A Flex dateTime with ";" between the date and the time. The Flex Query
+ * "Date/Time Separator" setting also offers ",", a space and none, and the
+ * time may be HHmmss or HH:mm:ss: "20240615,103000", "2024-06-15 10:30:00",
+ * "20240615103000". The engine and the date check read only ";", so every
+ * such dividend or withholding was dropped as undated, or crashed the report.
+ * The date keeps its own shape (yyyyMMdd or yyyy-MM-dd); a value that is
+ * already in this form, a date alone, or no date is left as it is.
+ */
+function flexDateTime(raw: string): string {
+  const m = /^((?:19|20)\d\d(-?)\d{2}\2\d{2})(?:[, ]|(?=\d))(.+)$/.exec(raw.trim());
+  return m ? `${m[1]};${m[3]}` : raw;
+}
+
 function mapCashTransaction(raw: Record<string, string>): CashTransaction {
   return {
     transactionID: raw.transactionID ?? "",
@@ -825,7 +862,7 @@ function mapCashTransaction(raw: Record<string, string>): CashTransaction {
     description: raw.description ?? "",
     isin: raw.isin ?? "",
     currency: raw.currency ?? "",
-    dateTime: raw.dateTime ?? "",
+    dateTime: flexDateTime(raw.dateTime ?? ""),
     settleDate: raw.settleDate ?? "",
     amount: raw.amount ?? "0",
     fxRateToBase: raw.fxRateToBase ?? "1",

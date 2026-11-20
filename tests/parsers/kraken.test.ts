@@ -223,13 +223,13 @@ describe("krakenParser", () => {
       expect(() => krakenParser.parse("col1,col2,col3\na,b,c")).toThrow("no reconocido");
     });
 
-    it("should skip rows with empty txid", () => {
+    it("should book a readable row with an empty txid under a row id (#467)", () => {
       const csv = [
         '"txid","ordertxid","pair","time","type","ordertype","price","cost","fee","vol","margin","misc","ledgers"',
         '"","ORDERID1","XBTEUR","2024-01-15 10:30:00","buy","limit","42000","21000","5","0.5","0","",""',
       ].join("\n");
       const result = krakenParser.parse(csv);
-      expect(result.trades).toHaveLength(0);
+      expect(result.trades.map((t) => [t.tradeID, t.buySell, t.quantity])).toEqual([["kraken-row-1", "BUY", "0.5"]]);
     });
 
     it("throws on non-Kraken content with specific message", () => {
@@ -397,8 +397,8 @@ describe("krakenParser — Ledgers CSV staking assets and Earn rewards", () => {
   it("ledger rows of types the parser does not read are counted in an info message", () => {
     const result = krakenParser.parse([
       HEADER,
-      row("L1", "spend", "", "ZEUR", "-1000"),
-      row("L2", "receive", "", "XXBT", "0.02"),
+      row("L1", "rollover", "", "ZEUR", "-2"),
+      row("L2", "custodytransfer", "", "XXBT", "0.02"),
       row("L3", "deposit", "", "ZEUR", "1000"),
       row("L4", "withdrawal", "", "ZEUR", "-10"),
       row("L5", "trade", "", "XXBT", "0.01"),
@@ -410,10 +410,10 @@ describe("krakenParser — Ledgers CSV staking assets and Earn rewards", () => {
     const msg = result.parserMessages![0]!;
     expect(msg.id).toBe("kraken.ledger_rows_ignored");
     expect(msg.severity).toBe("info");
-    expect(msg.message).toContain("spend");
-    expect(msg.message).toContain("receive");
+    expect(msg.message).toContain("rollover");
+    expect(msg.message).toContain("custodytransfer");
     expect(msg.message).not.toContain("deposit");
     expect(msg.message).not.toContain("trade");
-    expect(msg.context).toEqual({ count: "2" });
+    expect(msg.context).toEqual({ count: "2", types: "rollover (1), custodytransfer (1)" });
   });
 });

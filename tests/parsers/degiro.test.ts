@@ -221,17 +221,21 @@ describe("degiroParser", () => {
       expect(result.trades).toHaveLength(0);
     });
 
-    it("should skip non-dividend rows in Account CSV", () => {
+    it("should skip deposits and interest charged, and book interest received, in Account CSV", () => {
       const csv = [
         "Date,Time,Value date,Product,ISIN,Description,FX,Change,,Balance,,Order Id",
         "01-03-2025,00:00,01-03-2025,,,Deposit,,EUR,1000.00,EUR,1000.00,",
         "15-05-2025,00:00,15-05-2025,APPLE INC,US0378331005,Dividend,,USD,2.50,USD,500.00,",
         "20-06-2025,00:00,20-06-2025,,,flatex Interest,,EUR,0.10,EUR,500.10,",
+        "20-07-2025,00:00,20-07-2025,,,flatex Interest,,EUR,-0.05,EUR,500.05,",
       ].join("\n");
 
       const result = degiroParser.parse(csv);
-      expect(result.cashTransactions).toHaveLength(1);
-      expect(result.cashTransactions[0]!.type).toBe("Dividends");
+      expect(result.cashTransactions.map((c) => `${c.type} ${c.amount} ${c.currency}`)).toEqual([
+        "Dividends 2.50 USD",
+        "Broker Interest Received 0.10 EUR",
+      ]);
+      expect(result.parserMessages).toBeUndefined();
     });
   });
 
@@ -443,8 +447,9 @@ describe("degiroParser", () => {
 
     it("should parse trades from the export", () => {
       const result = degiroParser.parse(sampleCsv);
-      // 13 data rows minus 1 zero-price rights assignment = 12 trades
-      expect(result.trades.length).toBe(12);
+      // 13 data rows: 12 trades plus the zero-price rights assignment, kept
+      // as a row that books nothing (#467)
+      expect(result.trades.length).toBe(13);
     });
 
     it("should parse USD buy with FX rate correctly", () => {
@@ -479,10 +484,12 @@ describe("degiroParser", () => {
       expect(eurTrade.fxRateToBase).toBe("1");
     });
 
-    it("should skip zero-price rights assignments", () => {
+    it("should book nothing for a zero-price rights assignment, and name it (#467)", () => {
       const result = degiroParser.parse(sampleCsv);
-      const rights = result.trades.find((t) => t.symbol.includes("RTS"));
-      expect(rights).toBeUndefined();
+      const rights = result.trades.find((t) => t.symbol.includes("RTS"))!;
+      expect([rights.quantity, rights.quantityUnknown, rights.tradeMoney, rights.cost]).toEqual(["0", true, "0", "0"]);
+      expect(result.parserMessages?.find((m) => m.id === "parser.corporate_action_not_applied")?.context?.rows)
+        .toBe("ZETA ENERGY SA-RTS (XX0000000009) 20230707 [Precio 0.0000: 42]");
     });
 
     it("should parse commission correctly", () => {

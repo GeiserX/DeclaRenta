@@ -190,7 +190,7 @@ describe("eToro XLSX parsing", () => {
       const data = buildEtoroWorkbook({
         closedPositions: [
           CLOSED_POSITIONS_HEADER,
-          ["Buy AAPL", "1000", "5", "180", "195", "82.50", "15/03/2025", "20/09/2025", "Stocks", "1", "US0378331005"],
+          ["Buy AAPL", "1000", "5.5", "180", "195", "82.50", "15/03/2025", "20/09/2025", "Stocks", "1", "US0378331005"],
         ],
       });
 
@@ -332,7 +332,12 @@ describe("eToro XLSX parsing", () => {
       });
 
       const result = await parseEtoroXlsx(data);
-      expect(result.trades).toHaveLength(0);
+      // Kept as its two legs, which book nothing, and named (#467).
+      expect(result.trades.map((t) => [t.symbol, t.tradeDate, t.quantity, t.quantityUnknown, t.tradeMoney, t.unreadableRow])).toEqual([
+        ["INVALID ACTION", "20250315", "0", true, "0", 'INVALID ACTION (US0378331005) 20250315 [Action: "INVALID ACTION"]'],
+        ["INVALID ACTION", "20250920", "0", true, "0", 'INVALID ACTION (US0378331005) 20250920 [Action: "INVALID ACTION"]'],
+      ]);
+      expect(result.parserMessages?.find((m) => m.id === "parser.trade_row_unreadable")?.context?.count).toBe("2");
     });
 
     it("keeps both legs of a row with NaN units as trades of unknown quantity, moving no share or money (#453)", async () => {
@@ -602,11 +607,12 @@ describe("eToro XLSX parsing", () => {
       // Short 10 units, open @250 (sell high), close @200 (buy back low) → profit.
       // FIFO computes P/L from tradePrice: openProceeds (qty*openRate) − closeCost
       // (qty*closeRate) = 10*250 − 10*200 = +500 (in native units, before ECB).
+      // Tesla is quoted in dollars, so eToro's FX rates (instrument → USD) are 1.
       const data = buildSpanishWorkbook({
         closedPositions: [
           SPANISH_CLOSED_HEADER,
           ["456", "Tesla (TSLA)", "Short", "2000", "10", "01/02/2025 10:00:00", "15/06/2025 16:00:00",
-           "1", "0", "0", "500", "455", "1.09", "1.10", "250", "200", "0", "0", "0", "-", "Acciones", "US88160R1014", ""],
+           "1", "0", "0", "500", "455", "1", "1", "250", "200", "0", "0", "0", "-", "Acciones", "US88160R1014", ""],
         ],
       });
 
@@ -630,11 +636,12 @@ describe("eToro XLSX parsing", () => {
 
     it("should build a LOSING short with open-low/close-high legs", async () => {
       // Short 10 units, open @200 (sell low), close @250 (buy back high) → loss.
+      // Tesla is quoted in dollars, so eToro's FX rates (instrument → USD) are 1.
       const data = buildSpanishWorkbook({
         closedPositions: [
           SPANISH_CLOSED_HEADER,
           ["789", "Tesla (TSLA)", "Short", "2000", "10", "01/02/2025 10:00:00", "15/06/2025 16:00:00",
-           "1", "0", "0", "-500", "-455", "1.09", "1.10", "200", "250", "0", "0", "0", "-", "Acciones", "US88160R1014", ""],
+           "1", "0", "0", "-500", "-455", "1", "1", "200", "250", "0", "0", "0", "-", "Acciones", "US88160R1014", ""],
         ],
       });
 
@@ -664,11 +671,14 @@ describe("eToro XLSX parsing", () => {
       const result = await parseEtoroXlsx(data);
       expect(result.trades).toHaveLength(2);
       const sell = result.trades[1]!;
-      // Proceeds = amount + profit = 83.11 + (-14.29) = 68.82
-      expect(parseFloat(sell.proceeds)).toBeCloseTo(68.82, 2);
-      expect(sell.fifoPnlRealized).toBe("-14.29");
-      // FX rate 1.07 (not 1): a EUR-quoted Xetra stock, so the legs stay EUR
-      expect(sell.currency).toBe("EUR");
+      // The legs are in USD, so the profit is Ganancias (USD):
+      // proceeds = amount + profit = 83.11 + (-16.63) = 66.48
+      expect(parseFloat(sell.proceeds)).toBeCloseTo(66.48, 2);
+      expect(sell.fifoPnlRealized).toBe("-16.63");
+      // FX rate 1.07 at open and 1.16 at close (not 1): a Xetra stock quoted in
+      // EUR. The file does not say which currency, so the legs are valued in
+      // USD at eToro's own rates: 9.89 × 1.07 and 8.07 × 1.16.
+      expect(result.trades.map((t) => [t.currency, t.tradePrice])).toEqual([["USD", "10.5823"], ["USD", "9.3612"]]);
     });
 
     it("should convert a Spanish-layout trade from USD at the ECB rate, like the English layout", async () => {

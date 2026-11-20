@@ -1065,10 +1065,46 @@ const en: TranslationKeys = {
     "Flatex trades without a calculated commission: {{trades}}. The cash entry is in a different currency from the trade.",
   "flatex.commission.cross_currency.hint":
     "The commission of those trades has been left at 0. Look up its amount in the order's settlement note in Flatex and take it into account when reviewing the return: it is added to the acquisition value on purchases and subtracted from the transfer value on sales.",
+  "kraken.ledger_trade_not_booked":
+    "Kraken: {{count}} trade(s) of the ledger (Ledgers) are in no uploaded trades file (Trades) and are not calculated: {{rows}}.",
+  "kraken.ledger_trade_not_booked.hint":
+    "DeclaRenta reads Kraken purchases and sales only from the trades file (Trades). Each row shows the refid of the trade and its date. The square brackets show the coins and the amounts it moves in the ledger. Download the Trades file for those dates from Kraken (History → Export → Trades) and upload it with the ledger. Without it, a sale can be missing from your return, or the cost of a purchase. Instant buys and sells (types spend and receive), conversions (conversion) and sales (sale) may not be in the Trades file. If they are not, add each sale and each swap of one cryptocurrency for another by hand in Renta Web, and use each purchase as the cost when you sell that coin. Rows of type margin and settled are the result of a margin position. A row of type adjustment is an adjustment, such as the swap of a coin that Kraken stops offering. A row of type nfttrade is the sale of an NFT. If they are not in the Trades file and give you money or coins, they can be a capital gain: declare them by hand in Renta Web.",
+  "kraken.fiat_conversion_not_booked":
+    "Kraken: {{count}} trade(s) exchange one fiat currency for another (for example, euros for dollars) and are not calculated: {{rows}}.",
+  "kraken.fiat_conversion_not_booked.hint":
+    "Each row shows the pair, the type (buy or sell), the quantity (vol), the amount (cost) and the date. DeclaRenta does not calculate the exchange-rate gain or loss of these Kraken exchanges. Exchanging a currency for euros or for another currency can give a gain or a loss. It is the difference between its value in euros when you exchange it and what it cost you in euros. Calculate it and add it by hand in Renta Web.",
+  "kraken.income_negative":
+    "Kraken: {{count}} staking or Earn reward(s) are negative and are not calculated: {{rows}}.",
+  "kraken.income_negative.hint":
+    "A negative reward is usually a reward that Kraken took back. It is also negative when the fee is larger than the amount. DeclaRenta does not know which reward it cancels, so it changes no amount. It still counts the other rewards as income, and their coins as bought at their value on that day. If the row cancels income of the year you file, remove it by hand in Renta Web. If you later sold that cryptocurrency, the cost of the sale may be too high. Check the cost of those sales in Renta Web.",
+  "kraken.ledger_rows_ignored":
+    "{{count}} Kraken ledger movement(s) of types that are not processed were ignored: {{types}}.",
+  "kraken.ledger_rows_ignored.hint":
+    "DeclaRenta reads from the ledger only staking and Earn rewards and airdrops. It reads purchases and sales from the trades CSV (Trades). A transfer that does not move coins between your own accounts can be income, such as a fork. If it is, declare it by hand in Renta Web.",
+  "kraken.ledger_income_not_booked":
+    "Kraken: {{count}} ledger movement(s) may be income and are not calculated: {{rows}}.",
+  "kraken.ledger_income_not_booked.hint":
+    "They are rows of type reward, dividend, credit, nftrebate or nftcreatorfee that give you coins or money. DeclaRenta does not know what income they are, so it does not add them. A reward or a bonus can be a capital gain (general base). A dividend can be income from movable capital (savings base). If it is income of the year you file, declare it by hand in Renta Web at its value in euros on that day.",
+  "flatex.commission.not_recovered":
+    "Flatex: {{count}} trade(s) have no calculated commission, because their cash entries do not match the trade: {{rows}}.",
+  "flatex.commission.not_recovered.hint":
+    "Each row gives the order number, the security and the date. The square brackets show the trade amount and the sum of its cash entries. If an amount cannot be read, they show its cell. A cash entry may be missing, or there may be one too many. An entry may have an amount or a date that cannot be read, or a date that is not the trade's date. An execution of the order may also be unreadable or have a Nominal of 0. A commission of 50 € plus 2 % of the amount, or more, is not used either: the entry may also pay another execution that is not in the file. DeclaRenta leaves that commission at 0. It does not add it to the cost of purchases or subtract it from the value of sales. Look up the commission in the order's settlement note in Flatex. If you want to deduct it, add it by hand in Renta Web.",
+  "flatex.order_leg_without_fill":
+    "Flatex: {{count}} purchase or sale order(s) are in the Kontoumsätze CSV but in no uploaded Depotumsätze CSV, and are not calculated: {{rows}}.",
+  "flatex.order_leg_without_fill.hint":
+    "DeclaRenta reads Flatex purchases and sales only from the Depotumsätze CSV. The Kontoumsätze CSV gives only the money of each order. Each row gives the order number, the security and the date. The square brackets show whether it is a purchase (Kauf) or a sale (Verkauf) and the sum of its cash entries. If an amount cannot be read, they show its cell. Download the Depotumsätze CSV for those dates from Flatex and upload it with the Kontoumsätze CSV. Without it, a sale can be missing from your return, or the cost of a purchase.",
+  "flatex.depot.storno_cancelled":
+    "Flatex: {{count}} execution(s) cancelled with a Storno are not calculated: {{rows}}.",
+  "flatex.depot.storno_cancelled.hint":
+    "Flatex corrects an execution with a Storno that cancels it, and sometimes with a new execution of the same order. DeclaRenta leaves each cancelled execution and its Storno out of the calculation, and calculates the new execution if it is in the file. Each row gives the order number, the security and the date of the cancelled execution. The square brackets show its shares and its price. The date of the Storno comes last.",
   "flatex.commission.multi_fill_prorated":
     "Flatex orders executed in several parts: {{orders}}. Their commission has been split across the executions in proportion to their amount.",
   "flatex.commission.multi_fill_prorated.hint":
-    "Flatex settled those orders with a number of cash entries different from the number of executions, so it is not possible to tell which commission belongs to each one. The total commission of each order is exact; only the split between executions is approximate.",
+    "Flatex settled those orders with a number of cash entries different from the number of executions, so it is not possible to tell which commission belongs to each one. The total comes from the cash entries, and the split between executions is approximate. If an entry also pays an execution that is not in the Depotumsätze CSV, the commission comes out too high: check it in the order's settlement note in Flatex.",
+  "flatex.commission.above_usual":
+    "Flatex: {{count}} order(s) have a commission larger than a usual Flatex commission, and DeclaRenta does not deduct it: {{rows}}.",
+  "flatex.commission.above_usual.hint":
+    "Each row has the order number, the security and the date. The brackets show the amount of the trade and the sum of its cash entries. The difference would be the commission. A usual Flatex commission is 5.90 € per order, plus a few euros of exchange fees and, in some countries, a tax of up to 1 % of the amount. This one is larger. It can be real, but the cash entry may also pay another execution that is not in the Depotumsätze CSV. The two CSVs cannot tell them apart. So DeclaRenta leaves the commission at 0. It does not add it to the cost of the buy or take it from the value of the sale. Check the commission in the order statement (Abrechnung) in Flatex. If it is real and you want to deduct it, add it by hand in Renta Web. If an execution is missing, upload the Depotumsätze CSV that has it.",
   "flatex.depot.repeated_fills":
     "Repeated Flatex trades counted only once: {{fills}}. They had the same order number and booking number (TA-Nr.) as one already loaded.",
   "flatex.depot.repeated_fills.hint":
@@ -1087,26 +1123,85 @@ const en: TranslationKeys = {
   "degiro.transaction_tax": "Financial transaction tax paid on {{product}} ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degiro charges this tax when you buy Spanish, French or Italian shares and only shows it in the Account CSV. It is part of the acquisition value (art. 35.1.b LIRPF): add it to the cost of your purchases of that security, because DeclaRenta does not add it automatically.",
+  "degiro.cash_row_undescribed": "DEGIRO: {{count}} row(s) of the Account CSV do not say what movement they are and are not calculated: {{rows}}.",
+  "degiro.cash_row_undescribed.hint":
+    "The brackets show the description cell as it is in the file. Without it, DeclaRenta does not know if the row is a dividend, a withholding, interest or another movement. So it does not add the row and does not make up its type. If it is income of the year you declare, you must still declare it. Download the original Account CSV from DEGIRO again and upload it unedited. If the row still has no description, copy the data from the DEGIRO statement and upload the file again. You can also add the amount by hand in Renta Web.",
   "binance.unparseable_timestamp":
-    "{{count}} row(s) of the Binance CSV were skipped because they had an unrecognizable date/time (UTC_Time).",
+    "Binance: {{count}} row(s) have no readable date and time (UTC_Time) and are not calculated: {{rows}}.",
   "binance.unparseable_timestamp.hint":
-    "This is usually caused by a manually edited or incompletely exported file. Re-download the original report from Binance without editing it so those operations are included.",
+    "The square brackets show the date cell. Without it, DeclaRenta does not know which other row each movement goes with. So it adds or removes no units and no money for those rows. The gains, losses and income of those cryptocurrencies are not reliable. If a row is a repurchase in the year after a sale at a loss, that loss may have to stay pending (art. 33.5.e LIRPF). DeclaRenta does not block it. Download the original Binance report again and upload it unedited. If the row is still wrong in the original, copy the missing value from your Binance history and upload the file again.",
+  "binance.unparseable_amount":
+    "Binance: {{count}} row(s) have no readable amount (Change) and are not calculated: {{rows}}.",
+  "binance.unparseable_amount.hint":
+    "The square brackets show the amount cell. DeclaRenta adds or removes no units and no money for those rows. So the gains, losses and income of those cryptocurrencies are not reliable. If a row is a repurchase in the year after a sale at a loss, that loss may have to stay pending (art. 33.5.e LIRPF). DeclaRenta does not block it. Download the original Binance report again and upload it unedited. If the row is still wrong in the original, copy the missing value from your Binance history and upload the file again.",
+  "binance.unparseable_coin":
+    "Binance: {{count}} row(s) do not say which coin they are for (Coin) and are not calculated: {{rows}}.",
+  "binance.unparseable_coin.hint":
+    "The square brackets show the coin cell. Without it, DeclaRenta does not know which cryptocurrency comes in or goes out. So it adds or removes no units and no money for those rows. The gains, losses and income of your cryptocurrencies are not reliable. If a row is a repurchase in the year after a sale at a loss, that loss may have to stay pending (art. 33.5.e LIRPF). DeclaRenta does not block it. Download the original Binance report again and upload it unedited. If the row is still wrong in the original, copy the missing value from your Binance history and upload the file again.",
+  "freedom24.row_skipped_malformed":
+    "Freedom24: {{count}} corporate action row(s) have no readable type (type_id) and are not calculated.",
+  "freedom24.row_skipped_malformed.hint":
+    "The \"type_id\" field of those rows is empty or is not text. So DeclaRenta does not know if they are a dividend, a coupon or another operation. It adds no amount for them. They may move shares. So the warning about corporate actions not applied also names them. The one-purchase check of the 2-month rule may be affected. DeclaRenta does not apply that exception to their security. If the row names no security, it does not apply it to any security. If a dividend or a coupon is missing, download the full Freedom24 JSON report again and upload it.",
+  "freedom24.dividend_amount_unreadable":
+    "Freedom24: {{count}} dividend(s) or coupon(s) have no readable amount (amount) and are not calculated: {{rows}}.",
+  "freedom24.dividend_amount_unreadable.hint":
+    "The square brackets show the amount cell (amount). Without it, DeclaRenta does not know how much you received. So it does not add that income or its withholding, and does not make up an amount. If it is income of the year you declare, download the full Freedom24 JSON report again and upload it. You can also add the amount and the withholding by hand in Renta Web.",
+  "freedom24.tax_amount_unreadable":
+    "Freedom24: {{count}} dividend(s) or coupon(s) have no usable withholding (tax_amount) and are calculated with no withholding: {{rows}}.",
+  "freedom24.tax_amount_unreadable.hint":
+    "The square brackets show the withholding cell (tax_amount). It is not a number, or it is larger than the dividend amount (amount). DeclaRenta adds the full income, but does not know how much was withheld. So you do not underpay, but you lose the deduction for that withholding (box 0588, or 0597 if the security is Spanish). Take the withholding from the Freedom24 tax report and add it by hand in Renta Web.",
+  "freedom24.cash_flow_not_read":
+    "Freedom24: {{count}} cash_flows money movement(s) are not calculated: {{rows}}.",
+  "freedom24.cash_flow_not_read.hint":
+    "DeclaRenta calculates only the trades (trades) and the dividends and coupons (corporate_actions) of the report. It does not calculate the cash_flows rows. It does not warn you about deposits to and withdrawals from your account, because they are not taxed. Each row of this warning can be an interest, a dividend, a coupon, a withholding or a fee. An interest or a dividend that is not in corporate_actions is income you must declare. Add it by hand in Renta Web. If the row repeats a dividend of corporate_actions, it is already calculated. A missing fee can only make you pay more.",
   "binance.unhandled_operation":
     "{{count}} Binance CSV movement(s) with unrecognized operations were skipped: {{operations}}.",
   "binance.unhandled_operation.hint":
     "These movements are not included in the calculation. If they are purchases, sales or income (e.g. futures, Binance Card payments, Auto-Invest or cashback), add them to your return by hand and report the operation name so it can be supported.",
+  "binance.unpaired_leg":
+    "Binance: {{count}} buy, sell or convert movement(s) have no other side of the operation and are not calculated: {{rows}}.",
+  "binance.unpaired_leg.hint":
+    "Each Binance buy or sale is two rows with the same time: the coin that comes in and the one that goes out. DeclaRenta did not find the other row of these movements. So it adds or removes no units and no money for them. The gains and losses of those cryptocurrencies are not reliable. If a row is a repurchase in the year after a sale at a loss, that loss may have to stay pending (art. 33.5.e LIRPF). DeclaRenta does not block it. Compare those rows with your Binance history and add the missing operations by hand in Renta Web.",
+  "binance.spot_cost_split":
+    "Binance: {{count}} row(s) of trades in several cryptocurrencies in the same second do not say which payment or proceeds go with each cryptocurrency. DeclaRenta shared the amounts among them: {{rows}}.",
+  "binance.spot_cost_split.hint":
+    "Binance lists several trades in the same second. It does not write each payment or proceeds next to its purchase or sale. So DeclaRenta does not know which amount goes with each cryptocurrency. It shared the amounts among them by order or in equal parts. The total is correct, but the cost or sale value of each cryptocurrency is not reliable. Their gains and losses are not reliable either. If one of them is a repurchase in the year after a sale at a loss, the art. 33.5.e LIRPF check is not reliable either. Find those orders in your Binance history and correct the cost or sale value of each cryptocurrency by hand in Renta Web.",
+  "binance.fee_unassigned":
+    "Binance: {{count}} fee(s) do not say which trade of the same second they belong to, and DeclaRenta does not deduct them: {{rows}}.",
+  "binance.fee_unassigned.hint":
+    "Binance lists several trades in the same second. These fees sit between two trades in the same currency. So DeclaRenta does not know which one they belong to. It does not add them to the cost or deduct them from the sale amount, so you do not pay too little. If you know which purchase or sale each fee belongs to, correct its cost or sale amount by hand in Renta Web.",
+  "binance.income_negative":
+    "Binance: {{count}} income row(s) are negative and are not calculated: {{rows}}.",
+  "binance.income_negative.hint":
+    "A negative income row is usually a reward that Binance took back. DeclaRenta does not know which reward it cancels, so it changes no amount. It still counts that reward as income, and its coins as bought at their value on that day. If it cancels income of the year you file, remove it by hand in Renta Web. If you later sold that cryptocurrency, the cost of the sale may be too high. Check the cost of those sales in Renta Web.",
+  "binance.fiat_conversion_not_booked":
+    "Binance: {{count}} row(s) exchange one fiat currency for another (for example, euros for dollars) and are not calculated: {{rows}}.",
+  "binance.fiat_conversion_not_booked.hint":
+    "DeclaRenta does not calculate the exchange-rate gain or loss of these Binance exchanges. Exchanging a currency for euros or for another currency can give a gain or a loss. It is the difference between its value in euros when you exchange it and what it cost you in euros. Calculate it and add it by hand in Renta Web.",
   "binance.unsupported_pair":
-    "{{count}} Binance CSV trade(s) with an unrecognized pair were skipped: {{pairs}}.",
+    "DeclaRenta skipped {{count}} Binance CSV trade(s) with an unrecognized pair: {{rows}}.",
   "binance.unsupported_pair.hint":
-    "These trades are not included in the calculation. Add them to your return by hand and report the pair so it can be supported.",
+    "The square brackets show the pair cell. DeclaRenta did not include these trades in the calculation. Add them to your return by hand and report the pair so DeclaRenta can support it.",
   "etoro.closed_types_skipped":
     "{{count}} eToro closed position(s) of an unsupported type were skipped: {{types}}.",
   "etoro.closed_types_skipped.hint":
     "DeclaRenta does not import these eToro position types yet (e.g. crypto). Their gain or loss is not included in the calculation: add it to your return by hand using the invested amount and the profit eToro shows.",
+  "etoro.columns_not_detected":
+    "eToro: DeclaRenta does not recognise the columns {{columns}} of the sheet «{{sheet}}». It imported no row of that sheet.",
+  "etoro.columns_not_detected.hint":
+    "eToro sometimes renames its columns. If DeclaRenta does not recognise them, it cannot read the rows of that sheet and adds none of them. Download the full XLSX account statement from eToro again and upload it. If the warning stays, add the trades, dividends or interest of that sheet by hand in Renta Web.",
+  "etoro.staking_not_imported":
+    "eToro: {{count}} staking reward(s) are not calculated: {{rows}}.",
+  "etoro.staking_not_imported.hint":
+    "DeclaRenta does not import eToro's crypto yet. So it does not add these rewards. If they are income of the year you declare, you must still declare them. Add by hand in Renta Web their value in euros on the day you received them. That value is also their cost when you sell them.",
   "lightyear.unknown_types":
     "{{count}} Lightyear CSV row(s) with an unrecognized transaction type were skipped: {{types}}.",
   "lightyear.unknown_types.hint":
     "These movements are not included in the calculation. If they are stock splits, share transfers or other corporate actions, check them by hand: they can change the share count or the acquisition cost of later sales.",
+  "lightyear.income_shares_booked":
+    "Lightyear: {{count}} income row(s) come with shares. DeclaRenta counts them as bought on that day: {{rows}}.",
+  "lightyear.income_shares_booked.hint":
+    "They are dividend, distribution, interest or reward rows that write a number of shares. DeclaRenta adds their amount as income, as for the other rows. It also counts those shares as bought on that day for that same amount. So their later sale has a cost. If you sold that security at a loss 2 months before or after, this purchase can block the loss (the 2-month rule). Check it against the Lightyear statement. If the row gave you no new shares, that purchase does not exist. Then the cost of your sales and the blocked losses of that security may not be correct.",
   "coinbase.rewards_income_classification":
     '{{count}} "Rewards Income" item(s) from Coinbase were classified as investment income (savings tax base).',
   "coinbase.rewards_income_classification.hint":
@@ -1119,18 +1214,42 @@ const en: TranslationKeys = {
     "{{count}} Coinbase Advanced Trade fill(s) were paid or received in a currency other than the valuation currency ({{pairs}}); only the crypto bought or sold was recorded, not the counterpart currency.",
   "coinbase.advanced_trade_quote_leg_missing.hint":
     "In these pairs you also dispose of (when buying) or acquire (when selling) the quote currency, whether another crypto or a fiat currency, and that is taxable too. Add the sale or purchase of that currency manually, for the same euro value as the trade, so its gain and acquisition cost add up.",
-  "trade_republic.trade_skipped_no_amount":
-    "{{count}} Trade Republic buy/sell operation(s) without a usable amount were skipped.",
-  "trade_republic.trade_skipped_no_amount.hint":
-    'This is usually caused by incomplete rows in the export (an empty or non-numeric "amount" column). If operations are missing, re-download the full transactions CSV from Trade Republic.',
+  "coinbase.income_negative":
+    "Coinbase: {{count}} cryptocurrency income row(s) are negative and are not calculated: {{rows}}.",
+  "coinbase.income_negative.hint":
+    "A negative income row is usually a reward that Coinbase took back. DeclaRenta does not know which reward it cancels, so it changes no amount. It still counts the other rewards as income, and their coins as bought at their value on that day. If the row cancels income of the year you file, remove it by hand in Renta Web. If you later sold that cryptocurrency, the cost of the sale may be too high. Check the cost of those sales in Renta Web.",
   "trade_republic.corporate_action_not_applied":
-    "Trade Republic: {{count}} corporate action row(s) (merger, exchange, split) for {{isins}} were not applied.",
+    "Trade Republic: DeclaRenta did not apply {{count}} corporate action row(s) (merger, exchange, split) for {{isins}}.",
   "trade_republic.corporate_action_not_applied.hint":
-    "The cost of the old securities is not carried over to the new ones, so a later sale of the new security may show no lots and a cost of 0. If it was a merger or an exchange, add the original acquisition cost under “Manual lots for transferred positions”.",
+    "DeclaRenta does not carry the cost of the old securities over to the new ones. So a later sale of the new security may show no lots and a cost of 0. If it was a merger or an exchange, add the original acquisition cost under “Manual lots for transferred positions”.",
   "trade_republic.delivery_not_applied":
     "Trade Republic: {{count}} securities delivery row(s) without a trade (free shares, transfers) for {{isins}} were not imported.",
   "trade_republic.delivery_not_applied.hint":
     "Free shares from a promotion are a capital gain in the general tax base at their market value on the delivery date: declare them separately and add that value as the cost under “Manual lots for transferred positions”. If it is a transfer from another broker, add the original purchase cost there.",
+  "trade_republic.tax_unreadable":
+    "Trade Republic: {{count}} dividend(s) have no readable withholding (tax) and are calculated with no withholding: {{rows}}.",
+  "trade_republic.tax_unreadable.hint":
+    "The square brackets show the withholding cell (tax). It is not a number. DeclaRenta adds the full dividend, but does not know how much was withheld. So you do not underpay, but you lose the deduction for that withholding (box 0588, or 0597 if the security is Spanish). If the row reverses a dividend (a negative amount), DeclaRenta does not subtract it, and the reversed dividend stays added. Take the withholding from the Trade Republic tax report and add it by hand in Renta Web.",
+  "trade_republic.dividend_tax_refund":
+    "Trade Republic: {{count}} dividend row(s) have an amount of 0 and a withholding refund (a positive tax): {{rows}}.",
+  "trade_republic.dividend_tax_refund.hint":
+    "A row with an amount of 0 is no dividend. Its positive withholding (tax) is a refund. DeclaRenta subtracts it from the withholding of a dividend of the same security from 7 days before or after. If there is none, it does not subtract it, and the withholding of that dividend counts in full: you would underpay. Take the final withholding from the Trade Republic tax report and correct box 0588 by hand in Renta Web, or box 0597 if the security is Spanish.",
+  "trade_republic.trade_tax_positive":
+    "Trade Republic: {{count}} buy(s) or sale(s) have a positive tax, and DeclaRenta does not count it: {{rows}}.",
+  "trade_republic.trade_tax_positive.hint":
+    "Trade Republic writes the tax you pay on a buy or a sale as a negative number. A positive tax is money paid back to you, so it is no cost of the trade. DeclaRenta does not add it to the cost and does not subtract it from the sale. So you do not underpay. If it pays back a tax that DeclaRenta subtracted on another trade, that trade has too much cost: correct it by hand in Renta Web.",
+  "trade_republic.cash_type_not_read":
+    "Trade Republic: {{count}} money movement(s) of a type DeclaRenta does not know are not calculated: {{rows}}.",
+  "trade_republic.cash_type_not_read.hint":
+    "Each row names a security and has an amount, but DeclaRenta does not know what it is. It can be a coupon, a dividend, a return of capital, an interest or a fee. So it does not add it. Income of the year you declare must be declared anyway. Add it by hand in Renta Web. A missing fee can only make you pay more.",
+  "scalable.income_row_not_read":
+    "Scalable Capital: {{count}} dividend(s) or interest payment(s) cannot be read and are not calculated: {{rows}}.",
+  "scalable.income_row_not_read.hint":
+    "The cell that fails is in brackets. It can be a status DeclaRenta does not know. DeclaRenta only calculates executed rows and does not count cancelled, rejected or pending ones. With another status it does not know if the payment was made. It can also be the withholding (tax) of a row that reverses a dividend. Then DeclaRenta does not subtract that row, and the reversed dividend stays added with its withholding. Compare each row with the Scalable Capital statement. If it is a real payment of the year you declare, add the amount and the withholding by hand in Renta Web. If it reverses a dividend, remove that dividend and its withholding in Renta Web.",
+  "scalable.dividend_tax_refund":
+    "Scalable Capital: {{count}} dividend row(s) have an amount of 0 and a withholding refund (a positive tax): {{rows}}.",
+  "scalable.dividend_tax_refund.hint":
+    "A row with an amount of 0 is no dividend. Scalable Capital writes a withholding (tax) as a negative number, so a positive one is a refund. DeclaRenta subtracts it from the withholding of a dividend of the same security from 7 days before or after. If there is none, it does not subtract it, and the withholding of that dividend counts in full: you would underpay. Take the final withholding from the Scalable Capital tax report and correct box 0588 by hand in Renta Web, or box 0597 if the security is Spanish. If the row is a withholding charged later, DeclaRenta does not count it: add it by hand.",
   "parser.trading212.unresolved_price_skipped":
     "{{skipped}} operations without a price per share and with an amount in another currency were skipped.",
   "parser.trading212.unresolved_price_skipped.hint":
@@ -1170,6 +1289,28 @@ const en: TranslationKeys = {
   "parser.trade_quantity_unknown.hint": "DeclaRenta adds or removes no shares for them, so the gains and losses of that security are not reliable and the one-purchase exception of the 2-month rule is not applied. Make sure the exported file has the quantity and the price of every trade and export it again.",
   "parser.crypto_quantity_unknown": "{{broker}} gives no readable unit count or price for {{count}} crypto trade(s): {{trades}}.",
   "parser.crypto_quantity_unknown.hint": "DeclaRenta adds or removes no units for them, so the gains and losses of that cryptocurrency are not reliable. If one of them is a repurchase in the year after a sale at a loss, that loss may have to stay pending (art. 33.5.e LIRPF), and DeclaRenta does not block it because it does not know how many units you bought back. Make sure the exported file has the quantity and the price of every trade and export it again.",
+  "parser.trade_row_unreadable": "{{broker}}: {{count}} trade row(s) cannot be read and are not calculated: {{rows}}.",
+  "parser.trade_row_unreadable.hint": "The square brackets show the cell that fails. It is missing, empty or unreadable, or it holds a trade type that DeclaRenta does not recognise. Sometimes it does not match the other cells of the row. DeclaRenta adds or removes no shares, units or money for those rows. So the gains and losses of those securities are not reliable. DeclaRenta also does not apply the one-purchase exception of the 2-month rule to any security that such a row may belong to. A row may be a cryptocurrency repurchase in the year after a sale at a loss. Then that loss may have to stay pending (art. 33.5.e LIRPF). DeclaRenta does not block it. If a row is a real purchase or sale, download the original file from the broker again and upload it unedited. If the cell is still wrong in the original, copy the value from the broker's statement and upload the file again.",
+  "revolut.bad_fx_rate": "DeclaRenta skipped {{count}} cash top-up(s) or withdrawal(s) of the Revolut statement because their exchange rate (FX Rate) is not valid: {{rows}}.",
+  "revolut.bad_fx_rate.hint": "Only cash top-ups and withdrawals use that column. DeclaRenta calculates purchases, sales and dividends at the ECB rate and does not skip them. The usual cause is an exchange rate cell that is not a number, is negative or is zero. Download the full Trading Account Statement again from the Revolut app and upload it.",
+  "revolut.holding_size_unknown": "The Revolut statement does not tell how many shares or units you hold at the end for {{count}} security(ies): {{tickers}}.",
+  "revolut.holding_size_unknown.hint": "One row of each cannot be read or does not say how many shares or units it moves (another warning names it). DeclaRenta shows only the part it can read, which may be 0. For Modelo 720 and 721, take the number and the value of those holdings from the Revolut statement and add them by hand.",
+  "parser.corporate_action_not_applied": "{{broker}}: DeclaRenta did not apply {{count}} stock split, consolidation or other corporate action row(s): {{rows}}.",
+  "parser.corporate_action_not_applied.hint": "DeclaRenta does not change the number of shares or the cost of those securities for them. So the gains and losses of their later sales may not be correct. Check them against the broker's statement. DeclaRenta also does not apply the one-purchase exception of the 2-month rule to those securities. If one of those rows paid you money, such as a maturity or a redemption, that sale is not in the report. Add it by hand in Renta Web.",
+  "parser.cash_row_undated": "{{broker}}: {{count}} cash movement(s) have no readable date and are not calculated: {{rows}}.",
+  "parser.cash_row_undated.hint": "The square brackets show the date cell. Without a date, DeclaRenta does not know which year the amount belongs to or which ECB exchange rate applies. So it does not add the amount and does not make up a date. It may be a dividend, a withholding, interest or other income of the year you declare. Then download the original file from the broker again and upload it unedited. If the date is still wrong in the original, copy it from the broker's statement and upload the file again. You can also add the amount by hand in Renta Web.",
+  "parser.cash_row_unidentified": "{{broker}}: {{count}} dividend(s) or withholding(s) do not say which security they belong to and are not calculated: {{rows}}.",
+  "parser.cash_row_unidentified.hint": "The row has no ticker and no ISIN. Without the security, DeclaRenta does not know which country the dividend comes from or which withholding goes with it. So it does not add the amount and does not make up a security. If it is income of the year you declare, download the original file from the broker again and upload it unedited. If the row still has no security, copy the ticker or the ISIN from the broker's statement and upload the file again. You can also add the amount by hand in Renta Web.",
+  "parser.crypto_income_unidentified": "{{broker}}: {{count}} crypto income row(s) do not say which cryptocurrency you received and are not calculated: {{rows}}.",
+  "parser.crypto_income_unidentified.hint": "The square brackets show the cryptocurrency cell. Without it, DeclaRenta does not know what you received. It also does not know what cost to give it when you sell it. So it does not add that income and does not make up the cryptocurrency. If it is income of the year you declare, you must still declare it. Download the original file from the exchange again and upload it unedited. If the row is still wrong in the original, copy the missing value from the exchange's history and upload the file again. You can also add the income by hand in Renta Web.",
+  "parser.crypto_income_amount_unreadable": "{{broker}}: {{count}} crypto income row(s) have no readable amount and are not calculated: {{rows}}.",
+  "parser.crypto_income_amount_unreadable.hint": "The square brackets show the amount as the file writes it. Without an amount, DeclaRenta does not know how much you received. So it does not add that income and does not count it as zero. If it is income of the year you declare, you must still declare it. Download the original file from the exchange again and upload it unedited. If the row is still wrong in the original, copy the missing value from the exchange's history and upload the file again. You can also add the income by hand in Renta Web.",
+  "parser.cash_income_amount_unreadable": "{{broker}}: {{count}} dividend(s), interest payment(s) or other income row(s) have no readable amount and are not calculated: {{rows}}.",
+  "parser.cash_income_amount_unreadable.hint": "The square brackets show the amount cell or its currency cell as the file writes it. Without it, DeclaRenta does not know how much you received. So it does not add that income or its withholding, and does not count it as zero. If it is income of the year you declare, you must still declare it. Download the original file from the broker again and upload it unedited. If the row is still wrong in the original, copy the missing value from the broker's statement and upload the file again. You can also add the amount and the withholding by hand in Renta Web.",
+  "parser.cash_row_not_booked": "{{broker}}: {{count}} money movement(s) of a type DeclaRenta does not know are not calculated: {{rows}}.",
+  "parser.cash_row_not_booked.hint": "The square brackets show the amount as the file writes it. DeclaRenta does not know what this movement is. So it does not add it or subtract it. It can be the broker's adjustment of a trade, a compensation or a fee. Check the broker's statement. If the broker paid you this money in the year you declare, it can be a gain you must declare. If the broker charged it, it can be a cost of a trade. Add what applies by hand in Renta Web.",
+  "revolut.dividend_tax_correction": "The Revolut statement has {{count}} dividend withholding correction(s) (DIVIDEND TAX (CORRECTION)) that DeclaRenta does not add: {{rows}}.",
+  "revolut.dividend_tax_correction.hint": "With these rows Revolut corrects the withholding of a dividend already paid. DeclaRenta imports Revolut dividends at their net amount. It does not read the withholding from this statement, and not its correction either. Take the gross dividend and the final, corrected withholding from Revolut's annual tax report.",
 };
 
 export default en;

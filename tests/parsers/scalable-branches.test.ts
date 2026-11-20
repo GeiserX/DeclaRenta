@@ -54,13 +54,20 @@ describe("scalableParser - branch coverage", () => {
     expect(result.trades).toHaveLength(0);
   });
 
-  it("should skip rows without ISIN", () => {
+  it("keeps a buy row without ISIN as an unreadable row that books nothing (#467)", () => {
     const input = [
       HEADER,
       "2025-01-15;10:00;executed;REF001;Some Product;ETF;buy;;10;45.00;450;0;0;EUR",
     ].join("\n");
     const result = scalableParser.parse(input);
-    expect(result.trades).toHaveLength(0);
+    expect(result.trades.map((t) => [t.symbol, t.isin, t.assetCategory, t.quantity, t.quantityUnknown, t.tradeMoney, t.unreadableRow])).toEqual([
+      ["Some Product", "", "FUND", "0", true, "0", 'Some Product 20250115 [isin: ""]'],
+    ]);
+  });
+
+  it("control: a row of another type without ISIN (a deposit) is skipped", () => {
+    const input = [HEADER, "2025-01-15;10:00;executed;REF001;Deposit;Cash;deposit;;0;0;450;0;0;EUR"].join("\n");
+    expect(scalableParser.parse(input).trades).toEqual([]);
   });
 
   it("should skip rows with zero shares", () => {

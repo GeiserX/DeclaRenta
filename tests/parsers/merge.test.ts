@@ -9,7 +9,7 @@ import { lightyearParser } from "../../src/parsers/lightyear.js";
 import { scalableParser } from "../../src/parsers/scalable.js";
 import { trading212Parser } from "../../src/parsers/trading212.js";
 import { binanceParser } from "../../src/parsers/binance.js";
-import { generateTaxReport } from "../../src/generators/report.js";
+import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
 import type { Statement } from "../../src/types/broker.js";
 
 function makeStatement(overrides: Partial<Statement>): Statement {
@@ -218,10 +218,13 @@ describe("statement merge utilities", () => {
     expect(statement.parserMessages ?? []).toEqual([]);
   });
 
-  it("splits one combined cash leg across the fills pro rata and says so", () => {
+  it("splits one combined cash leg across the same day's fills pro rata and says so", () => {
+    // Flatex books a fill and its leg on the same day. A combined leg for
+    // fills of two days could be a missing leg: that order gets no fee and is
+    // named (tests/integration/unreadable-trade-rows-e2e.test.ts).
     const statement = makeStatement({
       trades: [
-        makeTrade({ tradeID: "F1", currency: "EUR", tradeDate: "20250310", tradeMoney: "1000", notes: "flatex-order:329000001" }),
+        makeTrade({ tradeID: "F1", currency: "EUR", tradeDate: "20250311", tradeMoney: "1000", notes: "flatex-order:329000001" }),
         makeTrade({ tradeID: "F2", currency: "EUR", tradeDate: "20250311", tradeMoney: "3000", notes: "flatex-order:329000001" }),
       ],
       pendingOrderLegs: [
@@ -498,5 +501,39 @@ describe("same-day trade order through merge and finalize", () => {
     const trades = parser.parse(fixture(name)).trades;
     expect(trades[0]!.tradeTime).toBe(time);
     expect(trades.every((t) => /^\d{2}:\d{2}:\d{2}$/.test(t.tradeTime ?? ""))).toBe(true);
+  });
+});
+
+// A high-volume export (a trader's year, a multi-year crypto export) can hold
+// more rows than a function call takes arguments. Merging it with
+// push(...rows) threw RangeError at about 125k rows, so no report was made.
+describe("a statement too large for one function call still merges", () => {
+  const header = '"txid","ordertxid","pair","time","type","ordertype","price","cost","fee","vol","margin","misc","ledgers"';
+  // Pairs of a buy at 40000 and a sale at 41000 of 0.001 BTC on one day:
+  // every sale gains 1 EUR.
+  function krakenExport(rows: number): string {
+    const lines = [header];
+    for (let i = 0; i < rows; i++) {
+      const day = new Date(Date.UTC(2025, 0, 1) + (Math.floor(i / 2) % 300) * 86_400_000).toISOString().slice(0, 10);
+      lines.push(i % 2 === 0
+        ? `"T${i}","O${i}","XBTEUR","${day} 10:00:00","buy","limit","40000","40","0","0.001","0.0","","L${i}"`
+        : `"T${i}","O${i}","XBTEUR","${day} 11:00:00","sell","limit","41000","41","0","0.001","0.0","","L${i}"`);
+    }
+    return lines.join("\n");
+  }
+
+  it.each([
+    [1_000, "500.00"],
+    [130_000, "65000.00"],
+  ])("%i Kraken rows merge and give every sale's gain in all three FX methods", { timeout: 120_000 }, (rows, gain) => {
+    const merged = createEmptyStatement();
+    mergeStatement(merged, krakenParser.parse(krakenExport(rows)), "Kraken");
+    finalizeMergedStatement(merged);
+    expect(merged.trades).toHaveLength(rows);
+    for (const method of ["multidivisa", "tradicional-divisa", "monodivisa"] as const) {
+      const report = generateTaxReport(merged, new Map(), 2025, reportOptionsForMethod(method));
+      expect(report.capitalGains.disposals).toHaveLength(rows / 2);
+      expect(report.capitalGains.netGainLoss.toFixed(2)).toBe(gain);
+    }
   });
 });

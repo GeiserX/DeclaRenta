@@ -153,13 +153,14 @@ describe("binanceParser", () => {
       expect(() => binanceParser.parse(csv)).toThrow("vacío");
     });
 
-    it("should skip rows with unknown side", () => {
+    it("keeps a row with an unknown side as a row that books nothing, and names it (#467)", () => {
       const csv = [
         "Date(UTC),Pair,Side,Price,Executed,Amount,Fee",
         "2025-01-15 10:30:00,BTCEUR,TRANSFER,42000.00,0.05,2100.00,0.001BTC",
       ].join("\n");
       const result = binanceParser.parse(csv);
-      expect(result.trades).toHaveLength(0);
+      expect(result.trades.map((t) => [t.symbol, t.quantity, t.quantityUnknown])).toEqual([["BTC", "0", true]]);
+      expect(result.parserMessages?.find((m) => m.id === "parser.trade_row_unreadable")?.context?.rows).toBe('BTC 20250115 [Side: "TRANSFER"]');
     });
 
     it("should return empty cashTransactions and corporateActions", () => {
@@ -763,11 +764,11 @@ describe("binanceParser", () => {
       // Only the valid permuta → exactly 2 trades; the BTC ghost leg is gone.
       expect(result.trades).toHaveLength(2);
       expect(result.trades.some((t) => t.symbol === "BTC")).toBe(false);
-      // Surfaced exactly once with the right count.
+      // Surfaced exactly once, naming the row by coin, operation, change and cell.
       const msg = (result.parserMessages ?? []).find((m) => m.id === "binance.unparseable_timestamp");
       expect(msg).toBeDefined();
       expect(msg!.severity).toBe("warning");
-      expect(msg!.message).toContain("1 fila");
+      expect(msg!.context).toEqual({ count: "1", rows: 'BTC Binance Convert 0.01 [UTC_Time: ""]' });
     });
 
     it("keeps the row order deterministic when a bad timestamp is interleaved (comparator not NaN-poisoned)", () => {
@@ -792,7 +793,7 @@ describe("binanceParser", () => {
       expect(result.trades.filter((t) => t.symbol === "SOL")).toHaveLength(1);
       expect(result.trades.filter((t) => t.symbol === "ETH")).toHaveLength(1);
       const msg = (result.parserMessages ?? []).find((m) => m.id === "binance.unparseable_timestamp");
-      expect(msg!.message).toContain("2 filas");
+      expect(msg!.context).toEqual({ count: "2", rows: 'BTC Binance Convert 0.01 [UTC_Time: "not-a-date"]; DOGE Binance Convert 50 [UTC_Time: "2025-03-15"]' });
     });
   });
 
@@ -1305,9 +1306,12 @@ describe("binanceParser — Transaction History legs that straddle two ±1s wind
     ].join("\n");
     const result = binanceParser.parse(csv);
     expect(result.trades.filter((t) => t.symbol === "XRP")).toHaveLength(1);
-    const msg = result.parserMessages?.find((m) => m.id === "binance.unhandled_operation");
+    // A leg of a known operation is no unrecognised operation: it is named
+    // by coin, operation, change and time (#467).
+    expect(result.parserMessages?.some((m) => m.id === "binance.unhandled_operation")).toBe(false);
+    const msg = result.parserMessages?.find((m) => m.id === "binance.unpaired_leg");
     expect(msg).toBeDefined();
-    expect(msg!.context).toMatchObject({ count: "1", operations: "transaction sold (1)" });
+    expect(msg!.context).toEqual({ count: "1", rows: "ADA Transaction Sold -50 2025-04-01 12:00:00" });
   });
 
   it("keeps back-to-back Converts apart when each lists its received leg first", () => {
@@ -1397,9 +1401,10 @@ describe("binanceParser — Transaction History legs that straddle two ±1s wind
     ].join("\n");
     const result = binanceParser.parse(csv);
     expect(result.trades.filter((t) => t.buySell === "BUY")).toHaveLength(1);
-    const msg = result.parserMessages?.find((m) => m.id === "binance.unhandled_operation");
+    expect(result.parserMessages?.some((m) => m.id === "binance.unhandled_operation")).toBe(false);
+    const msg = result.parserMessages?.find((m) => m.id === "binance.unpaired_leg");
     expect(msg).toBeDefined();
-    expect(msg!.context).toMatchObject({ count: "1", operations: "binance convert (1)" });
+    expect(msg!.context).toEqual({ count: "1", rows: "ETH Binance Convert 0.1 2025-04-01 12:00:00" });
   });
 
   it("keeps back-to-back fiat purchases apart when each lists its crypto leg first", () => {

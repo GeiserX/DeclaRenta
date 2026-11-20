@@ -1067,10 +1067,46 @@ const gl: TranslationKeys = {
     "Operacións de Flatex sen comisión calculada: {{trades}}. O apuntamento de caixa está nunha moeda distinta á da operación.",
   "flatex.commission.cross_currency.hint":
     "A comisión desas operacións deixouse en 0. Consulta o seu importe na liquidación da orde en Flatex e tena en conta ao revisar a declaración: súmase ao valor de adquisición nas compras e réstase do valor de transmisión nas vendas.",
+  "kraken.ledger_trade_not_booked":
+    "Kraken: {{count}} compravenda(s) do libro maior (Ledgers) non están en ningún ficheiro de operacións (Trades) subido e non se calculan: {{rows}}.",
+  "kraken.ledger_trade_not_booked.hint":
+    "DeclaRenta le as compras e as vendas de Kraken só do ficheiro de operacións (Trades). Cada fila trae o refid da operación e a súa data. Entre corchetes van as moedas e os importes que move no libro maior. Descarga de Kraken o ficheiro Trades desas datas (History → Export → Trades) e súbeo xunto co libro maior. Sen el, pode faltar unha venda na túa declaración, ou o custo dunha compra. As compras e vendas instantáneas (tipos spend e receive), as conversións (conversion) e as vendas (sale) poden non estar no ficheiro Trades. Se non están, engade a man en Renta Web cada venda e cada cambio dunha criptomoeda por outra, e usa cada compra como custo cando vendas esa moeda. As filas margin e settled son o resultado dunha posición con marxe. Unha fila adjustment é un axuste, como o cambio dunha moeda que Kraken deixa de ofrecer. Unha fila nfttrade é a venda dun NFT. Se non están no ficheiro Trades e che dan diñeiro ou moedas, poden ser unha ganancia patrimonial: declaraas a man en Renta Web.",
+  "kraken.fiat_conversion_not_booked":
+    "Kraken: {{count}} operación(s) cambian unha moeda oficial por outra (por exemplo, euros por dólares) e non se calculan: {{rows}}.",
+  "kraken.fiat_conversion_not_booked.hint":
+    "Cada fila trae o par, o tipo (buy ou sell), a cantidade (vol), o importe (cost) e a data. DeclaRenta non calcula a ganancia ou a perda por tipo de cambio destes cambios de Kraken. Cambiar unha divisa por euros ou por outra divisa pode dar unha ganancia ou unha perda. É a diferenza entre o seu valor en euros ao cambiala e o que che custou en euros. Calcúlaa e engádea a man en Renta Web.",
+  "kraken.income_negative":
+    "Kraken: {{count}} recompensa(s) de staking ou Earn son negativas e non se calculan: {{rows}}.",
+  "kraken.income_negative.hint":
+    "Unha recompensa negativa adoita ser unha recompensa que Kraken che retirou. Tamén sae negativa cando a comisión (fee) é maior que o importe (amount). DeclaRenta non sabe que recompensa anula, así que non cambia ningún importe. Segue contando as demais recompensas como ingreso e as súas moedas como compradas ao seu valor dese día. Se a fila anula un ingreso do ano que declaras, quítao a man en Renta Web. Se despois vendiches esa criptomoeda, o custo da venda pode ser demasiado alto. Revisa en Renta Web o custo desas vendas.",
+  "kraken.ledger_rows_ignored":
+    "Ignoráronse {{count}} movemento(s) do libro maior de Kraken de tipos que non se procesan: {{types}}.",
+  "kraken.ledger_rows_ignored.hint":
+    "DeclaRenta le do libro maior só as recompensas de staking e Earn e os airdrops. Le as compravendas do CSV de operacións (Trades). Unha transferencia (transfer) que non move moedas entre as túas propias contas pode ser un ingreso, como unha bifurcación (fork). Se o é, declárao a man en Renta Web.",
+  "kraken.ledger_income_not_booked":
+    "Kraken: {{count}} movemento(s) do libro maior poden ser ingresos e non se calculan: {{rows}}.",
+  "kraken.ledger_income_not_booked.hint":
+    "Son filas de tipo reward, dividend, credit, nftrebate ou nftcreatorfee que che dan moedas ou diñeiro. DeclaRenta non sabe de que ingreso se trata, así que non as suma. Unha recompensa ou un bono pode ser unha ganancia patrimonial (base xeral). Un dividendo pode ser un rendemento do capital mobiliario (base do aforro). Se é un ingreso do ano que declaras, declárao a man en Renta Web co seu valor en euros dese día.",
+  "flatex.commission.not_recovered":
+    "Flatex: {{count}} operación(s) non teñen a comisión calculada, porque os seus apuntamentos de caixa non cadran coa operación: {{rows}}.",
+  "flatex.commission.not_recovered.hint":
+    "Cada fila trae o número de orde, o valor e a data. Entre corchetes vai o importe da operación e a suma dos seus apuntamentos de caixa. Se un importe non se pode ler, vai a súa cela. Pode faltar un apuntamento ou sobrar un. Un apuntamento pode ter un importe ou unha data que non se pode ler, ou unha data que non é a da operación. Tamén pode haber unha execución da orde que non se pode ler ou que ten un Nominal de 0. Unha comisión de 50 € máis o 2 % do importe, ou maior, tampouco se calcula: o apuntamento pode pagar tamén outra execución que non está no ficheiro. DeclaRenta deixa esa comisión en 0. Non a suma ao custo das compras nin a resta do valor das vendas. Consulta a comisión na liquidación da orde en Flatex. Se queres deducila, engádea a man en Renta Web.",
+  "flatex.order_leg_without_fill":
+    "Flatex: {{count}} orde(s) de compra ou venda están no CSV de Kontoumsätze pero non en ningún CSV de Depotumsätze subido, e non se calculan: {{rows}}.",
+  "flatex.order_leg_without_fill.hint":
+    "DeclaRenta le as compras e as vendas de Flatex só do CSV de Depotumsätze. O de Kontoumsätze trae só o diñeiro de cada orde. Cada fila trae o número de orde, o valor e a data. Entre corchetes vai se é unha compra (Kauf) ou unha venda (Verkauf) e a suma dos seus apuntamentos de caixa. Se un importe non se pode ler, vai a súa cela. Descarga de Flatex o CSV de Depotumsätze desas datas e súbeo xunto co de Kontoumsätze. Sen el, pode faltar unha venda na túa declaración, ou o custo dunha compra.",
+  "flatex.depot.storno_cancelled":
+    "Flatex: {{count}} execución(s) anulada(s) cun Storno non se calculan: {{rows}}.",
+  "flatex.depot.storno_cancelled.hint":
+    "Flatex corrixe unha execución cun Storno que a anula, e ás veces cunha execución nova da mesma orde. DeclaRenta quita do cálculo cada execución anulada e o seu Storno, e calcula a execución nova se está no ficheiro. Cada fila trae o número de orde, o valor e a data da execución anulada. Entre corchetes van os seus títulos e o seu prezo. Ao final vai a data do Storno.",
   "flatex.commission.multi_fill_prorated":
     "Ordes de Flatex executadas en varias partes: {{orders}}. A súa comisión repartiuse entre as execucións en proporción ao seu importe.",
   "flatex.commission.multi_fill_prorated.hint":
-    "Flatex liquidou esas ordes cun número de apuntamentos de caixa distinto ao de execucións, polo que non se pode saber que comisión corresponde a cada unha. O total de comisións de cada orde é exacto; só o reparto entre execucións é aproximado.",
+    "Flatex liquidou esas ordes cun número de apuntamentos de caixa distinto ao de execucións, polo que non se pode saber que comisión corresponde a cada unha. O total sae dos apuntamentos de caixa, e o reparto entre execucións é aproximado. Se un apuntamento paga tamén unha execución que non está no CSV de Depotumsätze, a comisión sae máis alta: revísaa na liquidación da orde en Flatex.",
+  "flatex.commission.above_usual":
+    "Flatex: {{count}} orde(s) teñen unha comisión maior que a habitual de Flatex, e DeclaRenta non a resta: {{rows}}.",
+  "flatex.commission.above_usual.hint":
+    "Cada fila trae o número de orde, o valor e a data. Entre corchetes vai o importe da operación e a suma dos seus apuntamentos de caixa. A diferenza sería a comisión. Unha comisión habitual de Flatex é de 5,90 € por orde, máis uns poucos euros de gastos da bolsa e, nalgúns países, un imposto de ata o 1 % do importe. Esta é maior. Pode ser real, pero o apuntamento de caixa pode pagar tamén outra execución que non está no CSV de Depotumsätze. Os dous CSV non permiten sabelo. Por iso DeclaRenta deixa a comisión en 0. Non a suma ao custo da compra nin a resta do valor da venda. Consulta a comisión na liquidación da orde (Abrechnung) en Flatex. Se é real e queres deducila, engádea a man en Renta Web. Se falta unha execución, sube o CSV de Depotumsätze que a trae.",
   "flatex.depot.repeated_fills":
     "Operacións de Flatex repetidas e contadas unha soa vez: {{fills}}. Tiñan o mesmo número de orde e de apuntamento (TA-Nr.) que outra xa cargada.",
   "flatex.depot.repeated_fills.hint":
@@ -1089,26 +1125,85 @@ const gl: TranslationKeys = {
   "degiro.transaction_tax": "Imposto sobre as transaccións financeiras pagado en {{product}} ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degiro cobra este imposto ao comprar accións españolas, francesas ou italianas e só o mostra no CSV de Conta. Forma parte do valor de adquisición (art. 35.1.b LIRPF): súmao ao custo das compras dese valor, porque DeclaRenta non o engade automaticamente.",
+  "degiro.cash_row_undescribed": "DEGIRO: {{count}} fila(s) do CSV de Conta non din que movemento son e non se calculan: {{rows}}.",
+  "degiro.cash_row_undescribed.hint":
+    "Entre corchetes vai a cela da descrición, tal como está no ficheiro. Sen ela, DeclaRenta non sabe se a fila é un dividendo, unha retención, un xuro ou outro movemento. Por iso non a suma e non inventa o tipo. Se é un ingreso do ano que declaras, tes que declaralo igualmente. Volve descargar o CSV de Conta orixinal de DEGIRO e súbeo sen editalo. Se a fila segue sen descrición, copia o dato do extracto de DEGIRO e volve subir o ficheiro. Tamén podes engadir o importe a man en Renta Web.",
   "binance.unparseable_timestamp":
-    "Omitíronse {{count}} fila(s) do CSV de Binance por ter unha data/hora (UTC_Time) non recoñecible.",
+    "Binance: {{count}} fila(s) non teñen unha data e hora (UTC_Time) lexible e non se calculan: {{rows}}.",
   "binance.unparseable_timestamp.hint":
-    "Adoita deberse a un ficheiro modificado manualmente ou exportado de forma incompleta. Volve descargar o informe orixinal desde Binance sen editalo para que esas operacións se inclúan.",
+    "Entre corchetes vai a cela da data. Sen ela, DeclaRenta non sabe con que outra fila vai cada movemento. Por iso non suma nin resta unidades nin diñeiro por esas filas. As ganancias, as perdas e os ingresos desas criptomoedas non son fiables. Se unha fila é unha recompra no ano seguinte a unha venda con perdas, esa perda pode ter que quedar pendente (art. 33.5.e LIRPF). DeclaRenta non a bloquea. Volve descargar o informe orixinal de Binance e súbeo sen editalo. Se a fila segue mal no orixinal, copia o dato que falta do teu historial de Binance e volve subir o ficheiro.",
+  "binance.unparseable_amount":
+    "Binance: {{count}} fila(s) non teñen un importe (Change) lexible e non se calculan: {{rows}}.",
+  "binance.unparseable_amount.hint":
+    "Entre corchetes vai a cela do importe. DeclaRenta non suma nin resta unidades nin diñeiro por esas filas. Por iso as ganancias, as perdas e os ingresos desas criptomoedas non son fiables. Se unha fila é unha recompra no ano seguinte a unha venda con perdas, esa perda pode ter que quedar pendente (art. 33.5.e LIRPF). DeclaRenta non a bloquea. Volve descargar o informe orixinal de Binance e súbeo sen editalo. Se a fila segue mal no orixinal, copia o dato que falta do teu historial de Binance e volve subir o ficheiro.",
+  "binance.unparseable_coin":
+    "Binance: {{count}} fila(s) non din de que moeda son (Coin) e non se calculan: {{rows}}.",
+  "binance.unparseable_coin.hint":
+    "Entre corchetes vai a cela da moeda. Sen ela, DeclaRenta non sabe que criptomoeda entra ou sae. Por iso non suma nin resta unidades nin diñeiro por esas filas. As ganancias, as perdas e os ingresos das túas criptomoedas non son fiables. Se unha fila é unha recompra no ano seguinte a unha venda con perdas, esa perda pode ter que quedar pendente (art. 33.5.e LIRPF). DeclaRenta non a bloquea. Volve descargar o informe orixinal de Binance e súbeo sen editalo. Se a fila segue mal no orixinal, copia o dato que falta do teu historial de Binance e volve subir o ficheiro.",
+  "freedom24.row_skipped_malformed":
+    "Freedom24: {{count}} fila(s) de accións corporativas non teñen un tipo lexible (type_id) e non se calculan.",
+  "freedom24.row_skipped_malformed.hint":
+    "O campo \"type_id\" desas filas está baleiro ou non é texto. Por iso DeclaRenta non sabe se son un dividendo, un cupón ou outra operación. Non suma ningún importe por elas. Poden mover accións. Por iso o aviso de operacións societarias non aplicadas tamén as nomea. A comprobación de compra única da regra dos 2 meses pode verse afectada. DeclaRenta non aplica esa excepción ao seu valor. Se a fila non nomea ningún valor, non a aplica a ningún. Se che falta un dividendo ou un cupón, volve descargar o informe JSON completo de Freedom24 e volve subilo.",
+  "freedom24.dividend_amount_unreadable":
+    "Freedom24: {{count}} dividendo(s) ou cupón(s) non teñen un importe (amount) lexible e non se calculan: {{rows}}.",
+  "freedom24.dividend_amount_unreadable.hint":
+    "Entre corchetes vai a cela do importe (amount). Sen ela, DeclaRenta non sabe canto cobraches. Por iso non suma ese ingreso nin a súa retención e non inventa un importe. Se é un ingreso do ano que declaras, volve descargar o informe JSON completo de Freedom24 e volve subilo. Tamén podes engadir o importe e a retención a man en Renta Web.",
+  "freedom24.tax_amount_unreadable":
+    "Freedom24: {{count}} dividendo(s) ou cupón(s) non teñen unha retención (tax_amount) que se poida usar e calcúlanse sen retención: {{rows}}.",
+  "freedom24.tax_amount_unreadable.hint":
+    "Entre corchetes vai a cela da retención (tax_amount). Non é un número, ou é maior que o importe (amount) do dividendo. DeclaRenta suma o ingreso completo, pero non sabe canto che retiveron. Así non pagas de menos, pero perdes a dedución por esa retención (casilla 0588, ou 0597 se o valor é español). Toma a retención do informe fiscal de Freedom24 e engádea a man en Renta Web.",
+  "freedom24.cash_flow_not_read":
+    "Freedom24: {{count}} movemento(s) de diñeiro de cash_flows non se calculan: {{rows}}.",
+  "freedom24.cash_flow_not_read.hint":
+    "DeclaRenta só calcula as operacións (trades) e os dividendos e cupóns (corporate_actions) do informe. Non calcula as filas de cash_flows. Non che avisa dos ingresos e as retiradas de diñeiro da túa conta, porque non tributan. Cada fila deste aviso pode ser un xuro, un dividendo, un cupón, unha retención ou unha comisión. Un xuro ou un dividendo que non está en corporate_actions é un ingreso que tes que declarar. Engádeo a man en Renta Web. Se a fila repite un dividendo de corporate_actions, xa está calculado. Unha comisión que falta só pode facerche pagar máis.",
   "binance.unhandled_operation":
     "Omitíronse {{count}} movemento(s) do CSV de Binance con operacións non recoñecidas: {{operations}}.",
   "binance.unhandled_operation.hint":
     "Estes movementos non se incluíron no cálculo. Se son compras, vendas ou ingresos (p. ex. futuros, pagamentos con Binance Card, Auto-Invest ou cashback), engádeos á man na túa declaración e comunica o nome da operación para que se poida incorporar.",
+  "binance.unpaired_leg":
+    "Binance: {{count}} movemento(s) de compra, venda ou conversión non teñen a outra parte da operación e non se calculan: {{rows}}.",
+  "binance.unpaired_leg.hint":
+    "Cada compra ou venda de Binance son dúas filas coa mesma hora: a moeda que entra e a que sae. DeclaRenta non atopou a outra fila destes movementos. Por iso non suma nin resta unidades nin diñeiro por eles. As ganancias e as perdas desas criptomoedas non son fiables. Se unha fila é unha recompra no ano seguinte a unha venda con perdas, esa perda pode ter que quedar pendente (art. 33.5.e LIRPF). DeclaRenta non a bloquea. Compara esas filas co teu historial de Binance e engade a man en Renta Web as operacións que falten.",
+  "binance.spot_cost_split":
+    "Binance: {{count}} movemento(s) de operacións con varias criptomoedas á vez non din que pagamento ou cobro vai con cada unha. DeclaRenta repartiu os importes entre elas: {{rows}}.",
+  "binance.spot_cost_split.hint":
+    "Binance anota varias operacións no mesmo segundo. Non pon cada pagamento ou cobro xunto á súa compra ou venda. Por iso DeclaRenta non sabe que importe vai con cada criptomoeda. Repartiu os importes entre elas por orde ou a partes iguais. O total é correcto, pero o custo ou o importe de venda de cada criptomoeda non é fiable. Por iso as ganancias e as perdas desas criptomoedas non son fiables. Se unha delas é unha recompra no ano seguinte a unha venda con perdas, a comprobación do art. 33.5.e LIRPF tampouco é fiable. Busca esas ordes no teu historial de Binance e corrixe a man en Renta Web o custo ou o importe de venda de cada criptomoeda.",
+  "binance.fee_unassigned":
+    "Binance: {{count}} comisión(s) non din de que operación do mesmo segundo son, e DeclaRenta non as resta: {{rows}}.",
+  "binance.fee_unassigned.hint":
+    "Binance anota varias operacións no mesmo segundo. Estas comisións están entre dúas operacións da mesma moeda. Por iso DeclaRenta non sabe de cal son. Non as suma ao custo nin as resta do importe de venda, e así non pagas de menos. Se sabes de que compra ou venda é cada comisión, corrixe a man en Renta Web o seu custo ou o seu importe de venda.",
+  "binance.income_negative":
+    "Binance: {{count}} fila(s) de ingresos son negativas e non se calculan: {{rows}}.",
+  "binance.income_negative.hint":
+    "Unha fila de ingresos negativa adoita ser unha recompensa que Binance che retirou. DeclaRenta non sabe que recompensa anula, así que non cambia ningún importe. Segue contando esa recompensa como ingreso e as súas moedas como compradas ao seu valor dese día. Se anula un ingreso do ano que declaras, quítao a man en Renta Web. Se despois vendiches esa criptomoeda, o custo da venda pode ser demasiado alto. Revisa en Renta Web o custo desas vendas.",
+  "binance.fiat_conversion_not_booked":
+    "Binance: {{count}} fila(s) cambian unha moeda oficial por outra (por exemplo, euros por dólares) e non se calculan: {{rows}}.",
+  "binance.fiat_conversion_not_booked.hint":
+    "DeclaRenta non calcula a ganancia ou a perda por tipo de cambio destes cambios de Binance. Cambiar unha divisa por euros ou por outra divisa pode dar unha ganancia ou unha perda. É a diferenza entre o seu valor en euros ao cambiala e o que che custou en euros. Calcúlaa e engádea a man en Renta Web.",
   "binance.unsupported_pair":
-    "Omitíronse {{count}} operación(s) do CSV de Binance cun par non recoñecido: {{pairs}}.",
+    "DeclaRenta omitiu {{count}} operación(s) do CSV de Binance cun par non recoñecido: {{rows}}.",
   "binance.unsupported_pair.hint":
-    "Estas operacións non se incluíron no cálculo. Engádeas á man na túa declaración e comunica o par para que se poida incorporar.",
+    "Entre corchetes vai a cela do par. DeclaRenta non incluíu estas operacións no cálculo. Engádeas a man na túa declaración e comunica o par para que DeclaRenta o incorpore.",
   "etoro.closed_types_skipped":
     "Omitíronse {{count}} posición(s) pechada(s) de eToro dun tipo non admitido: {{types}}.",
   "etoro.closed_types_skipped.hint":
     "DeclaRenta aínda non importa estes tipos de posición de eToro (p. ex. criptomoedas). A súa ganancia ou perda non está incluída no cálculo: engádea á man na túa declaración co importe investido e o beneficio que mostra eToro.",
+  "etoro.columns_not_detected":
+    "eToro: DeclaRenta non recoñece as columnas {{columns}} da folla «{{sheet}}». Non importou ningunha fila desa folla.",
+  "etoro.columns_not_detected.hint":
+    "eToro cambia ás veces os nomes das columnas. Se DeclaRenta non as recoñece, non pode ler as filas desa folla e non suma ningunha. Volve descargar o informe XLSX completo da conta e súbeo outra vez. Se o aviso segue, engade a man en Renta Web as operacións, os dividendos ou os xuros desa folla.",
+  "etoro.staking_not_imported":
+    "eToro: {{count}} recompensa(s) de staking non se calculan: {{rows}}.",
+  "etoro.staking_not_imported.hint":
+    "DeclaRenta aínda non importa as criptomoedas de eToro. Por iso non suma estas recompensas. Se son ingresos do ano que declaras, tes que declaralas igualmente. Engade á man en Renta Web o seu valor en euros do día en que as recibiches. Ese valor é tamén o seu custo cando as vendas.",
   "lightyear.unknown_types":
     "Omitíronse {{count}} fila(s) do CSV de Lightyear cun tipo de movemento non recoñecido: {{types}}.",
   "lightyear.unknown_types.hint":
     "Estes movementos non se incluíron no cálculo. Se son desdobramentos (splits), traspasos de accións ou outras operacións societarias, revísaos á man: poden cambiar o número de accións ou o custo de adquisición de vendas posteriores.",
+  "lightyear.income_shares_booked":
+    "Lightyear: {{count}} fila(s) de ingreso traen accións. DeclaRenta cóntaas como compradas ese día: {{rows}}.",
+  "lightyear.income_shares_booked.hint":
+    "Son filas de dividendo, distribución, xuro ou recompensa que traen un número de accións. DeclaRenta suma o seu importe como ingreso, igual que nas demais filas. Ademais, conta esas accións como compradas ese día por ese mesmo importe. Así a súa venda posterior ten custo. Se vendiches ese valor con perdas 2 meses antes ou despois, esa compra pode bloquear a perda (regra dos 2 meses). Compróbao co extracto de Lightyear. Se a fila non che deu accións novas, esa compra non existe. Entón o custo das túas vendas e as perdas bloqueadas dese valor poden non ser correctos.",
   "coinbase.rewards_income_classification":
     'Clasificáronse {{count}} ingreso(s) de tipo "Rewards Income" de Coinbase como rendementos do capital mobiliario (base do aforro).',
   "coinbase.rewards_income_classification.hint":
@@ -1121,18 +1216,42 @@ const gl: TranslationKeys = {
     "{{count}} operación(s) de Advanced Trade de Coinbase pagáronse ou cobráronse nunha moeda distinta da de valoración ({{pairs}}); só se rexistrou a criptomoeda comprada ou vendida, non a moeda de contrapartida.",
   "coinbase.advanced_trade_quote_leg_missing.hint":
     "Nestes pares tamén transmites (ao comprar) ou adquires (ao vender) a moeda de cotización, sexa outra criptomoeda ou unha divisa, e esa operación tamén tributa. Engade manualmente a venda ou a compra desa moeda polo mesmo valor en euros da operación para que a súa ganancia e o seu custo de adquisición cadren.",
-  "trade_republic.trade_skipped_no_amount":
-    "Omitiuse(ronse) {{count}} operación(s) de compravenda de Trade Republic sen importe utilizable.",
-  "trade_republic.trade_skipped_no_amount.hint":
-    'Adoita deberse a filas incompletas na exportación (columna "amount" baleira ou non numérica). Se faltan operacións, volve descargar o CSV de transaccións completo desde Trade Republic.',
+  "coinbase.income_negative":
+    "Coinbase: {{count}} ingreso(s) en criptomoedas son negativos e non se calculan: {{rows}}.",
+  "coinbase.income_negative.hint":
+    "Un ingreso negativo adoita ser unha recompensa que Coinbase che retirou. DeclaRenta non sabe que recompensa anula, así que non cambia ningún importe. Segue contando as demais recompensas como ingreso e as súas moedas como compradas ao seu valor dese día. Se a fila anula un ingreso do ano que declaras, quítao a man en Renta Web. Se despois vendiches esa criptomoeda, o custo da venda pode ser demasiado alto. Revisa en Renta Web o custo desas vendas.",
   "trade_republic.corporate_action_not_applied":
-    "Trade Republic: non se aplicaron {{count}} movemento(s) de acción corporativa (fusión, canxe, split) de {{isins}}.",
+    "Trade Republic: DeclaRenta non aplicou {{count}} movemento(s) de acción corporativa (fusión, canxe, split) de {{isins}}.",
   "trade_republic.corporate_action_not_applied.hint":
-    "O custo dos títulos antigos non pasa aos novos, así que unha venda posterior do novo valor pode saír sen lotes e con custo 0. Se foi unha fusión ou un canxe, engade o custo de adquisición orixinal en «Lotes manuais para posicións transferidas».",
+    "DeclaRenta non pasa o custo dos títulos antigos aos novos. Por iso unha venda posterior do novo valor pode saír sen lotes e con custo 0. Se foi unha fusión ou un canxe, engade o custo de adquisición orixinal en «Lotes manuais para posicións transferidas».",
   "trade_republic.delivery_not_applied":
     "Trade Republic: non se importaron {{count}} entrega(s) de títulos sen compravenda (accións gratuítas, traspasos) de {{isins}}.",
   "trade_republic.delivery_not_applied.hint":
     "As accións gratuítas dunha promoción son unha ganancia patrimonial da base xeral polo seu valor de mercado o día da entrega: declaraas á parte e engade ese valor como custo en «Lotes manuais para posicións transferidas». Se é un traspaso desde outro bróker, engade alí o custo de compra orixinal.",
+  "trade_republic.tax_unreadable":
+    "Trade Republic: {{count}} dividendo(s) non teñen unha retención (tax) lexible e calcúlanse sen retención: {{rows}}.",
+  "trade_republic.tax_unreadable.hint":
+    "Entre corchetes vai a cela da retención (tax). Non é un número. DeclaRenta suma o dividendo completo, pero non sabe canto che retiveron. Así non pagas de menos, pero perdes a dedución por esa retención (casilla 0588, ou 0597 se o valor é español). Se a fila anula un dividendo (un importe negativo), DeclaRenta non a resta e o dividendo anulado segue sumado. Toma a retención do informe fiscal de Trade Republic e engádea a man en Renta Web.",
+  "trade_republic.dividend_tax_refund":
+    "Trade Republic: {{count}} fila(s) de dividendo traen importe 0 e unha devolución de retención (tax positivo): {{rows}}.",
+  "trade_republic.dividend_tax_refund.hint":
+    "Unha fila con importe 0 non é un dividendo. A súa retención (tax) positiva é unha devolución. DeclaRenta réstaa da retención dun dividendo do mesmo valor de 7 días antes ou despois. Se non hai ningún, non a resta, e a retención dese dividendo conta enteira: así pagarías de menos. Toma a retención final do informe fiscal de Trade Republic e corrixe a man en Renta Web a casilla 0588, ou a 0597 se o valor é español.",
+  "trade_republic.trade_tax_positive":
+    "Trade Republic: {{count}} compra(s) ou venda(s) traen un imposto (tax) positivo, e DeclaRenta non o conta: {{rows}}.",
+  "trade_republic.trade_tax_positive.hint":
+    "Trade Republic escribe en negativo o imposto que pagas nunha compra ou nunha venda. Un imposto positivo é diñeiro que che devolven, así que non é un gasto da operación. DeclaRenta non o suma ao custo nin o resta da venda. Así non pagas de menos. Se é a devolución dun imposto que DeclaRenta restou noutra operación, esa operación ten un gasto de máis: corríxea a man en Renta Web.",
+  "trade_republic.cash_type_not_read":
+    "Trade Republic: {{count}} movemento(s) de diñeiro dun tipo que DeclaRenta non recoñece non se calculan: {{rows}}.",
+  "trade_republic.cash_type_not_read.hint":
+    "Cada fila nomea un valor e trae un importe, pero DeclaRenta non sabe que é. Pode ser un cupón, un dividendo, unha devolución de capital, un xuro ou unha comisión. Por iso non o suma. Un ingreso do ano que declaras tes que declaralo igualmente. Engádeo a man en Renta Web. Unha comisión que falta só pode facerche pagar máis.",
+  "scalable.income_row_not_read":
+    "Scalable Capital: {{count}} dividendo(s) ou xuro(s) non se poden ler e non se calculan: {{rows}}.",
+  "scalable.income_row_not_read.hint":
+    "Entre corchetes vai a cela que falla. Pode ser un estado que DeclaRenta non recoñece. DeclaRenta só calcula as filas executadas e non conta as canceladas, rexeitadas ou pendentes. Con outro estado non sabe se o cobro se fixo. Tamén pode ser a retención (tax) dunha fila que anula un dividendo. Entón DeclaRenta non resta esa fila, e o dividendo anulado segue sumado coa súa retención. Compara cada fila co extracto de Scalable Capital. Se é un cobro real do ano que declaras, engade o importe e a retención a man en Renta Web. Se anula un dividendo, quita en Renta Web ese dividendo e a súa retención.",
+  "scalable.dividend_tax_refund":
+    "Scalable Capital: {{count}} fila(s) de dividendo traen importe 0 e unha devolución de retención (tax positivo): {{rows}}.",
+  "scalable.dividend_tax_refund.hint":
+    "Unha fila con importe 0 non é un dividendo. Scalable Capital escribe a retención (tax) en negativo, así que unha positiva é unha devolución. DeclaRenta réstaa da retención dun dividendo do mesmo valor de 7 días antes ou despois. Se non hai ningún, non a resta, e a retención dese dividendo conta enteira: así pagarías de menos. Toma a retención final do informe fiscal de Scalable Capital e corrixe a man en Renta Web a casilla 0588, ou a 0597 se o valor é español. Se a fila é unha retención cobrada máis tarde, DeclaRenta non a conta: engádea a man.",
   "parser.trading212.unresolved_price_skipped":
     "Omitíronse {{skipped}} operacións sen prezo por acción e con importe noutra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":
@@ -1172,6 +1291,28 @@ const gl: TranslationKeys = {
   "parser.trade_quantity_unknown.hint": "DeclaRenta non suma nin resta accións por elas, así que as ganancias e perdas dese valor non son fiables e non se aplica a excepción de compra única da regra dos 2 meses. Comproba que o ficheiro exportado trae a cantidade e o prezo de cada operación e volve exportalo.",
   "parser.crypto_quantity_unknown": "{{broker}} non dá un número de unidades ou un prezo lexible para {{count}} operación(s) con criptomoedas: {{trades}}.",
   "parser.crypto_quantity_unknown.hint": "DeclaRenta non suma nin resta unidades por elas, así que as ganancias e perdas desa criptomoeda non son fiables. Se unha delas é unha recompra no ano seguinte a unha venda con perdas, esa perda pode ter que quedar pendente (art. 33.5.e LIRPF), e DeclaRenta non a bloquea porque non sabe cantas unidades recompraches. Comproba que o ficheiro exportado trae a cantidade e o prezo de cada operación e volve exportalo.",
+  "parser.trade_row_unreadable": "{{broker}}: {{count}} fila(s) de operación non se poden ler e non se calculan: {{rows}}.",
+  "parser.trade_row_unreadable.hint": "Entre corchetes vai a cela que falla. Falta, está baleira, non se pode ler ou trae un tipo de operación que DeclaRenta non recoñece. Ás veces non cadra coas outras celas da fila. DeclaRenta non suma nin resta accións, unidades nin diñeiro por esas filas. Por iso as ganancias e perdas deses valores non son fiables. Tampouco aplica a excepción de compra única da regra dos 2 meses a un valor que poida ser o dunha desas filas. Unha fila pode ser a recompra dunha criptomoeda no ano seguinte a unha venda con perdas. Entón esa perda pode ter que quedar pendente (art. 33.5.e LIRPF). DeclaRenta non a bloquea. Se unha fila é unha compra ou unha venda real, volve descargar o ficheiro orixinal do broker e súbeo sen editalo. Se a cela segue mal no orixinal, copia o dato do extracto do broker e volve subir o ficheiro.",
+  "revolut.bad_fx_rate": "DeclaRenta omitiu {{count}} ingreso(s) ou retirada(s) de efectivo do extracto de Revolut porque o seu tipo de cambio (FX Rate) non é válido: {{rows}}.",
+  "revolut.bad_fx_rate.hint": "Só os ingresos e as retiradas de efectivo usan esa columna. DeclaRenta calcula as compras, as vendas e os dividendos co tipo do BCE e non os omite. A causa adoita ser unha cela de tipo de cambio que non é un número, é negativa ou vale cero. Volve descargar o Trading Account Statement completo desde a app de Revolut e volve subilo.",
+  "revolut.holding_size_unknown": "O extracto de Revolut non permite saber cantas accións ou unidades tes ao final de {{count}} valor(es): {{tickers}}.",
+  "revolut.holding_size_unknown.hint": "Unha fila de cada un non se pode ler ou non di cantas accións ou unidades move (outro aviso nomea esa fila). DeclaRenta mostra só a parte que si se pode ler, que pode ser 0. Para os modelos 720 e 721, toma o número e o valor desas posicións do extracto de Revolut e engádeos a man.",
+  "parser.corporate_action_not_applied": "{{broker}}: DeclaRenta non aplicou {{count}} fila(s) de desdobramento, agrupación ou outra operación societaria: {{rows}}.",
+  "parser.corporate_action_not_applied.hint": "DeclaRenta non cambia por elas o número de accións nin o custo deses valores. Por iso as ganancias e perdas das súas vendas posteriores poden non ser correctas. Compróbaas co extracto do broker. Tampouco aplica a eses valores a excepción de compra única da regra dos 2 meses. Se unha desas filas che pagou diñeiro, como un vencemento ou un reembolso, esa venda non está no informe. Engádea a man en Renta Web.",
+  "parser.cash_row_undated": "{{broker}}: {{count}} movemento(s) de diñeiro non teñen unha data lexible e non se calculan: {{rows}}.",
+  "parser.cash_row_undated.hint": "Entre corchetes vai a cela da data. Sen data, DeclaRenta non sabe a que ano pertence o importe nin que tipo de cambio do BCE lle corresponde. Por iso non o suma e non inventa unha data. Pode ser un dividendo, unha retención, un xuro ou outro ingreso do ano que declaras. Entón volve descargar o ficheiro orixinal do broker e súbeo sen editalo. Se a data segue mal no orixinal, cópiaa do extracto do broker e volve subir o ficheiro. Tamén podes engadir o importe a man en Renta Web.",
+  "parser.cash_row_unidentified": "{{broker}}: {{count}} dividendo(s) ou retención(s) non din de que valor son e non se calculan: {{rows}}.",
+  "parser.cash_row_unidentified.hint": "A fila non trae nin o ticker nin o ISIN. Sen o valor, DeclaRenta non sabe de que país vén o dividendo nin con que retención vai. Por iso non o suma e non inventa o valor. Se é un ingreso do ano que declaras, volve descargar o ficheiro orixinal do broker e súbeo sen editalo. Se a fila segue sen o valor, copia o ticker ou o ISIN do extracto do broker e volve subir o ficheiro. Tamén podes engadir o importe a man en Renta Web.",
+  "parser.crypto_income_unidentified": "{{broker}}: {{count}} ingreso(s) en criptomoedas non din que criptomoeda recibiches e non se calculan: {{rows}}.",
+  "parser.crypto_income_unidentified.hint": "Entre corchetes vai a cela da criptomoeda. Sen ela, DeclaRenta non sabe que recibiches. Tampouco sabe que custo darlle cando a vendas. Por iso non suma ese ingreso e non inventa a criptomoeda. Se é un ingreso do ano que declaras, tes que declaralo igualmente. Volve descargar o ficheiro orixinal do exchange e súbeo sen editalo. Se a fila segue mal no orixinal, copia o dato que falta do historial do exchange e volve subir o ficheiro. Tamén podes engadir o ingreso a man en Renta Web.",
+  "parser.crypto_income_amount_unreadable": "{{broker}}: {{count}} ingreso(s) en criptomoedas non teñen un importe lexible e non se calculan: {{rows}}.",
+  "parser.crypto_income_amount_unreadable.hint": "Entre corchetes vai o importe tal como está no ficheiro. Sen un importe, DeclaRenta non sabe canto recibiches. Por iso non suma ese ingreso e non o conta como cero. Se é un ingreso do ano que declaras, tes que declaralo igualmente. Volve descargar o ficheiro orixinal do exchange e súbeo sen editalo. Se a fila segue mal no orixinal, copia o dato que falta do historial do exchange e volve subir o ficheiro. Tamén podes engadir o ingreso a man en Renta Web.",
+  "parser.cash_income_amount_unreadable": "{{broker}}: {{count}} dividendo(s), xuro(s) ou outro(s) ingreso(s) non teñen un importe lexible e non se calculan: {{rows}}.",
+  "parser.cash_income_amount_unreadable.hint": "Entre corchetes vai a cela do importe ou da súa divisa, tal como está no ficheiro. Sen ela, DeclaRenta non sabe canto cobraches. Por iso non suma ese ingreso nin a súa retención e non o conta como cero. Se é un ingreso do ano que declaras, tes que declaralo igualmente. Volve descargar o ficheiro orixinal do broker e súbeo sen editalo. Se a fila segue mal no orixinal, copia o dato que falta do extracto do broker e volve subir o ficheiro. Tamén podes engadir o importe e a retención a man en Renta Web.",
+  "parser.cash_row_not_booked": "{{broker}}: {{count}} movemento(s) de diñeiro dun tipo que DeclaRenta non recoñece non se calculan: {{rows}}.",
+  "parser.cash_row_not_booked.hint": "Entre corchetes vai o importe tal como está no ficheiro. DeclaRenta non sabe que é ese movemento. Por iso non o suma nin o resta. Pode ser un axuste do broker sobre unha operación, unha compensación ou unha comisión. Mira o extracto do broker. Se o broker che abonou ese diñeiro no ano que declaras, pode ser unha ganancia que tes que declarar. Se cho cobrou, pode ser un gasto dunha operación. Engade o que corresponda a man en Renta Web.",
+  "revolut.dividend_tax_correction": "O extracto de Revolut trae {{count}} corrección(s) da retención dun dividendo (DIVIDEND TAX (CORRECTION)) que DeclaRenta non suma: {{rows}}.",
+  "revolut.dividend_tax_correction.hint": "Con estas filas Revolut corrixe a retención dun dividendo xa cobrado. DeclaRenta importa os dividendos de Revolut polo seu importe neto. Non le a retención deste extracto, e tampouco a súa corrección. Toma o dividendo bruto e a retención final, xa corrixida, do informe fiscal anual de Revolut.",
 };
 
 export default gl;

@@ -1523,7 +1523,9 @@ describe("(k) every share parser keeps a trade row with no readable quantity as 
       for (const t of parsed.trades) {
         expect([t.quantity, t.quantityUnknown, t.tradeMoney, t.proceeds, t.cost, t.commission, t.taxes]).toEqual(["0", true, "0", "0", "0", "0", "0"]);
       }
-      expect(parsed.openPositions).toEqual([]);
+      // Revolut infers holdings from its trades: a purchase of unknown size
+      // leaves one of unknown size, flagged, never a readable count.
+      expect(parsed.openPositions.map((p) => [p.symbol, p.quantity, p.quantityUnknown])).toEqual(broker.name === "Revolut" ? [["XYZ", "0", true]] : []);
       const warning = parsed.parserMessages?.find((m) => m.id === "parser.trade_quantity_unknown");
       expect([warning?.severity, warning?.context?.broker, warning?.context?.count]).toEqual(["warning", broker.label, String(parsed.trades.length)]);
     });
@@ -1731,10 +1733,15 @@ describe("(l) other parsers: an earlier guard, a currency-only cell, a non-trade
       expectUnverified(await report("Flatex", flatex("", `Ausführung ORDER Kauf ${ISIN} 1`, "")));
     });
 
-    it("controls: an explicit zero Kurs, a custody transfer, a row with no buy or sale text: skipped", () => {
-      expect(flatex("", `Ausführung ORDER Kauf ${ISIN} 1`, "0,00").trades).toEqual([]);
-      expect(flatex("", `Lagerstellenwechsel in ${ISIN}`, "").trades).toEqual([]);
-      expect(flatex("", `Einbuchung ${ISIN}`, "").trades).toEqual([]);
+    it("an explicit zero Kurs and an unmatched custody transfer: kept as rows that book nothing (#467)", () => {
+      expect(flags(flatex("", `Ausführung ORDER Kauf ${ISIN} 1`, "0,00"))).toEqual([["BUY", "0", true]]);
+      expect(flags(flatex("", `Lagerstellenwechsel in ${ISIN}`, ""))).toEqual([["BUY", "0", true]]);
+    });
+
+    it("a row with no buy or sale text is kept as an unreadable row, never dropped (#468)", () => {
+      const parsed = flatex("", `Einbuchung ${ISIN}`, "");
+      expect(flags(parsed)).toEqual([["BUY", "0", true]]);
+      expect(parsed.trades[0]?.unreadableRow).toBe(`XYZ SA (${ISIN}) 20241202 [Buchungsinformationen: "Einbuchung ${ISIN}"]`);
     });
   });
 
@@ -1753,8 +1760,8 @@ describe("(l) other parsers: an earlier guard, a currency-only cell, a non-trade
       expectUnverified(await report("DEGIRO", degiro("", "", "-400.00")));
     });
 
-    it("controls: an explicit zero price (a rights assignment) and a row with no order id and no value: skipped", () => {
-      expect(degiro("", "0", "0").trades).toEqual([]);
+    it("an explicit zero price (a rights assignment) is kept as a row that books nothing (#467); a row with no order id and no value is skipped", () => {
+      expect(flags(degiro("", "0", "0"))).toEqual([["BUY", "0", true]]);
       expect(degiro("", "", "", "").trades).toEqual([]);
     });
   });
@@ -1765,10 +1772,15 @@ describe("(l) other parsers: an earlier guard, a currency-only cell, a non-trade
       corporate_actions: { detailed: [] },
     }));
 
-    it.each(["transfer", "deposit"])("operation %j with no quantity: no trade, no warning", (operation) => {
+    it.each(["transfer", "deposit"])("operation %j with no quantity: kept as an unreadable row, never a buy (#468)", (operation) => {
       const parsed = f24(operation, "");
-      expect(parsed.trades).toEqual([]);
-      expect(parsed.parserMessages?.some((m) => m.id === "parser.trade_quantity_unknown") ?? false).toBe(false);
+      expect(flags(parsed)).toEqual([["BUY", "0", true]]);
+      expect(parsed.trades[0]?.unreadableRow).toBe(`XYZ (${ISIN}) 20241202 [operation: "${operation}"]`);
+      expect(parsed.parserMessages?.map((m) => m.id)).toEqual(["parser.trade_row_unreadable"]);
+    });
+
+    it.each(["transfer", "deposit"])("operation %j with a written 0: moves no shares, skipped", (operation) => {
+      expect(f24(operation, "0").trades).toEqual([]);
     });
 
     it("control: a sell with no quantity is kept as a SELL", () => {
@@ -1845,12 +1857,16 @@ describe("(m) a buy or sale with a readable quantity but no readable price is ev
       expect(flags(flatex("-5", "", `Ausführung ORDER Verkauf ${ISIN} 1`))).toEqual([["SELL", "0", true]]);
     });
 
-    it("controls: a written price is a second purchase; a written zero Kurs, a custody transfer and a row with no Kauf/Verkauf text are skipped", () => {
+    it("controls: a written price is a second purchase; a written zero Kurs and an unmatched custody transfer are kept, not applied (#467)", () => {
       twoPurchases(report("Flatex", flatex("5", "9,00")));
-      expect(flatex("5", "0,00").trades).toEqual([]);
-      expect(flatex("5", "", `Lagerstellenwechsel in ${ISIN}`).trades).toEqual([]);
-      expect(flatex("5", "", `Einbuchung ${ISIN}`).trades).toEqual([]);
-      expectApplied(report("Flatex", flatex("5", "0,00")));
+      expect(flags(flatex("5", "0,00"))).toEqual([["BUY", "0", true]]);
+      expect(flags(flatex("5", "", `Lagerstellenwechsel in ${ISIN}`))).toEqual([["BUY", "0", true]]);
+      expectUnverified(report("Flatex", flatex("5", "0,00")));
+    });
+
+    it("a row with no Kauf/Verkauf text is kept as an unreadable row (#468): not applied", () => {
+      expect(flags(flatex("5", "", `Einbuchung ${ISIN}`))).toEqual([["BUY", "0", true]]);
+      expectUnverified(report("Flatex", flatex("5", "", `Einbuchung ${ISIN}`)));
     });
   });
 
@@ -1885,13 +1901,18 @@ describe("(m) a buy or sale with a readable quantity but no readable price is ev
       }
     });
 
-    it("controls: a written price is a second purchase; a written zero price (rights) and a row with no order id and no value are skipped", () => {
+    it("controls: a written price is a second purchase; a written zero price (rights) and a row with no order id and no value are kept, not applied", () => {
       // The readable row is booked as written: 5 shares at 9,00 EUR.
       expect(degiro("5", "9,00", "-45,00").trades.map((t) => [t.quantity, t.tradePrice, t.currency, t.quantityUnknown ?? false])).toEqual([["5", "9.00", "EUR", false]]);
       twoPurchases(report("DEGIRO", degiro("5", "9,00", "-45,00")));
-      expect(degiro("5", "0", "0").trades).toEqual([]);
-      expect(degiro("5", "", "", "").trades).toEqual([]);
-      expectApplied(report("DEGIRO", degiro("5", "0", "0")));
+      // A written zero price (rights) is kept as a row that books nothing (#467).
+      expect(flags(degiro("5", "0", "0"))).toEqual([["BUY", "0", true]]);
+      // A readable quantity with a blank price, no order id and no value is
+      // still a purchase of unknown price: dropped, it hid a second purchase
+      // in the window, so the exception could be applied wrongly (#467).
+      expect(flags(degiro("5", "", "", ""))).toEqual([["BUY", "0", true]]);
+      expectUnverified(report("DEGIRO", degiro("5", "0", "0")));
+      expectUnverified(report("DEGIRO", degiro("5", "", "", "")));
     });
   });
 

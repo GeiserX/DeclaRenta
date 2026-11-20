@@ -29,6 +29,15 @@ import {
   quantityUnknownTrade,
   quantityUnreadable,
   tradeQuantityUnknownMessages,
+  unreadableTrade,
+  unreadableCell,
+  corporateActionTrade,
+  markUndatedTrades,
+  dropUndatedCash,
+  cashIncomeRowText,
+  cashIncomeAmountUnreadableMessages,
+  cashRowsUnidentifiedMessages,
+  cashRowsNotBookedMessages,
 } from "./csv-utils.js";
 import { formatDateDmy } from "../engine/dates.js";
 import { plainOrExponent } from "../engine/amount-range.js";
@@ -49,8 +58,21 @@ const DESCRIPTION_HEADERS = ["descripción", "description", "omschrijving", "bes
 /** Known header keywords for the Account CSV value-date column */
 const VALUE_DATE_HEADERS = ["fecha valor", "value date", "valutadatum", "wertdatum"];
 
-/** Dividend description patterns (Account CSV) */
-const DIVIDEND_PATTERNS = [/dividendo/i, /dividend/i];
+/**
+ * Dividend description patterns (Account CSV). "Fondsausschüttung" is how the
+ * German export names a fund (ETF) distribution: dividend income (casilla
+ * 0029), dropped with no word before (#467).
+ */
+const DIVIDEND_PATTERNS = [/dividendo/i, /dividend/i, /fondsaussch[üu]ttung/i];
+
+/**
+ * Capital return description patterns (Account CSV), EN, FR, DE, NL and ES.
+ * It lowers the cost of the shares, and any part above that cost is income
+ * (art. 25.1.e LIRPF): DeclaRenta cannot book either, so the row is named,
+ * never dropped with no word (#467). Anchored, so a trade leg whose product
+ * name holds the words is not caught.
+ */
+const CAPITAL_RETURN_PATTERN = /^(?:capital return|return of capital|remboursement de capital|kapitalr[üu]ckzahlung|kapitaalsuitkering|devoluci[oó]n de capital)/i;
 
 /** Withholding tax description patterns (Account CSV) */
 const WITHHOLDING_PATTERNS = [
@@ -65,6 +87,14 @@ const WITHHOLDING_PATTERNS = [
   /ritenuta sul dividendo/i,
   /imposto sobre dividendo/i,
 ];
+
+/**
+ * Interest description patterns (Account CSV): flatex pays interest on the
+ * cash balance ("flatex Interest", "Interés", "Zinsen", "Rente"). A positive
+ * row is interest received (casilla 0027); a negative one (interest charged on
+ * a negative balance) is left out, which can only raise the tax.
+ */
+const INTEREST_PATTERNS = [/interest/i, /inter[eé]s/i, /zinsen/i, /\brente\b/i, /int[eé]r[eê]ts?/i];
 
 /**
  * Financial-transaction-tax description patterns (Account CSV): Spanish ITF,
@@ -107,6 +137,18 @@ interface TransactionColumns {
   total: number;
   totalCurrency: number;
   orderId: number;
+}
+
+/**
+ * The asset category of a DEGIRO product name with the shape of an option
+ * ("AAPL C200.00 20DEC24", "ASML P600 17JAN25") or a future ("FDAX MAR25",
+ * "FESX DEC24"), or undefined. Used only for a row with no ISIN.
+ */
+function derivativeCategory(product: string): "OPT" | "FUT" | undefined {
+  const month = "(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)";
+  if (new RegExp(`\\s[CP]\\d+(?:[.,]\\d+)?\\s+\\d{1,2}${month}\\d{2,4}$`, "i").test(product.trim())) return "OPT";
+  if (new RegExp(`^[A-Z0-9]{2,6}\\s+${month}\\d{2}$`).test(product.trim())) return "FUT";
+  return undefined;
 }
 
 /**
@@ -263,8 +305,10 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     const autoFx = cols.autoFxCosts >= 0 ? toFiniteDecimal(fields[cols.autoFxCosts] ?? "0") : toFiniteDecimal("0");
     const commDec = txCosts.plus(autoFx);
     const commission = commDec.isZero() ? "0" : plainOrExponent(commDec, 2);
-    // When header already embeds "EUR" (costsCurrency = -1), default to EUR
-    const commCurrency = cols.costsCurrency >= 0 ? (fields[cols.costsCurrency] ?? "EUR").trim() : "EUR";
+    // When header already embeds "EUR" (costsCurrency = -1), default to EUR.
+    // DEGIRO charges its costs in EUR, so an empty costs-currency cell is EUR
+    // too, never the price currency: 2 EUR booked as 2 GBP lowered the gain (#467).
+    const commCurrency = cols.costsCurrency >= 0 ? (fields[cols.costsCurrency] ?? "").trim() || "EUR" : "EUR";
 
     // Use local value (original currency) if available, otherwise EUR value
     const localValue = cols.localValue >= 0 ? parseNumber(fields[cols.localValue] ?? "0") : "";
@@ -274,6 +318,26 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     // FX rate from the CSV (19-col format), defaults to "1" for same-currency trades
     const rawFx = cols.fxRate >= 0 ? (fields[cols.fxRate] ?? "").trim() : "";
     const fxRate = rawFx ? parseNumber(rawFx) : "1";
+
+    // A trade-like row with no ISIN is still a purchase or a sale: kept as a
+    // trade that books nothing and named, never dropped (#467). Trade-like is
+    // a readable quantity or price, or an order id (a cash line, such as a
+    // deposit, has a value but none of them). Its side comes from the value or
+    // the quantity sign.
+    const noIsinTradeLike = !toFiniteDecimal(quantity, "0", false).isZero() ||
+      !toFiniteDecimal(price, "0", false).isZero() || orderId !== "";
+    if (!isin && noIsinTradeLike) {
+      const sell = toFiniteDecimal(value, "0", false).greaterThan(0) || toFiniteDecimal(quantity, "0", false).lessThan(0);
+      // An option or a future ("AAPL C200.00 20DEC24", "FDAX MAR25") is no
+      // share: kept as a derivative, so it does not stand for every share in
+      // the one-purchase evidence (#453), which derivatives never enter.
+      trades.push(unreadableTrade({
+        tradeID: orderId, symbol: product, description: product, isin: "", assetCategory: derivativeCategory(product) ?? "STK",
+        currency: normalizeFractionalCurrency(currency || "EUR").currency, tradeDate, tradeTime,
+        buySell: sell ? "SELL" : "BUY", exchange,
+      }, unreadableCell(headers[cols.isin] ?? "ISIN", isin)));
+      continue;
+    }
 
     // An empty or unreadable quantity is no "0": a buy or sale row of an ISIN
     // is kept as a trade of unknown quantity (below, #453).
@@ -289,16 +353,31 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       continue;
     }
 
-    // Skip zero-price rows (rights assignments, non-tradeable conversions). A
-    // row whose price is empty or unreadable is still a buy or sale when it
-    // has an order id or a value (#453); a written zero price is always skipped,
-    // and so is a written zero quantity with no readable price ("0,00" reads
-    // "0.00", past the check above).
+    // A row whose price is empty or unreadable is still a buy or sale when it
+    // has a readable quantity, an order id or a value (#453, #467). A written
+    // zero quantity with no readable price is skipped ("0,00" reads "0.00",
+    // past the check above), and so is a row with neither a readable quantity
+    // nor a readable price, unless it has an order id or a value.
     const tradeEvidence = orderId !== "" || !toFiniteDecimal(value).isZero();
     const priceUnreadable = quantityUnreadable(fields[cols.price]);
     if (!quantityUnknown && toFiniteDecimal(quantity).isZero() && priceUnreadable) continue;
-    const priceUnknown = priceUnreadable && tradeEvidence;
-    if ((price === "0" || price === "0.0000") && !priceUnknown) continue;
+    const priceUnknown = priceUnreadable && (tradeEvidence || !quantityUnknown);
+    // A zero-price row (a rights assignment, a non-tradeable conversion, a
+    // transfer), whatever the spelling of the zero ("0", "0.00", "0,0000"),
+    // has no price to book but moves shares of its ISIN: kept as a row that
+    // books nothing and named, never skipped with no word (#467). Dropped, it
+    // would hide a holding at the anti-churning window start (#453). A row
+    // with neither a readable quantity nor a readable price, and no order id
+    // or value, is no trade.
+    if (toFiniteDecimal(price, "0", false).isZero() && !priceUnknown) {
+      if (!priceUnreadable && (quantityUnknown || !toFiniteDecimal(quantity, "0", false).isZero())) {
+        trades.push(corporateActionTrade({
+          tradeID: orderId, symbol: product, description: product, isin, assetCategory: "STK",
+          currency: normalizeFractionalCurrency(currency || "EUR").currency, tradeDate, tradeTime, exchange,
+        }, `${headers[cols.price] ?? "Price"} ${(fields[cols.price] ?? "").trim() || "—"}`, fields[cols.quantity] ?? ""));
+      }
+      continue;
+    }
 
     // Determine buy/sell: negative local value = you paid = buy; or negative
     // quantity = sell. toFiniteDecimal keeps the comparison finite-safe so a
@@ -313,11 +392,11 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     // and the FX rate by 100 (issue #282). The "Valor local" column is by
     // definition in the instrument's quote currency, so it divides with it;
     // a 16-col fallback value (already the EUR column) is left untouched.
-    let tradeCurrency = currency || "EUR";
+    let tradeCurrency = currency;
     let tradePrice = price;
     let tradeValue = value;
     let tradeFxRate = fxRate;
-    const fractional = normalizeFractionalCurrency(tradeCurrency);
+    const fractional = normalizeFractionalCurrency(currency || "EUR");
     if (quantityUnknown || priceUnknown) {
       // With no quantity or no price FIFO cannot book its shares: it moves no
       // share or money. Its direction comes from the value or the quantity sign.
@@ -328,20 +407,43 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       }));
       continue;
     }
+    // A trade with no price currency is not in euros: a yen buy booked as
+    // euros made a loss of thousands with no word. It is kept as a row that
+    // books nothing and named by that cell (#467).
+    if (!currency) {
+      trades.push(unreadableTrade({
+        tradeID: orderId, symbol: product, description: product, isin, assetCategory: "STK", currency: "EUR",
+        tradeDate, tradeTime, buySell: isSell ? "SELL" : "BUY", exchange,
+      }, unreadableCell((headers[cols.priceCurrency] ?? "").trim() || `${(headers[cols.price] ?? "Precio").trim()}, divisa`, fields[cols.priceCurrency])));
+      continue;
+    }
+    // A negative price ("-120.00", "(120,00)") is no price: booked, a sale
+    // had negative proceeds (a loss of 2,028 € on a gain of 180 €) and a buy a
+    // negative cost, with no word. Kept as a row that books nothing and named
+    // by that cell, as in Flatex (#467).
+    if (toFiniteDecimal(price, "0", false).isNegative()) {
+      trades.push(unreadableTrade({
+        tradeID: orderId, symbol: product, description: product, isin, assetCategory: "STK", currency: fractional.currency,
+        tradeDate, tradeTime, buySell: isSell ? "SELL" : "BUY", exchange,
+      }, unreadableCell((headers[cols.price] ?? "").trim() || "Precio", fields[cols.price])));
+      continue;
+    }
     if (!fractional.divisor.equals(1)) {
+      // A Valor local or a Tipo de cambio that cannot be read is no number to
+      // divide: it reads "0" (FIFO values the trade at price × quantity), so
+      // the file is never refused with a raw DecimalError (#467).
       tradeCurrency = fractional.currency;
-      tradePrice = new Decimal(price).div(fractional.divisor).toString();
-      if (localValue) tradeValue = new Decimal(localValue).div(fractional.divisor).toString();
+      tradePrice = toFiniteDecimal(price, "0", false).div(fractional.divisor).toString();
+      if (localValue) tradeValue = toFiniteDecimal(localValue, "0", false).div(fractional.divisor).toString();
       if (tradeFxRate !== "0" && tradeFxRate !== "1") {
-        tradeFxRate = new Decimal(tradeFxRate).div(fractional.divisor).toString();
+        tradeFxRate = toFiniteDecimal(tradeFxRate, "0", false).div(fractional.divisor).toString();
       }
     }
 
     // Commission currency may itself be a minor unit in older layouts with a
-    // per-costs currency column (fallback = the raw quote currency, so an
-    // unlabeled pence commission is divided too) — normalize it the same way.
+    // per-costs currency column — normalize it the same way.
     let commissionValue = commission;
-    let commissionCcy = commCurrency || currency || "EUR";
+    let commissionCcy = commCurrency;
     const commFractional = normalizeFractionalCurrency(commissionCcy);
     if (!commFractional.divisor.equals(1)) {
       commissionCcy = commFractional.currency;
@@ -424,6 +526,7 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       context: { date, oldProduct, oldIsin, newProduct, newIsin },
     });
   }
+  markUndatedTrades(trades, headers[cols.date] ?? "Date");
   parserMessages.push(...tradeQuantityUnknownMessages("DEGIRO", trades));
 
   return {
@@ -513,6 +616,21 @@ function parseAccountCsv(lines: string[], delimiter: string): Statement {
   // Financial transaction tax paid, summed per ISIN + currency (Art. 35.1.b LIRPF:
   // a tax inherent to the purchase, part of its acquisition cost).
   const transactionTax = new Map<string, { product: string; isin: string; currency: string; total: Decimal }>();
+  // Dividend, withholding and interest rows whose amount or currency cannot
+  // be read (#467). `key` pairs a dividend with its withholdings.
+  const unreadableIncome: { key: string; dividend: boolean; type: string; security: string; currency: string; date: string; cells: string[] }[] = [];
+  // In the real layout the amount column has no header: it sits under the
+  // labelled currency column ("Variación", "Change").
+  const amountName = (headers[cols.amount] ?? "").trim() || (headers[cols.currency] ?? "").trim() || "Importe";
+  const currencyName = `${amountName}, divisa`;
+  const incomeKey = (isin: string, product: string, date: string): string => `${isin}|${product}|${date}`;
+  // Dividend and withholding rows with no ISIN (#467): `key` pairs a
+  // withholding with its dividend by product and date.
+  const unidentified: { key: string; dividend: boolean; type: string; product: string; amount: string; date: string; withheld: string[] }[] = [];
+  // Rows with no Descripción that name a security and move money (#467).
+  const undescribed: string[] = [];
+  // Capital returns that name a security and move money (#467).
+  const notBooked: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -526,17 +644,38 @@ function parseAccountCsv(lines: string[], delimiter: string): Statement {
     const isin = (fields[cols.isin] ?? "").trim();
     const product = (fields[cols.product] ?? "").trim();
     let amount = parseNumber(fields[cols.amount] ?? "0");
-    let currency = cols.currency >= 0 ? (fields[cols.currency] ?? "EUR").trim() : "EUR";
+    const currencyCell = cols.currency >= 0 ? (fields[cols.currency] ?? "").trim() : "EUR";
+    let currency = currencyCell;
     const fx = cols.fx >= 0 ? parseNumber(fields[cols.fx] ?? "1") : "1";
 
     // Minor-unit amounts (GBX pence, etc.) → ECB major unit, same as trades.
+    // An amount that cannot be read stays as it is: it is named below, never
+    // divided (a raw DecimalError refused the whole file, #467).
     const fractional = normalizeFractionalCurrency(currency || "EUR");
     if (!fractional.divisor.equals(1)) {
       currency = fractional.currency;
-      if (amount !== "0") amount = new Decimal(amount).div(fractional.divisor).toString();
+      if (amount !== "0" && !quantityUnreadable(fields[cols.amount])) {
+        amount = toFiniteDecimal(amount, "0", false).div(fractional.divisor).toString();
+      }
     }
 
-    if (!description) continue;
+    // A row with no Descripción cannot be typed. One that names a security
+    // and moves money may be a dividend: it is named, never dropped with no
+    // word (#467). A written zero, an empty amount or no security stays skipped.
+    if (!description) {
+      const security = isin ? (product ? `${product} (${isin})` : isin) : product;
+      const amountCell = (fields[cols.amount] ?? "").trim();
+      const amountUnreadable = quantityUnreadable(amountCell);
+      if (security && amountCell && (amountUnreadable || !toFiniteDecimal(amount, "0", false).isZero())) {
+        const cells = [
+          unreadableCell((headers[cols.description] ?? "").trim() || "Descripción", fields[cols.description]),
+          ...(amountUnreadable ? [unreadableCell(amountName, fields[cols.amount])] : []),
+        ];
+        const head = [security, amountUnreadable ? "" : amount, currency, tradeDate || "—"].filter((part) => part !== "").join(" ");
+        undescribed.push(`${head} [${cells.join(", ")}]`);
+      }
+      continue;
+    }
 
     // Determine transaction type from description
     let type: CashTransaction["type"] | null = null;
@@ -545,17 +684,67 @@ function parseAccountCsv(lines: string[], delimiter: string): Statement {
       type = "Withholding Tax";
     } else if (matchesAny(description, DIVIDEND_PATTERNS)) {
       type = "Dividends";
+    } else if (matchesAny(description, TRANSACTION_TAX_PATTERNS)) {
+      const ccy = currency || "EUR";
+      const key = `${isin || product}|${ccy}`;
+      const entry = transactionTax.get(key) ?? { product, isin, currency: ccy, total: new Decimal(0) };
+      entry.total = entry.total.plus(toFiniteDecimal(amount));
+      transactionTax.set(key, entry);
+      continue;
+    } else if (matchesAny(description, INTEREST_PATTERNS)) {
+      // Interest received is booked; interest charged is left out (#467).
+      if (quantityUnreadable(fields[cols.amount]) || toFiniteDecimal(amount, "0", false).isPositive()) {
+        type = "Broker Interest Received";
+      }
     }
 
     if (!type) {
-      if (matchesAny(description, TRANSACTION_TAX_PATTERNS)) {
-        const ccy = currency || "EUR";
-        const key = `${isin || product}|${ccy}`;
-        const entry = transactionTax.get(key) ?? { product, isin, currency: ccy, total: new Decimal(0) };
-        entry.total = entry.total.plus(toFiniteDecimal(amount));
-        transactionTax.set(key, entry);
+      // A capital return is named, not booked: DeclaRenta does not lower the
+      // cost of the shares, and the part above the cost is income (#467). A
+      // written zero or no security stays skipped.
+      const security = isin ? (product ? `${product} (${isin})` : isin) : product;
+      const amountCell = (fields[cols.amount] ?? "").trim();
+      if (CAPITAL_RETURN_PATTERN.test(description) && security
+        && (quantityUnreadable(amountCell) || !toFiniteDecimal(amount, "0", false).isZero())) {
+        notBooked.push(cashIncomeRowText(description, security, currencyCell, tradeDate, [unreadableCell(amountName, fields[cols.amount])]));
       }
-      continue; // Skip non-dividend/withholding rows
+      continue; // Skip deposits, cash sweeps, fees and other rows
+    }
+
+    // An amount that cannot be read ("", "€", "abc") is no zero, and a row
+    // with no currency is not in euros: the row and the withholdings of its
+    // dividend are not booked, and the row is named (#467). A written 0 stays
+    // an explicit zero.
+    const amountUnreadable = quantityUnreadable(fields[cols.amount]);
+    if (amountUnreadable || !currencyCell) {
+      const security = isin ? (product ? `${product} (${isin})` : isin) : product;
+      unreadableIncome.push({
+        key: incomeKey(isin, product, tradeDate),
+        dividend: type === "Dividends",
+        type: description,
+        security: security || (type === "Broker Interest Received" ? "" : "—"),
+        currency: currencyCell,
+        date: tradeDate,
+        cells: [
+          ...(amountUnreadable ? [unreadableCell(amountName, fields[cols.amount])] : []),
+          ...(currencyCell ? [] : [unreadableCell(currencyName, fields[cols.currency])]),
+        ],
+      });
+      continue;
+    }
+
+    // A dividend or withholding with no ISIN names no security: its country,
+    // and so whether its withholding is Spanish or foreign, would be a guess
+    // (a Spanish 19 € read as a foreign 15 € deduction). It is named, not
+    // booked, as in Scalable (#467). A written zero stays an explicit zero.
+    if (!isin && type !== "Broker Interest Received" && !toFiniteDecimal(amount, "0", false).isZero()) {
+      unidentified.push({
+        key: incomeKey("", product, tradeDate),
+        dividend: type === "Dividends",
+        type: description, product, amount: `${amount} ${currency}`, date: tradeDate,
+        withheld: [],
+      });
+      continue;
     }
 
     cashTransactions.push({
@@ -573,7 +762,40 @@ function parseAccountCsv(lines: string[], delimiter: string): Statement {
     });
   }
 
-  const parserMessages: TaxMessage[] = [];
+  // The withholdings of a dividend that is not booked are not booked either:
+  // a deduction for income the report does not count. They are named with it.
+  const unreadableRows = unreadableIncome.map((row) => {
+    if (!row.dividend) return cashIncomeRowText(row.type, row.security, row.currency, row.date, row.cells);
+    const withheld = cashTransactions.filter((c) => c.type === "Withholding Tax" && incomeKey(c.isin, c.symbol, c.dateTime) === row.key);
+    for (const w of withheld) cashTransactions.splice(cashTransactions.indexOf(w), 1);
+    const tax = withheld.map((w) => `${w.description} ${w.amount} ${w.currency}`).join(", ");
+    return cashIncomeRowText(row.type, row.security, row.currency, row.date, row.cells, tax);
+  });
+
+  // A withholding with no ISIN is shown with the dividend of its product and
+  // date, when that dividend has no ISIN either.
+  const unidentifiedRows = unidentified.filter((row) => {
+    if (row.dividend) return true;
+    const dividend = unidentified.find((d) => d.dividend && d.key === row.key);
+    dividend?.withheld.push(`${row.type} ${row.amount}`);
+    return !dividend;
+  }).map((row) => `${row.type} ${row.product || "—"} ${row.amount}${row.withheld.length > 0 ? ` (${row.withheld.join(", ")})` : ""} ${row.date || "—"}`);
+
+  const parserMessages: TaxMessage[] = dropUndatedCash("DEGIRO", cashTransactions, headers[cols.date] ?? "Fecha");
+  parserMessages.push(...cashIncomeAmountUnreadableMessages("DEGIRO", unreadableRows));
+  parserMessages.push(...cashRowsUnidentifiedMessages("DEGIRO", unidentifiedRows));
+  parserMessages.push(...cashRowsNotBookedMessages("DEGIRO", notBooked));
+  if (undescribed.length > 0) {
+    const count = String(undescribed.length);
+    const rows = undescribed.join("; ");
+    parserMessages.push({
+      id: "degiro.cash_row_undescribed",
+      severity: "warning",
+      message: `DEGIRO: ${count} fila(s) del CSV de Cuenta no dicen qué movimiento son y no se calculan: ${rows}.`,
+      hint: "Entre corchetes va la celda de la descripción, tal como está en el archivo. Sin ella, DeclaRenta no sabe si la fila es un dividendo, una retención, un interés u otro movimiento. Por eso no la suma y no se inventa el tipo. Si es un ingreso del año que declaras, tienes que declararlo igualmente. Vuelve a descargar el CSV de Cuenta original de DEGIRO y súbelo sin editarlo. Si la fila sigue sin descripción, copia el dato del extracto de DEGIRO y vuelve a subirlo. También puedes añadir el importe a mano en Renta Web.",
+      context: { count, rows },
+    });
+  }
   for (const { product, isin, currency, total } of transactionTax.values()) {
     const paid = total.negated();
     if (!paid.greaterThan(0)) continue;

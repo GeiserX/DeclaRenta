@@ -130,13 +130,14 @@ describe("coinbaseParser.parse - edge cases", () => {
     expect(result.trades).toHaveLength(0);
   });
 
-  it("should skip rows with missing asset or timestamp", () => {
+  it("keeps a buy with no asset and no timestamp as a row that books nothing, and names it (#467)", () => {
     const input = [
       "Timestamp,Transaction Type,Asset,Quantity Transacted,Spot Price Currency,Spot Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes",
       ",Buy,,1,EUR,40000,40000,40000,0,",
     ].join("\n");
     const result = coinbaseParser.parse(input);
-    expect(result.trades).toHaveLength(0);
+    expect(result.trades.map((t) => [t.symbol, t.quantity, t.quantityUnknown, t.undatedRow])).toEqual([["", "0", true, true]]);
+    expect(result.parserMessages?.find((m) => m.id === "parser.trade_row_unreadable")?.context?.rows).toBe('Buy 1 [Asset: ""]');
   });
 
   it("should handle missing columns gracefully", () => {

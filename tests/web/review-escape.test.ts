@@ -124,12 +124,16 @@ describe("review step escapes broker-supplied currency and trade dates", () => {
     expect(review.querySelector(INJECTED)).toBeNull();
   });
 
-  it("markup in currency or tradeDate is shown as text, never as elements", async () => {
+  it("markup in currency is shown as text; markup after a readable tradeDate never reaches the page", async () => {
+    // The markup follows a ";", as in IBKR's "20250315;100000": the day is
+    // readable, so the row is booked, and the page shows only that day. A date
+    // with markup glued to the day is no readable day: the row is kept or
+    // named instead, never shown as a date (#467).
     const review = await uploadAndReview(
       flexXml(
         trade("1", {
           currency: `USD&lt;form id=&quot;f&quot;&gt;&lt;input&gt;&lt;/form&gt;`,
-          tradeDate: `20250110${TAG("date")}`,
+          tradeDate: `20250110;${TAG("date")}`,
           side: "BUY",
         }),
       ),
@@ -137,7 +141,8 @@ describe("review step escapes broker-supplied currency and trade dates", () => {
     expect(review.querySelector(INJECTED)).toBeNull();
     expect(review.querySelector("input")).toBeNull();
     expect(review.textContent).toContain('USD<form id="f"');
-    expect(review.textContent).toContain('20250110<b id="date">x</b>');
+    expect(review.textContent).toContain("10/01/2025 — 10/01/2025");
+    expect(review.textContent).not.toContain('<b id="date">');
   });
 });
 
@@ -159,12 +164,12 @@ function expectNoInjectedResults(): { casillas: HTMLElement; annex: HTMLElement 
 }
 
 describe("results tables escape broker-supplied dates", () => {
-  it("markup in buy/sell dates and dividend pay date is shown as text", async () => {
+  it("markup after readable buy/sell and dividend pay dates never reaches the tables; the day is shown", async () => {
     await uploadAndReview(
       flexXml(
-        trade("1", { currency: "EUR", tradeDate: `20250110${TAG("buy")}`, side: "BUY" }) +
-          trade("2", { currency: "EUR", tradeDate: `20250310${TAG("sell")}`, side: "SELL" }),
-        dividend(`20250315${TAG("pay")}`),
+        trade("1", { currency: "EUR", tradeDate: `20250110;${TAG("buy")}`, side: "BUY" }) +
+          trade("2", { currency: "EUR", tradeDate: `20250310;${TAG("sell")}`, side: "SELL" }),
+        dividend(`20250315;${TAG("pay")}`),
       ),
     );
     await continueToResults();
@@ -175,17 +180,19 @@ describe("results tables escape broker-supplied dates", () => {
     expect(divs.querySelector("tbody tr")).not.toBeNull();
     expect(ops.querySelector(INJECTED)).toBeNull();
     expect(divs.querySelector(INJECTED)).toBeNull();
-    expect(ops.textContent).toContain('20250110<b id="buy">x</b>');
-    expect(ops.textContent).toContain('20250310<b id="sell">x</b>');
-    expect(divs.textContent).toContain('20250315<b id="pay">x</b>');
+    expect(ops.textContent).toContain("10/01/2025");
+    expect(ops.textContent).toContain("10/03/2025");
+    expect(divs.textContent).toContain("15/03/2025");
+    for (const id of ["buy", "sell", "pay"]) expect(document.body.textContent).not.toContain(`<b id="${id}">`);
     expectNoInjectedResults();
   });
 
   it("a short markup date, which the date formatters return unchanged, is shown as text", async () => {
     // Fewer than 8 characters: the casilla and annex formatters skip their
     // slicing and hand the raw string back, so only esc() stands in the way.
-    // The IBKR parser now refuses a date that is not yyyyMMdd, so the raw
-    // string comes in through Freedom24, whose parser passes it along.
+    // The IBKR parser refuses a date that is not yyyyMMdd. Freedom24 keeps the
+    // row as an unreadable trade that books nothing (#467), so the raw string
+    // reaches the page only in the warning that names the row, as text.
     const freedom24Trade = (operation: string, date: string, p: number) => ({
       operation, ticker: "ACME.EU", isin: "XX0000000001", date, q: 10, p, curr_c: "EUR",
       amount: String(10 * p), commission: "0",
@@ -201,7 +208,7 @@ describe("results tables escape broker-supplied dates", () => {
 
     const { casillas, annex } = expectNoInjectedResults();
     expect(document.querySelector("#wizard-step-3 style")).toBeNull();
-    expect(casillas.textContent).toContain("<style>");
-    expect(annex.textContent).toContain("<style>");
+    expect(casillas.textContent).toContain('ACME (XX0000000001) [date: "<style>"]');
+    expect(annex.textContent).not.toContain("<style>");
   });
 });

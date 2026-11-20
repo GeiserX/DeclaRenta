@@ -30,6 +30,14 @@ import {
   quantityUnknownTrade,
   quantityUnreadable,
   tradeQuantityUnknownMessages,
+  unreadableTrade,
+  unreadableCell,
+  corporateActionTrade,
+  markUndatedTrades,
+  isReadableDay,
+  dropUndatedCash,
+  cashIncomeRowText,
+  cashIncomeAmountUnreadableMessages,
 } from "./csv-utils.js";
 import { daysBetween } from "../engine/dates.js";
 import { plainOrExponent } from "../engine/amount-range.js";
@@ -55,7 +63,13 @@ function extractIsin(text: string): string {
  * per-trade commission (gross vs. net cash discrepancy).
  */
 const ORDER_RE = /\bausf.hrung\b.*\border\b/i;
-const ORDER_KEY_RE = /(\d{6,})\s*$/;
+// The order number is a word of its own: with no word boundary, the last
+// digits of an ISIN (US0378331005) were read as one when the row had no
+// order number, and two orders pooled their legs and fees (#467).
+const ORDER_KEY_RE = /\b(\d{6,})\s*$/;
+
+/** `Trade.notes` prefix that carries a Depot row's order number to the merge (`reconcileOrderLegs`). */
+const FLATEX_ORDER_NOTE = "flatex-order:";
 
 /** Extract the trailing broker order id from an "Ausführung ORDER ..." line. */
 function extractOrderKey(text: string): string {
@@ -66,6 +80,8 @@ function extractOrderKey(text: string): string {
 /** Buy/sell keywords in the Buchungsinformationen column. */
 const BUY_RE = /\bkauf\b/i;
 const SELL_RE = /\bverkauf\b/i;
+/** A reversal ("Storno Ausführung ORDER Verkauf ..."): no purchase or sale. */
+const STORNO_RE = /\bstorno\b/i;
 
 /** Dividend cash patterns (Kontoumsätze). */
 const DIVIDEND_PATTERNS = [/dividendenzahlung/i, /dividende/i];
@@ -75,6 +91,16 @@ const DISTRIBUTION_PATTERNS = [/ertr.gnisaussch.ttung/i, /aussch.ttung/i];
 
 /** Withholding tax patterns (Quellensteuer). */
 const WITHHOLDING_PATTERNS = [/quellensteuer/i, /kapitalertragsteuer/i];
+
+/**
+ * Interest and coupon patterns (Kontoumsätze): "Habenzinsen" on the cash
+ * balance, "Zinsen", a bond's "Zinszahlung". A positive row is interest
+ * received (casilla 0027); it was dropped with no word (#467). A negative one
+ * (Sollzinsen on a debit balance) is left out, which can only raise the tax.
+ * "Stückzinsen" (accrued interest paid or received with a bond trade) has no
+ * word boundary before "zins" and is not matched.
+ */
+const INTEREST_PATTERNS = [/habenzins/i, /\bzins/i];
 
 function matchesAny(text: string, patterns: RegExp[]): boolean {
   return patterns.some((p) => p.test(text));
@@ -105,7 +131,8 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
   const priceCol = findColumn(headers, ["Kurs"]);
   const txnCol = findColumn(headers, ["TA-Nr.", "TA-Nr"]);
   // Currency sits in the empty header immediately after Kurs.
-  const currencyCol = priceCol >= 0 ? priceCol + 1 : -1;
+  const currencyCol = priceCol + 1;
+  const currencyName = (headers[currencyCol] ?? "").trim() || `${(headers[priceCol] ?? "Kurs").trim()}, divisa`;
 
   if (isinCol < 0 || dateCol < 0 || qtyCol < 0 || priceCol < 0) {
     throw new Error(
@@ -114,11 +141,16 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
   }
 
   const trades: Trade[] = [];
+  const zeroFillOrders: string[] = [];
   // Track Lagerstellenwechsel (custody transfer) net quantity per ISIN. A
   // balanced in/out pair nets to zero and is harmless; an unmatched leg means
   // a position entered or left the depot without a cost basis — same phantom-lot
   // risk as missing prior-year lots — so we warn the user.
   const custodyNet = new Map<string, Decimal>();
+  // The same legs per ISIN and day, each kept as a row that books nothing.
+  const custodyLegs = new Map<string, { net: Decimal; unknown: boolean; rows: Trade[] }>();
+  // Readable Stornos of an order, matched below with the fill they cancel.
+  const stornos: { row: Trade; note: string; side: Trade["buySell"]; qty: Decimal; price: Decimal }[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -129,56 +161,151 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     const isin = (fields[isinCol] ?? "").trim();
     const info = infoCol >= 0 ? (fields[infoCol] ?? "").trim() : "";
     const price = parseNumber(fields[priceCol] ?? "0");
-
+    const name = nameCol >= 0 ? (fields[nameCol] ?? "").trim() : "";
+    // An empty or missing currency cell is no "EUR" (checked before booking).
+    const currency = (fields[currencyCol] ?? "").trim();
+    const tradeDate = convertDateDMYDot(fields[dateCol] ?? "");
+    const orderId = txnCol >= 0 ? (fields[txnCol] ?? "").trim() : "";
     const qtyNum = toFiniteDecimal(fields[qtyCol] ?? "0");
     // An empty or unreadable Nominal is no "0" (see below).
     const qtyUnknown = quantityUnreadable(fields[qtyCol]);
-    if (!isin || (qtyNum.isZero() && !qtyUnknown)) continue;
+    // The side comes from the booking text, Kauf or Verkauf (#468); only a
+    // file with no Buchungsinformationen column leaves the Nominal's sign. A
+    // Storno reverses a Kauf or Verkauf and is neither: its text has the word
+    // and its Nominal the opposite sign, so a reversed sale was booked as a
+    // second sale and its loss deducted twice. It cancels the fill it
+    // reverses (after the loop), or is kept unreadable below.
+    const storno = STORNO_RE.test(info);
+    const buyText = infoCol >= 0 ? !storno && BUY_RE.test(info) : !qtyUnknown && qtyNum.isPositive();
+    const sellText = infoCol >= 0 ? !storno && SELL_RE.test(info) && !buyText : !qtyUnknown && qtyNum.isNegative();
+    // Broker order id embedded in the Buchungsinformationen text: used after
+    // merge to recover the commission from the matching Kontoumsätze cash leg.
+    // A kept row (below) carries it too, so the order of a fill that cannot be
+    // read gets no fee from that fill's leg (#467).
+    const orderKey = extractOrderKey(info);
+    const orderNote = orderKey ? { notes: `${FLATEX_ORDER_NOTE}${orderKey}` } : {};
+    // A row that cannot be read is kept as a trade that books nothing and
+    // named, never dropped or booked by the sign alone (#467, #468).
+    const keepUnreadable = (cell: string): void => {
+      trades.push({
+        ...unreadableTrade({
+          tradeID: orderId, symbol: name, description: name, isin, assetCategory: "STK", currency: currency || "EUR",
+          tradeDate, ...(buyText || sellText ? { buySell: sellText ? "SELL" as const : "BUY" as const } : {}), exchange: "",
+        }, cell),
+        ...orderNote,
+      });
+    };
 
-    // Skip custody transfers (Lagerstellenwechsel): net-zero, not a disposal.
-    if (/lagerstellenwechsel/i.test(info)) {
-      custodyNet.set(isin, (custodyNet.get(isin) ?? new Decimal(0)).plus(qtyNum));
+    if (!isin) {
+      // A Kauf or Verkauf with no ISIN is still a purchase or a sale, and so
+      // may be a row of another text that names a security and moves shares
+      // (a transfer in or out): kept unreadable. So is one whose Nominal
+      // cannot be read but whose Kurs can: dropped, it let the one-purchase
+      // exception (#453) be applied with no proof. A row with neither is no
+      // trade (a separator, or a cash line with no Nominal and no Kurs).
+      const kursReadable = !quantityUnreadable(fields[priceCol]) && !toFiniteDecimal(price).isZero();
+      const movesNamedShares = name !== "" && (qtyUnknown ? kursReadable : !qtyNum.isZero());
+      if (buyText || sellText || movesNamedShares) keepUnreadable(unreadableCell(headers[isinCol] ?? "ISIN", ""));
+      continue;
+    }
+    if (qtyNum.isZero() && !qtyUnknown) {
+      // A written 0 books nothing, but a Kauf or Verkauf of 0 may still be
+      // an execution whose cash is in a leg of its order: that leg booked
+      // the fill's value as the other fills' fee (#467). Its order is named.
+      if ((buyText || sellText) && orderKey) zeroFillOrders.push(orderKey);
       continue;
     }
 
-    // Skip zero-price rows (non-tradeable conversions, rights). A row whose
-    // Kurs is empty or unreadable is still a buy or sale when its booking text
-    // says Kauf or Verkauf (below); a written zero Kurs is always skipped.
+    // A row the parser does not book that still moves shares of the ISIN (a
+    // transfer in, a split, free shares, a conversion) is kept as a row that
+    // books nothing and named (#467): dropped, it would hide a holding at the
+    // anti-churning window start and let the one-purchase exception (#453) be
+    // applied with no proof.
+    const keepAction = (): Trade => ({
+      ...corporateActionTrade({
+        tradeID: orderId, symbol: name, description: name, isin, assetCategory: "STK", currency: currency || "EUR",
+        tradeDate, exchange: "",
+      }, info || `${headers[priceCol] ?? "Kurs"} ${(fields[priceCol] ?? "").trim()}`, fields[qtyCol] ?? ""),
+      ...orderNote,
+    });
+
+    // Custody transfers (Lagerstellenwechsel) are no disposal. The legs of
+    // one ISIN on one day that net to zero move nothing and are skipped; the
+    // others are kept below, once every leg is read.
+    if (/lagerstellenwechsel/i.test(info)) {
+      custodyNet.set(isin, (custodyNet.get(isin) ?? new Decimal(0)).plus(qtyNum));
+      const key = `${isin}|${tradeDate}`;
+      const legs = custodyLegs.get(key) ?? { net: new Decimal(0), unknown: false, rows: [] };
+      legs.net = legs.net.plus(qtyNum);
+      legs.unknown ||= qtyUnknown;
+      legs.rows.push(keepAction());
+      custodyLegs.set(key, legs);
+      continue;
+    }
+
+    // A row with a written zero Kurs (a non-tradeable conversion, rights,
+    // free shares, a transfer in) has no price to book: kept as a row that
+    // books nothing and named, never skipped with no word. A row whose Kurs is
+    // empty or unreadable is a buy or a sale of unknown quantity (below).
     const priceDec = toFiniteDecimal(price);
-    const tradeText = BUY_RE.test(info) || SELL_RE.test(info);
-    const priceUnknown = tradeText && quantityUnreadable(fields[priceCol]);
-    if (priceDec.isZero() && !priceUnknown) continue;
+    const priceUnknown = quantityUnreadable(fields[priceCol]);
+    if (priceDec.isZero() && !priceUnknown) {
+      trades.push(keepAction());
+      continue;
+    }
+    // A negative Kurs is no price: booked, it made negative proceeds or a
+    // negative cost with no word (#467). Kept as a row that books nothing.
+    if (priceDec.isNegative()) {
+      keepUnreadable(unreadableCell(headers[priceCol] ?? "Kurs", fields[priceCol]));
+      continue;
+    }
+
+    // A row whose text is neither Kauf nor Verkauf (a transfer in or out, a
+    // corporate action, a Storno) is no purchase or sale the parser can book:
+    // the sign of its Nominal alone booked it as one (#468). A Kauf with a negative
+    // Nominal contradicts itself (a Verkauf with a positive one is a sale:
+    // the count may be unsigned).
+    if (!buyText && !sellText) {
+      keepUnreadable(unreadableCell(headers[infoCol] ?? "Buchungsinformationen", info));
+      const side = SELL_RE.test(info) ? "SELL" : BUY_RE.test(info) ? "BUY" : undefined;
+      if (storno && side && orderKey && !qtyUnknown && !priceUnknown && currency && isReadableDay(tradeDate)) {
+        stornos.push({ row: trades[trades.length - 1]!, note: `${FLATEX_ORDER_NOTE}${orderKey}`, side, qty: qtyNum.abs(), price: priceDec });
+      }
+      continue;
+    }
+    if (buyText && qtyNum.isNegative()) {
+      keepUnreadable(unreadableCell(headers[qtyCol] ?? "Nominal", fields[qtyCol] ?? ""));
+      continue;
+    }
+    const isSell = sellText;
 
     // A buy or sale whose Nominal or Kurs is empty or unreadable: keep it as a
     // trade of unknown quantity for the anti-churning evidence (#453). With no
     // price FIFO cannot book its shares, so it books none, as with no Nominal.
-    // Its direction comes from the Nominal's sign or the booking text.
     if (qtyUnknown || priceUnknown) {
-      const name = nameCol >= 0 ? (fields[nameCol] ?? "").trim() : "";
-      const currency = currencyCol >= 0 ? (fields[currencyCol] ?? "EUR").trim() : "EUR";
-      trades.push(quantityUnknownTrade({
-        tradeID: txnCol >= 0 ? (fields[txnCol] ?? "").trim() : "",
-        symbol: name, description: name, isin, assetCategory: "STK", currency: currency || "EUR",
-        tradeDate: convertDateDMYDot(fields[dateCol] ?? ""),
-        buySell: qtyNum.isNegative() || (SELL_RE.test(info) && !BUY_RE.test(info)) ? "SELL" : "BUY", exchange: "",
-      }));
+      trades.push({
+        ...quantityUnknownTrade({
+          tradeID: orderId,
+          symbol: name, description: name, isin, assetCategory: "STK", currency: currency || "EUR",
+          tradeDate, buySell: isSell ? "SELL" : "BUY", exchange: "",
+        }),
+        ...orderNote,
+      });
       continue;
     }
 
-    // Direction: negative Nominal = sell, positive = buy. Keyword confirms.
-    const isSell = qtyNum.isNegative() || (SELL_RE.test(info) && !BUY_RE.test(info));
+    // A trade with no currency is not in euros: a pound or dollar trade
+    // booked as euros moved the gain with no word. Kept as a row that books
+    // nothing and named by that cell (#467).
+    if (!currency) {
+      keepUnreadable(unreadableCell(currencyName, fields[currencyCol]));
+      continue;
+    }
+
     const absQty = qtyNum.abs();
     // Never expanded past 60 digits: a cell of "1e1000000000" reaches the
     // report as exponent text, which names the row (#470).
     const tradeMoney = plainOrExponent(absQty.mul(priceDec));
-
-    const tradeDate = convertDateDMYDot(fields[dateCol] ?? "");
-    const name = nameCol >= 0 ? (fields[nameCol] ?? "").trim() : "";
-    const currency = currencyCol >= 0 ? (fields[currencyCol] ?? "EUR").trim() : "EUR";
-    const orderId = txnCol >= 0 ? (fields[txnCol] ?? "").trim() : "";
-    // Broker order id embedded in the Buchungsinformationen text — used after
-    // merge to recover the commission from the matching Kontoumsätze cash leg.
-    const orderKey = extractOrderKey(info);
 
     trades.push({
       tradeID: orderId,
@@ -187,7 +314,7 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       description: name,
       isin,
       assetCategory: "STK",
-      currency: currency || "EUR",
+      currency,
       tradeDate,
       settlementDate: tradeDate,
       quantity: isSell ? `-${plainOrExponent(absQty)}` : plainOrExponent(absQty),
@@ -200,15 +327,50 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       buySell: isSell ? "SELL" : "BUY",
       openCloseIndicator: isSell ? "C" : "O",
       exchange: "",
-      commissionCurrency: currency || "EUR",
+      commissionCurrency: currency,
       commission: "0",
       taxes: "0",
       multiplier: "1",
-      ...(orderKey ? { notes: `flatex-order:${orderKey}` } : {}),
+      ...orderNote,
     });
   }
 
+  // Flatex corrects a fill with a Storno of it, and often a new fill of the
+  // same order. The Storno cancels the booked fill of its order with the
+  // same ISIN, side, currency, |Nominal| and Kurs, on its day or before (the
+  // earliest one): both leave the trades and the pair is named. Kept, the
+  // fill was a second sale and its loss was deducted twice (#467). A Storno
+  // that matches no fill stays a named row that books nothing.
+  const cancelled: string[] = [];
+  for (const s of stornos) {
+    const fill = trades
+      .filter((t) => t.notes === s.note && t.quantityUnknown !== true && t.isin === s.row.isin && t.buySell === s.side &&
+        t.currency === s.row.currency && new Decimal(t.quantity).abs().eq(s.qty) && new Decimal(t.tradePrice).eq(s.price) &&
+        isReadableDay(t.tradeDate) && t.tradeDate <= s.row.tradeDate)
+      .reduce<Trade | undefined>((first, t) => (first && first.tradeDate <= t.tradeDate ? first : t), undefined);
+    if (!fill) continue;
+    trades.splice(trades.indexOf(fill), 1);
+    trades.splice(trades.indexOf(s.row), 1);
+    cancelled.push(`${s.note.slice(FLATEX_ORDER_NOTE.length)} ${fill.isin} ${fill.tradeDate} [${fill.quantity} × ${fill.tradePrice} ${fill.currency}] Storno ${s.row.tradeDate}`);
+  }
+
+  // An unmatched transfer leg moves shares in or out of the depot: kept.
+  for (const legs of custodyLegs.values()) {
+    if (legs.unknown || !legs.net.isZero()) trades.push(...legs.rows);
+  }
+
   const parserMessages: TaxMessage[] = [];
+  if (cancelled.length > 0) {
+    const count = String(cancelled.length);
+    const rows = cancelled.join("; ");
+    parserMessages.push({
+      id: "flatex.depot.storno_cancelled",
+      severity: "info",
+      message: `Flatex: ${count} ejecución(es) anulada(s) con un Storno no se calculan: ${rows}.`,
+      hint: "Flatex corrige una ejecución con un Storno que la anula, y a veces con una ejecución nueva de la misma orden. DeclaRenta quita del cálculo cada ejecución anulada y su Storno, y calcula la ejecución nueva si está en el archivo. Cada fila trae el número de orden, el valor y la fecha de la ejecución anulada. Entre corchetes van sus títulos y su precio. Al final va la fecha del Storno.",
+      context: { count, rows },
+    });
+  }
   for (const [isin, net] of custodyNet) {
     if (!net.isZero()) {
       parserMessages.push({
@@ -220,6 +382,14 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       });
     }
   }
+  // An undated trade becomes a new unreadable row in place: it keeps its
+  // order number, so its order gets no fee from its leg (#467).
+  const orderNotes = trades.map((t) => t.notes);
+  markUndatedTrades(trades, "Buchtag");
+  trades.forEach((t, i) => {
+    const notes = orderNotes[i];
+    if (notes !== undefined && t.notes === undefined) trades[i] = { ...t, notes };
+  });
   parserMessages.push(...tradeQuantityUnknownMessages("Flatex", trades));
 
   return {
@@ -232,6 +402,7 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],
+    ...(zeroFillOrders.length > 0 ? { flatexZeroFillOrders: zeroFillOrders } : {}),
     ...(parserMessages.length > 0
       ? { parserMessages, parserWarnings: parserMessages.map((m) => m.message) }
       : {}),
@@ -259,7 +430,7 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
   const amountCol = findColumn(headers, ["Betrag"]);
   const txnCol = findColumn(headers, ["TA-Nr.", "TA-Nr"]);
   // Currency sits in the empty header immediately after Betrag.
-  const currencyCol = amountCol >= 0 ? amountCol + 1 : -1;
+  const currencyCol = amountCol + 1;
 
   if (dateCol < 0 || infoCol < 0 || amountCol < 0) {
     throw new Error(
@@ -267,8 +438,15 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
     );
   }
 
+  const amountName = (headers[amountCol] ?? "").trim() || "Betrag";
+  const dateName = (headers[dateCol] ?? "").trim() || "Buchtag";
+  const currencyName = (headers[currencyCol] ?? "").trim() || `${amountName}, divisa`;
   const cashTransactions: CashTransaction[] = [];
   const pendingOrderLegs: OrderLeg[] = [];
+  // Dividend, withholding and interest rows whose amount or currency cannot
+  // be read (#467). `key` pairs a dividend with its withholdings.
+  const unreadableIncome: { key: string; dividend: boolean; type: string; currency: string; date: string; cells: string[] }[] = [];
+  const incomeKey = (isin: string, date: string): string => `${isin}|${date}`;
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -280,8 +458,11 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
     if (!info) continue;
 
     const tradeDate = convertDateDMYDot(fields[dateCol] ?? "");
-    const amount = parseNumber(fields[amountCol] ?? "0");
-    const currency = currencyCol >= 0 ? (fields[currencyCol] ?? "EUR").trim() : "EUR";
+    // An empty, currency-only or textual Betrag is no "0" and no number: it
+    // is never booked as one (#467). A written 0 stays an explicit zero.
+    const amountUnreadable = quantityUnreadable(fields[amountCol]);
+    const amount = amountUnreadable ? "0" : parseNumber(fields[amountCol] ?? "0");
+    const currency = (fields[currencyCol] ?? "").trim();
     const isin = extractIsin(info);
 
     // Trade cash legs ("Ausführung ORDER Kauf/Verkauf <ISIN> <orderId>") are NOT
@@ -292,6 +473,14 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
       const orderKey = extractOrderKey(info);
       if (orderKey) {
         const bookingId = txnCol >= 0 ? (fields[txnCol] ?? "").trim() : "";
+        // A leg whose Betrag cannot be read carries its cell: its order then
+        // gets no fee, never the whole trade as a fee or a crash (#467). So
+        // does a leg whose Buchtag cannot be read: the day pairs it with its
+        // fill, and a guessed day paired it with another fill.
+        const cells = [
+          ...(amountUnreadable ? [unreadableCell(amountName, fields[amountCol])] : []),
+          ...(isReadableDay(tradeDate) ? [] : [unreadableCell(dateName, fields[dateCol])]),
+        ];
         pendingOrderLegs.push({
           orderKey,
           netAmount: amount,
@@ -299,6 +488,8 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
           currency: currency || "EUR",
           tradeDate,
           ...(bookingId ? { bookingId } : {}),
+          ...(SELL_RE.test(info) ? { side: "Verkauf" as const } : BUY_RE.test(info) ? { side: "Kauf" as const } : {}),
+          ...(cells.length > 0 ? { unreadableCell: cells.join(", ") } : {}),
         });
       }
       continue;
@@ -309,11 +500,33 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
       type = "Withholding Tax";
     } else if (matchesAny(info, DIVIDEND_PATTERNS) || matchesAny(info, DISTRIBUTION_PATTERNS)) {
       type = "Dividends";
+    } else if (matchesAny(info, INTEREST_PATTERNS) && (amountUnreadable || toFiniteDecimal(amount).isPositive())) {
+      // A bond coupon names its ISIN; interest on the cash balance does not.
+      type = isin ? "Bond Interest Received" : "Broker Interest Received";
     }
 
     // Skip transfers ("ENTRE CUENTAS") and anything else that isn't
-    // dividend/distribution/withholding.
+    // dividend/distribution/withholding/interest.
     if (!type) continue;
+
+    // An amount that cannot be read, or a row with no currency, is not
+    // booked: as 0 it hid the income and kept its withholding, as text it
+    // stopped the report, and with no currency a dollar amount was read as
+    // euros. The row and the withholdings of its dividend are named (#467).
+    if (amountUnreadable || !currency) {
+      unreadableIncome.push({
+        key: incomeKey(isin, tradeDate),
+        dividend: type === "Dividends",
+        type: info,
+        currency,
+        date: tradeDate,
+        cells: [
+          ...(amountUnreadable ? [unreadableCell(amountName, fields[amountCol])] : []),
+          ...(currency ? [] : [unreadableCell(currencyName, fields[currencyCol])]),
+        ],
+      });
+      continue;
+    }
 
     const orderId = txnCol >= 0 ? (fields[txnCol] ?? "").trim() : "";
 
@@ -323,7 +536,7 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
       symbol: isin,
       description: info,
       isin,
-      currency: currency || "EUR",
+      currency,
       dateTime: tradeDate,
       settleDate: tradeDate,
       amount,
@@ -331,6 +544,17 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
       type,
     });
   }
+
+  // The withholdings of a dividend that is not booked (same ISIN, same day)
+  // are not booked either: a deduction for income the report does not count.
+  // They are named with it.
+  const unreadableRows = unreadableIncome.map((row) => {
+    if (!row.dividend) return cashIncomeRowText(row.type, "", row.currency, row.date, row.cells);
+    const withheld = cashTransactions.filter((c) => c.type === "Withholding Tax" && incomeKey(c.isin, c.dateTime) === row.key);
+    for (const w of withheld) cashTransactions.splice(cashTransactions.indexOf(w), 1);
+    const tax = withheld.map((w) => `${w.description} ${w.amount} ${w.currency}`).join(", ");
+    return cashIncomeRowText(row.type, "", row.currency, row.date, row.cells, tax);
+  });
 
   // Flatex credits a dividend as ONE net booking (after the foreign or Spanish
   // withholding) and usually writes no Quellensteuer row. The engine reads a
@@ -349,7 +573,8 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
           Math.abs(daysBetween(w.dateTime, c.dateTime)) <= 7,
       ),
   );
-  const parserMessages: TaxMessage[] = [];
+  const parserMessages: TaxMessage[] = dropUndatedCash("Flatex", cashTransactions, headers[dateCol] ?? "Buchtag");
+  parserMessages.push(...cashIncomeAmountUnreadableMessages("Flatex", unreadableRows));
   if (hasNetDividends) {
     parserMessages.push({
       id: "flatex.dividends.net_amounts",

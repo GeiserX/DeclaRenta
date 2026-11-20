@@ -422,22 +422,23 @@ práctico Renta 2025. The decisions, each pinned in
     readable quantity stays out of its order's merge as its own flagged row,
     so the readable fills of that order still merge and book their shares and
     cost. A cell that is blank, only a currency symbol ("€") or no number is
-    unreadable. Only a buy or sale row is kept: a Freedom24 transfer stays
-    skipped, a Flatex row with neither Nominal nor Kurs is kept only when its
-    text says Kauf or Verkauf, a DEGIRO row with neither quantity nor price
-    only when it has an order id or a value. A written zero price (a
-    conversion, a rights assignment) stays skipped in these cases only: a
-    Flatex Kurs of any written zero, a DEGIRO price written "0" or "0,0000"
-    (a DEGIRO "0,00" is booked as written), and a Trading 212 price of zero
-    with the Total in another currency (with the Total in the instrument
-    currency the row is valued from the Total and booked). A DEGIRO row with
-    a written zero quantity ("0,00") and no readable price stays skipped too.
+    unreadable. A row of the security whose type is neither a buy nor a
+    sale (a Freedom24 transfer, a Flatex Einbuchung) is kept as an unreadable
+    row, as the next point says. A DEGIRO row with neither quantity nor price
+    is kept only when it has an order id or a value. A Flatex or DEGIRO row
+    with a written zero price (a conversion, a rights assignment, free
+    shares, a transfer in) moves shares of its ISIN, so it is kept as a
+    corporate-action row (below), whatever the spelling of the zero ("0",
+    "0.00", "0,0000"). A Trading 212 price of zero with the Total in another
+    currency stays skipped (with the Total in the instrument currency the row
+    is valued from the Total and booked). A DEGIRO row with a written zero
+    quantity ("0,00") and no readable price stays skipped too.
     An IBKR fill with `tradePrice="0"` and a readable quantity still reaches
     `mapTrade`. Revolut's
     closed-positions format keeps both legs of such a row, as eToro does. A
     buy or sale with a readable quantity but a blank or unreadable price is
-    kept the same way (a Flatex Kauf or Verkauf, a DEGIRO row with an order id
-    or a value, a Trading 212 buy with no price and a Total in another
+    kept the same way (a Flatex Kauf or Verkauf, a DEGIRO row with or without
+    an order id or a value, a Trading 212 buy with no price and a Total in another
     currency): FIFO cannot book shares with no cost, and a dropped row would
     hide a second purchase. An IBKR cancellation with an `origTransactionID`
     drops itself and the fill that id names, whatever their quantity or
@@ -461,6 +462,791 @@ práctico Renta 2025. The decisions, each pinned in
     column, or a Revolut file (Revolut gives no ISIN), would otherwise hide
     it, because its account never trades the ISIN key. A holding closed
     before the window does not stop the exception.
+  - No trade row of the security is dropped because a parser cannot read it
+    (#466, #467, #468). A row that names a security (a ticker or an ISIN) and
+    looks like a trade, but whose date, ticker or ISIN, type or direction,
+    or amount cannot be read, is kept as a `quantityUnknownTrade` with
+    `Trade.unreadableRow`: the security, the date and the cell that failed,
+    for example `XYZ 20241202 [Type: "TRANSFER IN"]`. It books no shares and
+    no money, so it acts as a row of unknown quantity above (the ISIN is
+    "unverified"; with no ISIN, the trade is unidentified). The warning
+    `parser.trade_row_unreadable` names every such row. The shared helpers
+    are in `src/parsers/csv-utils.ts` (`unreadableTrade`, `unreadableCell`,
+    `markUndatedTrades`, `corporateActionTrade`, `dropUndatedCash`).
+    - A trade whose date is not a real day ("2024-13-45", "31-02-2024",
+      "02.12.2024 09:30" where the broker writes another format, or an empty
+      cell) is kept the same way, in every parser: a lot with a false date
+      could sit outside the window it belongs to. No parser throws for a
+      date any more. The parsed file leaves such a row with no date
+      (`tradeDate` "") and marks it `Trade.undatedRow`.
+      `finalizeMergedStatement` gives it the earliest readable date of the
+      whole upload (trades and cash rows), because the engine needs a real
+      day. Every sale is on or after that day, so the row stands before the
+      sale's window or inside it, never after another broker's year-end
+      list, where the evidence check does not look. With no ISIN, a row
+      there is an unidentified trade, and the exception is never "applied".
+      An upload with no readable date at all keeps the warning and books no
+      row.
+    - IBKR keeps one exception: a date in the wrong shape ("03/01/2025")
+      means the Flex Date Format setting is wrong, so the whole file is still
+      refused with the setting to change. A date of the right shape that is
+      no real day ("20240231") is kept as above.
+    - A split, consolidation, merger, spin-off or other corporate action
+      that names a security is kept as a row of unknown quantity with
+      `Trade.corporateActionRow` (the security, the date, the action and
+      the share count it writes). It books no shares and no money, and
+      `parser.corporate_action_not_applied` names it, not
+      `parser.trade_row_unreadable`. The engine does not apply corporate
+      actions from these files, so the user must check the holding by
+      hand; until then the security's evidence is "unverified".
+    - A cash row (a dividend, a withholding, interest, a deposit) whose date
+      is not a real day is not booked. We never guess its date: the date
+      sets the tax year, the ECB rate and the pairing of a dividend with
+      its withholding, and a guessed year can move income to the wrong
+      return. `parser.cash_row_undated` names each row with its type,
+      security, amount and the failing cell, so the user can add it by hand.
+    - A dividend or withholding row with no ticker goes by its ISIN
+      (Lightyear, Trading 212, Freedom24). With no ticker and no ISIN (and
+      for Scalable, no ISIN) it is not booked, for the same reason: the
+      security sets the source country and the pairing with the withholding.
+      `parser.cash_row_unidentified` names each row with its type, amount
+      and date (Lightyear, Scalable, Trading 212, Revolut, Freedom24).
+    - An IBKR cash `dateTime` written with the Flex Date/Time separator ",",
+      a space or none ("20240615,103000", "2024-06-15 10:30:00",
+      "20240615103000") is rewritten with ";" (`flexDateTime`). The engine
+      reads only ";", so such a dividend was dropped as undated or crashed
+      the report.
+    - In Revolut and eToro XLSX files, a date stored as a date cell is read
+      as its real day (`isoDateCells`). The sheet's display text ("1/10/25"
+      for the default format) is never parsed. A workbook in the 1904 date
+      system (Excel for Mac, Numbers) is read with that system: the same
+      serial number is a day 4 years and 1 day later.
+    - A slash date in text ("1/10/2024", "01/10/2024", "1/10/24") reads the
+      same with or without a leading zero, in one order per file
+      (`slashDateOrder`, `convertSlashDate`): day first, unless a date of the
+      file has a second part over 12 ("3/15/2025") and none a first part over
+      12. A 2-digit year is 20YY. A file with both kinds is day first, so its
+      month-first dates are no real day and are named, never read as another
+      day.
+    - A row of an unknown type that writes a zero share count moves no
+      shares and stays skipped. So does a row that names no security and
+      moves no shares (a cash line). A row that names its security only by
+      name and writes a share count is kept (Scalable, Trading 212, Flatex,
+      Trade Republic). The cases per broker follow.
+    - Revolut: a buy, sale or other type with a ticker and no readable date
+      (an undated row with no ticker is kept with no ISIN);
+      any type that is not a buy, sale, dividend, dividend tax correction,
+      split or cash row (a `SPINOFF`, a `TRANSFER IN`), also with a zero
+      quantity when it has an amount (a cash merger), unless it is a fee; a
+      buy or sale with no ticker; a closed position with no symbol; a split
+      with no readable date, or with a Quantity that is 0, empty or no
+      number (a corporate-action row, and the holding is of unknown size;
+      the dated one was only counted by `revolut.split_unresolved`, which
+      is gone). Stop and stop-limit orders (`BUY - STOP`,
+      `SELL - STOP LIMIT`) are buys and sales. The
+      `FX Rate` cell is read only on a cash top-up or withdrawal, the only
+      rows that use it (#466): a bad cell no longer deletes a sale, a buy or
+      a dividend. A cash row with a bad rate is still skipped, and
+      `revolut.bad_fx_rate` names it by date and amount. A ticker with a row
+      of unknown size (a blank or unreadable quantity, an unreadable date or
+      type) gets a holding of unknown size (`OpenPosition.quantityUnknown`):
+      its quantity is the readable part, so the Modelo 720 and 721 still
+      count it as a holding to value by hand, and it is never complete
+      evidence. A buy of unknown size with nothing readable left makes one of
+      quantity "0"; a row of unknown type alone makes none.
+      `revolut.holding_size_unknown` names every such ticker.
+      A `DIVIDEND TAX (CORRECTION)` row books nothing, and
+      `revolut.dividend_tax_correction` (info) names it by ticker, date and
+      amount.
+      Revolut writes English US numbers, so a comma between groups of three
+      digits is a thousands separator: "USD 1,500" is 1500 and a quantity of
+      "1,000" is 1000 shares (both were read with the comma as a decimal
+      point). Any other comma is still a decimal comma ("EUR 15,61").
+      A `DIVIDEND` whose Total Amount has no number (blank, currency only,
+      text) is not booked and is named by
+      `parser.cash_income_amount_unreadable`, with or without a ticker; it
+      was dropped with no word. A written zero stays skipped.
+      A row of unknown type with a zero quantity whose Total Amount cannot
+      be read ("USD abc", "USD") is kept like one with a readable amount; a
+      blank or written-zero amount moves no money and stays skipped.
+      A buy or sale whose Price per share cannot be read, is zero or is
+      negative takes |Total Amount| ÷ Quantity as its price (it was booked
+      at 0, so a sale became a full loss). With no readable non-zero Total
+      either, a written zero price is a corporate-action row and any other
+      price an unreadable row named by Price per share; the holding is of
+      unknown size.
+      A closed position whose Gross proceeds cannot be read keeps both legs
+      as unreadable rows (it was a sale at 0). One with no symbol and no
+      readable date is kept too when it has a quantity; only a line with a
+      `Total` label or no quantity is skipped as a totals line.
+      The column lookup matches each header as the detection does, so
+      "Price per share (USD)" or "Gross proceeds (USD)" is read (every
+      trade was priced 0, or the file came out empty). A detected sheet
+      with a required column missing is refused, naming the column.
+      A buy, sale or dividend whose Total Amount or Price per share is
+      written in another currency than its Currency cell ("EUR 1500" with
+      USD) is not booked and is named with those cells (it was booked in
+      the Currency cell's currency). An empty Currency cell takes the
+      currency in front of the amounts. A closed position does the same
+      with its Cost basis, Gross proceeds and Fees: one written in another
+      currency than its Currency cell keeps both legs as unreadable rows
+      named with those cells (it was booked in the Currency cell's
+      currency).
+      A split, merger or spin-off row with no ticker is a corporate-action
+      row with no security, named as not applied (it was dropped with no
+      word, so a split's later sale kept its pre-split cost and a cash
+      merger's money was lost). One that moves no shares and no money is
+      skipped. A reward or a custody fee with no ticker stays skipped.
+    - Trading 212: a buy or sale with no readable Time or no ticker; an
+      action that is not a buy, sale, dividend, interest, split or cash row
+      and writes a share count. An unknown action with an empty share cell
+      (`Result adjustment`) is a cash row, not evidence; the same holds for
+      Lightyear and Scalable (`Fee`, `Tax`). Its money is not booked, but a
+      Trading 212 Total that is not a written zero is named by
+      `parser.cash_row_not_booked` (it was dropped with no word, so a
+      credit was gain the report never saw).
+      Each leg of a `Stock split open` or `Stock split close` is a
+      corporate-action row (above).
+      FIFO values a Trading 212 buy or sale at `No. of shares` ×
+      `Price / share`, and never reads the Total. A row with no readable or
+      nonzero price was valued from a Total in the instrument's currency,
+      but its price stayed 0, so a sale was a full loss with no word. The
+      price is now Total ÷ shares. With neither a price nor a Total, a sale
+      was booked at 0: a written zero in both cells is now a
+      corporate-action row, and any other an unreadable row named by both
+      cells. A buy or sale with an empty `Currency (Price / share)` (or a
+      row cut short) is an unreadable row named by that cell; it was booked
+      as euros. A dividend, interest or withholding with an empty
+      `Currency (Total)` is not booked and is named by
+      `parser.cash_income_amount_unreadable`: in an EUR account the Total
+      is in EUR while `Currency (Price / share)` is the instrument's, so
+      the Total is never read in the price currency. A buy or sale with no
+      readable price and an empty `Currency (Total)` is an unreadable row
+      named by both cells, never valued from that Total; one with a
+      readable price does not need the cell. A buy or sale with a negative
+      `Price / share` is an unreadable row named by that cell; booked, a
+      sale had negative proceeds. A fee with no currency of its
+      own takes `Currency (Total)`, and with neither it is not added. A
+      trade keeps one commission currency: a fee in a second currency
+      other than the instrument's is not added (100 EUR and 1 GBP were
+      booked as 101 GBP). `Dividend (Tax exempted)` is
+      a dividend; it was booked as a withholding. `Lending interest` is
+      interest (casilla 0027); it was dropped with no word. A withholding
+      keeps its sign when the file writes any withholding as negative, so a
+      positive one is a refund. The withholding of a dividend that is not
+      booked is not booked either, and is named with it. It is the
+      withholding of the same day and security, where the ISIN of one row
+      matches the other's ISIN or ticker, so a row that writes no ISIN
+      still finds it. A dividend with no ticker and no ISIN takes the
+      withholdings of its day that no booked dividend of their own
+      security and day claims; a refund stays booked. A dividend whose
+      `Time` cannot be read takes, in the same way, the withholdings of
+      its security that no booked dividend claims, whatever their day,
+      and `parser.cash_row_undated` names them next to it.
+    - Freedom24: a row with no readable date, no ticker, or an operation
+      other than `buy` or `sell` after trimming (`sale`, `transfer`). Before,
+      every operation that was not `sell` was booked as a buy (#468). In
+      `corporate_actions`, every row that is not a dividend or a coupon is
+      a corporate-action row: a split, a consolidation, a merger, a
+      conversion, bonus shares, a maturity, a redemption or any type we do
+      not know. The JSON gives no share count, and these rows were skipped
+      with no word. A row with no ticker and no ISIN is kept too, so every
+      security is "unverified". The not-applied hint says that a row that
+      paid money (a maturity, a redemption) is a sale missing from the
+      report. A dividend whose `amount` is missing, empty, text or not
+      finite is not booked. The engine threw on it and the whole report
+      failed. `freedom24.dividend_amount_unreadable` names it with its cell,
+      or `parser.cash_row_unidentified` with no security. A corporate
+      action with no readable `type_id` cannot be told from a dividend or a
+      split: it is a corporate-action row named by its `type_id` cell, and
+      `freedom24.row_skipped_malformed` counts it and says the 2-month
+      one-purchase check may be affected. Before, it was only counted. A
+      dividend whose `tax_amount` is written but is no finite number is
+      booked with no withholding (the user loses a deduction, never
+      underpays), and `freedom24.tax_amount_unreadable` names the cell. A
+      readable `tax_amount` larger than the dividend's `amount` ("1e400",
+      or "1.234,56" on 500) is treated the same way: it went to box 0597
+      with no cap for a Spanish security.
+      A buy or sale whose price `p` is missing, empty, text, written with
+      a decimal comma, not finite or below zero is an unreadable row named
+      by `p`. Before, a missing price was read as 0, so a sale became a
+      full loss, and "" or "abc" stopped the whole report. A written zero
+      price is a corporate-action row, as in Flatex and DEGIRO. A trade or
+      dividend with no readable `curr_c` (missing, empty, null, not a
+      three-letter code) is never read as USD: the trade is an unreadable
+      row named by `curr_c`, and the dividend is not booked and is named by
+      `parser.cash_income_amount_unreadable` with its `amount` and `curr_c`
+      cells. " usd" is USD. Every `cash_flows` row that is not a deposit or
+      a withdrawal is named by `freedom24.cash_flow_not_read` (type,
+      amount, currency, date); before, every one was dropped with no word.
+      A written zero amount stays skipped. A row is a deposit or a
+      withdrawal only when its `type_id` and `type` carry no other word:
+      `deposit_interest` or "Interest on deposit" is named. A buy or sale
+      whose readable `amount` is not p × q, with or without its commission
+      (1 % and a cent of tolerance), is an unreadable row named by its `q`,
+      `p`, `commission` and `amount` cells: an option, a bond priced in %
+      of face or a price of 1e400 was booked at p × q. A `q` written with
+      a comma ("1,000") is a trade of unknown quantity, never 1 share. The
+      `tax_amount` of a negative dividend (a reversal) is a refund, so a
+      reversed Spanish dividend no longer keeps its withholding in box 0597.
+      An `isin` cell is an ISIN only when it has the shape of one: a
+      placeholder ("-", "N/A", "null", "0") is no ISIN, so the ticker keys
+      the security. Before, every security with the same placeholder shared
+      one FIFO queue, so a sale took another stock's cost, and a split of
+      the sold security counted as another security's.
+    - Lightyear and Scalable Capital: a buy or sale with no date, ticker or
+      ISIN; a type that is not a buy or sale and moves shares. A split or
+      corporate-action type is a corporate-action row (above). Scalable also
+      reads a German date (DD.MM.YYYY).
+      FIFO values a Scalable buy or sale at `shares` × `price`. A price that
+      could not be read ("abc", "-") stopped the report with a
+      `DecimalError`, and an empty, "€", written-zero or missing one sold
+      the shares at 0, so a gain became a loss with no word. With no
+      readable or nonzero price the price is now |`amount`| ÷ `shares`, the
+      file's own numbers. With no amount either, a price that cannot be
+      read makes an unreadable row named by `price`, and a written zero
+      price is a corporate-action row. A Scalable `Corporate action` row of
+      an ISIN that writes 0 shares but an amount (a cash merger, a
+      redemption) is a corporate-action row too, so the payout is named; it
+      was dropped with no word. A blank or written zero amount stays
+      skipped.
+      Scalable books only executed rows. A row whose status says it never
+      happened (cancelled, rejected, pending, expired, failed) stays
+      skipped. A row of any other status ("Settled") was dropped with no
+      word: a buy, a sale or a row that moves shares is now an unreadable
+      row named by `status`, and an interest or distribution is not booked
+      and is named by `scalable.income_row_not_read`.
+      The `tax` of a reversed (negative) Scalable Distribution is a refund,
+      never a new withholding: a reversed Spanish dividend kept its 0597
+      credit. A reversal whose `tax` cannot be read is not booked and is
+      named, so the dividend it reverses keeps its income.
+      FIFO values a Lightyear buy or sale at Quantity × `Price/share`. A
+      price that could not be read ("n/a", "-") stopped the report with a
+      `DecimalError`, and an empty, missing or written-zero one sold the
+      shares at 0 €, so a gain became a loss with no word. With no readable
+      or nonzero price the price is now |`Gross Amount`| ÷ `Quantity`, the
+      file's own numbers. With no Gross either, a price that cannot be read
+      makes an unreadable row named by `Price/share`, and a written zero
+      price is a corporate-action row, as in Flatex, DEGIRO and Freedom24.
+      A Lightyear buy or sale with an empty or missing `CCY` (a row cut
+      short) is an unreadable row named by `CCY`; it was read as EUR.
+      A Lightyear conversion leg with no `CCY`, or a non-EUR one whose
+      `Net Amt.` and `Gross Amount` both cannot be read, is named with the
+      unreadable rows but not kept as a trade: a currency leg is no
+      evidence for this rule, and the FX engine books every CASH trade it
+      gets. The first stopped the report, the second was dropped with no
+      word.
+      A Lightyear Dividend, Distribution, Interest or Reward row that names
+      a security and writes a share count gave shares too (a share reward,
+      a dividend paid in shares). It was booked as income only, so the
+      shares had no lot: a loss sale before them was not blocked, and their
+      later sale had no cost. The income stays booked, and the shares are
+      now a purchase of that day at the value taxed as income (Gross for a
+      dividend, Net else Gross for interest and rewards), named in
+      `lightyear.income_shares_booked` so the user checks them. A share
+      count or a value that cannot be read, a negative count, or no date,
+      ticker or `CCY` makes an unreadable row named by its cell; a zero
+      value is a corporate-action row, as for a Buy. A written zero count,
+      or none (the real export), moves no shares.
+    - Flatex: the side comes from the text (Kauf, Verkauf), never from the
+      Nominal's sign alone (#468). A row with neither word is unreadable, so
+      a Depotübertrag Ausgang is no sale and an Einbuchung no repurchase. A
+      Kauf with a negative Nominal is unreadable; a Verkauf with a positive
+      Nominal stays a sale. A Storno of a Kauf or a Verkauf is neither (a
+      reversed sale was booked as a second sale). It cancels the booked
+      fill of its order with the same ISIN, side, currency, |Nominal| and
+      Kurs, on its day or before: both leave the trades, so a corrected
+      sale counts once, at the rebooked price, and
+      `flatex.depot.storno_cancelled` (info) names each pair. Before, the
+      cancelled fill stayed booked and its loss was deducted twice. A Storno
+      that matches no fill, or has no order number, stays unreadable, named
+      by its text. A Kauf or Verkauf with no ISIN is kept, and so is a row of
+      another text with no ISIN that names a security and moves shares, or
+      has a Nominal that cannot be read and a readable Kurs. A row of the
+      ISIN with a written zero Kurs is a corporate-action
+      row. The legs of a custody transfer (`Lagerstellenwechsel`) of one ISIN
+      on one day that net to zero are skipped; every other leg is a
+      corporate-action row, and `flatex.lagerstellenwechsel.unmatched` still
+      names the ISIN.
+      A Kauf or Verkauf with an empty currency cell is an unreadable row
+      named `Kurs, divisa: ""` (it was booked as euros), and so is one with a
+      negative Kurs (it was booked as negative proceeds or cost).
+    - Flatex Kontoumsätze: an order's cash leg whose Betrag cannot be read
+      ("", "€", "abc") gives its order no fee: read as 0 it made the whole
+      trade a fee (a 1194 € gain became a 1006 € loss), and as text it
+      stopped the upload. The legs of an order are summed with their sign,
+      so a Storno cancels its leg. A fee is kept only when it is 0 or more
+      (one cent of rounding allowed) and below the gross; a missing or extra
+      leg made a fee as large as a fill. Otherwise the fills keep a fee of 0,
+      and `flatex.commission.not_recovered` names each order by number,
+      ISIN, date and the gross next to the sum of its legs, or the cell that
+      cannot be read. The order number is a word of its own: the last digits
+      of an ISIN are no order number. A dividend, distribution, withholding
+      or interest row whose Betrag cannot be read, or whose currency cell is
+      empty, is not booked, nor are the same-day withholdings of that
+      dividend, and `parser.cash_income_amount_unreadable` names each. A
+      written 0 stays a zero. A positive Habenzinsen, Zinsen or Zinszahlung
+      row is interest received (casilla 0027); it was dropped with no word.
+      A negative one stays out, which can only raise the tax.
+    - Flatex orders: a fill and its cash leg fall on the same Buchtag, so
+      the legs and fills of an order are matched day by day. A day with a
+      fill and no leg, or a leg and no fill, a leg with no readable Buchtag,
+      or a fill the parser keeps unreadable gives the whole order no fee,
+      and `flatex.commission.not_recovered` names it. Before, a leg of
+      another day, of a fill missing from the Depot export, or of an
+      unreadable fill became the fee of another fill. A day with one leg
+      per fill books no fee for any of its fills when one pair gives none:
+      a combined leg uploaded twice with no TA-Nr. gave the larger fill
+      the smaller fill's value as a fee. A fee of 50 plus 2 % of the
+      gross or more is no fee, and an order with a Kauf or Verkauf of
+      Nominal 0 gets none: the leg can also pay a fill the Depot export
+      does not list or writes with a Nominal of 0, whose value became the
+      listed fills' fee. A hidden fill below that cap still passes, since
+      nothing in the files tells its cash from a fee, but a fee above an
+      ordinary Flatex fee (10 € per leg plus 1 % of the gross; the order
+      fee is 5.90 €) is named by `flatex.commission.above_usual`. A day
+      with one combined leg for several fills splits the fee pro rata only
+      when the fee is below the day's smallest fill: a missing or extra
+      leg (one uploaded twice with no TA-Nr.) moves the fee by at least
+      that fill's value. A day with more legs than fills, once each Storno cancels a
+      leg, is never split: the extra leg can be that of a fill the Depot
+      export does not list or writes with a Nominal of 0, and below the
+      smallest fill it became the other fills' fee. A combined leg for fills
+      of two days is no longer split, which can only raise the tax.
+      An order whose legs have no fill in the upload (a Depot export that
+      ends earlier, or none) is a purchase or a sale the report does not
+      have: it was dropped with no word. It books nothing, and
+      `flatex.order_leg_without_fill` (warning) names it by number, ISIN,
+      first day, the side its text names and the sum of its legs, and asks
+      for the Depot export of those dates. Legs that net to 0 (a Storno and
+      the leg it reverses) move nothing and are not named; an order with a
+      fill the parser keeps unreadable is named by that fill.
+    - Trade Republic: a buy or sale with no amount, or that names no
+      security (crypto with no `symbol`, any other with no `symbol` and no
+      `name`), named by that cell: under an empty symbol unrelated
+      securities shared one FIFO pool and one took another's cost. A
+      TRADING row of another type, or a row of a category or CASH type the
+      parser does not know (BENEFITS SAVEBACK, CASH STOCKPERK), that names
+      an ISIN or writes a share count, and does not write a zero one. With
+      no ISIN it is evidence of an unidentified trade. A CORPORATE_ACTION or
+      DELIVERY row that names an ISIN or writes a share count, and does not
+      write a zero one, is a corporate-action row (above), and its own
+      warning still names it. The file gives a share count and a sign, but
+      not what the action did (a split, a merger, a transfer in), so booking
+      the count could add or remove shares that were never there. The row
+      books nothing and keeps the evidence "unverified". A CASH row of an
+      unknown type with no share count, or a zero one, and a row of an
+      unknown category that moves no shares, that names an ISIN and does
+      not write a zero amount (a coupon, a capital return) is not booked
+      and is named by `trade_republic.cash_type_not_read`, with its
+      category when it is not CASH. An empty amount is named as an
+      unreadable one, never skipped as a zero; a written zero stays
+      skipped. Deposits, card payments and transfers name no ISIN and stay
+      skipped. A negative `price` is
+      |`amount`| ÷ `shares`, as an empty one: it sold the shares at a
+      negative price. `price`, `amount` and `fee` are read once, from the
+      cell: read a second time, "1.2,3,4" (first read "12.3,4") became
+      123.4, and as a price its raw text stopped the report. Now such a
+      price is |`amount`| ÷ `shares`, such an amount names the row, and
+      such a fee is not booked, which can only raise the tax. A buy's or
+      sale's `tax` is a cost only when it is negative, as TR writes a paid
+      tax. A positive one is money paid back: booked by its absolute value,
+      it lowered the gain by twice the refund. It is not booked, and
+      `trade_republic.trade_tax_positive` names the row. The `fee` keeps
+      the sign TR writes: a paid fee is negative, a positive one is a
+      rebate, as `commissionCost` reads it. Booked by its absolute value,
+      a rebate lowered the gain by twice its amount. A charge written
+      positive can only raise the tax.
+      A Scalable trade `fee` keeps its sign too: Scalable writes a paid fee
+      negative, so a positive one is a rebate. Booked by its absolute value,
+      it lowered the gain.
+      Freedom24 writes a paid `commission` positive, so a negative one is a
+      rebate, and the parser negates the cell. Booked as −|commission|, a
+      rebate lowered the gain. A readable `amount` that shows a charge where
+      the commission says a rebate names the row.
+    - DEGIRO: a row with no ISIN but a readable quantity or price, or an
+      order id. When the product name has the shape of an option
+      (`AAPL C200.00 20DEC24`) or a future (`FDAX MAR25`), the row is kept as
+      a derivative (`OPT`, `FUT`): it is named the same way, but it does not
+      stand for every share in the evidence, which derivatives never enter.
+      A row of an ISIN with a written zero price is a corporate-action row.
+    - eToro: an unknown or empty direction in the `Long / Short` column
+      (only `Long`, `Short`, `Buy` and `Real` are read; `Real` is an
+      unleveraged position, always long), or an English Action with no Buy
+      or Sell, or an empty Action on a row with an ISIN, units or dates.
+      Before, an unknown or empty direction was booked as a long position,
+      so a short's gain became a loss. FIFO values each leg at Units × Open
+      Rate or Close Rate, so a row whose rate cannot be read, or whose rate
+      column is missing, keeps both legs as unreadable rows named by that
+      cell (`Close Rate: —`). Before, a missing Close Rate column booked
+      every sale at 0 (a full loss), and a rate that could not be read went
+      on as text and stopped the report. A rate with a thousands separator
+      or a decimal comma is read as a number. In the Spanish export, a row
+      whose `Tipo de cambio de apertura (USD)` cannot be read, or is 0 or
+      below, is unreadable too: read as USD, a EUR instrument's gain was
+      converted at the dollar's rate.
+    - Kraken: a type that is neither `buy` nor `sell` keeps an unreadable row
+      for each coin. Before, it was booked as a buy, so FIFO could take its
+      price as the cost of a later sale (#468). A readable row with no txid
+      is booked under a row id (it was dropped with its gain); a row with no
+      pair is kept unreadable. A buy or sale whose `vol` (or, for a
+      crypto-quoted pair, `cost`) cannot be read keeps an unreadable row for
+      each coin. Before, it was booked as zero units and FIFO dropped it
+      with its gain and no word.
+      FIFO values a Kraken trade at price × vol. A `price` that cannot be
+      read (empty, only a currency sign, text, negative, or no column) was
+      booked as 0, so a sale became a full loss with no word, or was passed
+      on as text and stopped the whole report with a `DecimalError`. The
+      price is now cost ÷ vol, the file's own numbers; a row with neither
+      is an unreadable row named by its `price`. A written zero price ("0",
+      "0.00") is treated the same way: it sold the coins for 0 €, so a
+      6000 € gain became a 3000 € loss with no word. With a readable
+      nonzero cost the price is cost ÷ vol; with a zero or unreadable cost
+      the row is an unreadable row named by its `price`, for each coin.
+      Only Kraken's legacy codes (XXBT, XETH, ZEUR, XICN, XNMC, XXVN, ...)
+      lose their X or Z prefix. Any other code was cut too, so ZETA became
+      ETA, XAUT became AUT and XUSD became dollars: a rebuy of the same
+      coin at another broker did not block a Kraken loss. A legacy quote
+      (ZEUR, XXBT) is split off only after a legacy base or a known coin,
+      so Tezos (XTZEUR) is no longer read as XT/ZEUR, and USDTZUSD
+      (Kraken's own key for USDT/USD) is USDT, never the coin "USDTZ"
+      that no USDT rebuy at another broker could match.
+      A pair written with a slash (BTC/EUR) was booked as the coin "BTC/",
+      so it matched no BTC lot, reward or rebuy. It is now split at the
+      slash; a slash pair that is not two sides, or whose quote is no known
+      currency or coin, is named by `kraken.unrecognized_pair`.
+      A pair of two fiat currencies (ZEURZUSD, EURUSD) was booked as a
+      crypto trade of the coin "EUR": multidivisa made up a capital loss on
+      a euro round trip, and a sale of euros alone gave a gain with
+      `fifo.sell_without_lots`. The FX engine reads only cash trades, so
+      the row books nothing and `kraken.fiat_conversion_not_booked` names
+      it by pair, type, vol, cost and time, as at Binance. Its ledger rows
+      are not named again as missing from the Trades CSV.
+      A ledger (Ledgers CSV) row of type `trade` books nothing: trades
+      come from the Trades CSV, whose txid is the ledger refid. A ledger
+      uploaded with no Trades CSV lost a sale with no word. At merge time,
+      `kraken.ledger_trade_not_booked` names each ledger trade, by refid,
+      date and legs, that no Kraken trade of the upload books.
+      Ledger rows of type `spend` and `receive` (an instant buy or sale in
+      the Kraken app), `conversion` and `sale` are sales and swaps too, and
+      may be in no Trades CSV. They were only counted by type in the info
+      message `kraken.ledger_rows_ignored`, so a sale's gain vanished. They
+      are now collected by refid like `trade` rows (each leg with its type)
+      and named by `kraken.ledger_trade_not_booked` when no Kraken trade of
+      the upload has that txid. So are rows of type `margin` and `settled`
+      (the result of a margin position), `adjustment` (such as a delisting
+      conversion) and `nfttrade` (an NFT sale): each may be a gain, and a
+      500 € margin profit uploaded as a ledger alone vanished. A margin
+      close uploaded with its Trades row is booked once from the Trades CSV
+      and not named. A `rollover` fee stays counted by type.
+      Every ledger `transfer` was skipped with no word, so an airdrop
+      (subtype `airdrop`, FLR or SGB) went undeclared. It is now crypto
+      income of the base general (art. 33.1 LIRPF), as at Binance. Only the
+      moves between the user's own wallets (spottostaking, stakingfromspot,
+      stakingtospot, spotfromstaking, spotfromfutures, spottofutures) stay
+      skipped; any other transfer, and an airdrop that is not a credit, is
+      named by `kraken.ledger_rows_ignored` by type and subtype.
+      A staking or Earn row that takes coins away (a negative amount, or a
+      fee larger than the reward) was booked as negative income and cut
+      casilla 0027 with no word. DeclaRenta does not know which reward it
+      cancels, so it books nothing and `kraken.income_negative` names it
+      by type, coin, amount, fee and date, as at Binance. A reward whose
+      fee equals its amount is booked as 0, as before.
+      A ledger row of type `reward`, `dividend`, `credit`, `nftrebate` or
+      `nftcreatorfee` that gives coins or money (or whose amount cannot be read) may be income. It was only
+      counted by type in an info message whose hint never said so. It books
+      nothing, since DeclaRenta does not know what income it is, and
+      `kraken.ledger_income_not_booked` names it by type, coin, amount and
+      date. A row of those types that takes money away or writes zero stays
+      counted in `kraken.ledger_rows_ignored`.
+    - Coinbase: a buy, sale or Convert whose `Asset` is empty or whose
+      `Quantity Transacted` cannot be read is an unreadable row, named by
+      that cell (with no Asset, by its type and quantity). A Convert still
+      books the coin it received when its Notes name it. Before, the row
+      was skipped with no word: a sale vanished with its gain, and a rebuy
+      could not show that an art. 33.5.e check was missing.
+      FIFO values a Coinbase trade at Quantity × Spot Price. A Spot Price
+      that cannot be read (empty, only a currency sign, text, a cell cut
+      off) was booked as 0, so a sale became a full loss with no word, or
+      was passed on as text and stopped the whole report with a
+      `DecimalError`. The price is now Subtotal ÷ Quantity, the file's own
+      numbers; a row with neither is an unreadable row named by its Spot
+      Price. A written 0 stays the file's word. An empty `Price Currency`,
+      or a header with no currency column, was read as EUR, so dollars were
+      booked as euros: such a buy, sale or Convert (both coins) is an
+      unreadable row named by that cell. Exports from before 2021 write the
+      currency in the money headers ("USD Spot Price at Transaction", "EUR
+      Subtotal"); no money column was found, so every trade was booked at 0
+      and the gain vanished. Those headers are now read, with the currency
+      from the prefix, and a header with no price column at all is refused.
+    - Crypto income whose coin cannot be read: a Coinbase Staking Income,
+      Rewards Income, Learning Reward, Inflation Reward or Coinbase Earn
+      row with an empty `Asset`, and a Kraken staking or Earn reward with
+      an empty `asset`, is not booked under a guessed coin.
+      `parser.crypto_income_unidentified` names each row by type, amount,
+      date and cell. Before, the Coinbase row was skipped with no word, so
+      the income could go undeclared; the Kraken row was booked under an
+      empty coin and only counted as unvalued income. Another Coinbase
+      type with an empty `Asset` is now counted by
+      `coinbase.unknown_types_skipped` like the same type with a coin.
+      Binance names such a row with `binance.unparseable_coin`.
+    - Crypto income whose amount cannot be read: a Coinbase income row
+      whose `Total` and `Subtotal` both cannot be read (empty, text, only a
+      currency sign), and a Kraken staking or Earn reward whose `amount`
+      cannot be read, is not booked.
+      `parser.crypto_income_amount_unreadable` names each row by type, coin,
+      date and cells. Before, an empty Coinbase Total booked the income as
+      0 with no word, even with a readable Subtotal (now used); a Total of
+      "abc" stopped the whole report with a `DecimalError`; and the Kraken
+      reward was booked as 0 units.
+      A Coinbase income row with an empty `Price Currency` is named the
+      same way: it was booked as euros. Coinbase income in another currency
+      ($30 of staking) was taken as that many euros (30 €), for the income
+      and for the cost of the coin received; it is now valued at the ECB
+      rate of its day, and only a EUR amount is taken as it is. A negative
+      Coinbase income row (income taken back) lowers the income, as
+      before, but no longer opens a second lot: abs() gave it one, so a
+      later sale of a coin with no lot got a made-up cost and no
+      `fifo.insufficient_lots` warning.
+    - Dividends and interest whose amount cannot be read: a Lightyear
+      Dividend or Distribution whose `Gross Amount` cannot be read, a
+      Lightyear Interest or Reward whose `Net Amt.` and `Gross Amount`
+      both cannot be read, a Trading 212 Dividend or Interest on cash whose
+      `Total` cannot be read, a Scalable Interest or Distribution whose
+      `amount` cannot be read, and a Trade Republic DIVIDEND (its
+      `original_amount` when it has one), INTEREST_PAYMENT or
+      TAX_OPTIMIZATION whose `amount` cannot be read, is not booked, and
+      neither is its withholding. `parser.cash_income_amount_unreadable`
+      names each row by type, security, currency, date, tax and cell.
+      Before, Lightyear, Scalable and Trade Republic booked such a
+      dividend at 0 with its withholding (a deduction for income the
+      report did not count), Trading 212 dropped such a dividend or
+      interest with no word, Lightyear and Scalable such interest, and
+      Trade Republic booked such interest as 0 and dropped a tax
+      optimisation. A written 0 stays an explicit zero with no warning.
+      A Trade Republic dividend whose written `tax` cannot be read
+      ("-15.00 EUR", "-15abc", "-Infinity") is booked in full with no
+      withholding, which can only raise the tax; a reversal (a negative
+      amount) with such a cell is not booked, so the dividend it reverses
+      keeps its income. `trade_republic.tax_unreadable` names each row.
+      Before, such a cell stopped the report or booked an unlimited
+      withholding. The `tax` of a reversal is a refund, never a new
+      withholding, and a dividend with `original_currency` but no
+      `original_amount` is booked in the account currency, the currency of
+      the amount read. A Trade Republic DIVIDEND whose amount is a written
+      zero and whose `tax` is not zero is no dividend, since TR writes a
+      dividend's tax on the dividend's own row. A withholding (negative) is
+      not booked and `parser.cash_income_amount_unreadable` names the row:
+      booked, it gave a 0597 or 0588 credit on 0 € of income. A refund
+      (positive) is booked alone, as a refund, which the report takes from
+      a dividend of its ISIN within 7 days, never below 0. Before, it was
+      booked as a new withholding. `trade_republic.dividend_tax_refund`
+      names the refund row: with no dividend that close the report leaves
+      the refund out, and the user corrects 0588 or 0597 by hand.
+      A Scalable Distribution of a written zero with a positive `tax` is
+      booked and named the same way (`scalable.dividend_tax_refund`):
+      Scalable writes a withholding negative, and before, the refund was
+      booked as a new withholding.
+      A Trade Republic dividend read from `original_amount` took its sign
+      from that cell alone. When `amount` is a readable nonzero number of
+      the other sign, or `original_amount` is 0, the row says two things:
+      it is not booked, nor its tax, and
+      `parser.cash_income_amount_unreadable` names it with both cells.
+      Before, 100 EUR credited against −110 USD booked negative income
+      that cancelled other dividends. An empty or unreadable `amount`
+      keeps `original_amount`.
+    - eToro: a dividend whose net amount cannot be read (in the Spanish
+      export, the EUR net), and an Interest Payment whose Amount cannot be
+      read, is not booked, and neither is that dividend's withholding.
+      `parser.cash_income_amount_unreadable` names each row. Before, both
+      were dropped with no word. A written 0 stays skipped. A dividend with
+      no withholding is booked at its net as a number: its raw text
+      ("1,234.56") stopped the report. A Dividends or Account Activity
+      sheet whose needed columns are not recognised is named by the error
+      `etoro.columns_not_detected`, like Closed Positions; it dropped every
+      dividend or interest with no word. An undated row is a totals line
+      only when it has no ISIN and its name is exactly `Total` or
+      `Totales`: an undated TotalEnergies dividend is named by
+      `parser.cash_row_undated`, never skipped as a total.
+      On a sheet with only `Withholding Tax Rate (%)`, only a rate
+      strictly between 0 and 100 grosses the net up. A rate of 100 or more
+      made the gross infinite or negative and stopped the report; such a
+      row is now booked at its net with no withholding, which can only
+      raise the tax. A reversal (a negative net) refunds its withholding:
+      the text "--7.5000" stopped the report.
+    - eToro: the English export's `FX rate at open (USD)` column is read
+      like the Spanish `Tipo de cambio de apertura (USD)`. Only the Spanish
+      name was known, so an English export booked a EUR instrument's legs
+      as dollars with no word.
+    - eToro: a closed position whose FX rate is not 1 was labelled EUR, so
+      a quote in pence or HKD was booked as euros (a loss 85 or 8 times too
+      large). The FX rate says only that the quote is not in dollars, not
+      which currency it is in. Every leg is now booked in USD, the
+      account's currency: Open Rate × `FX rate at open (USD)` and Close
+      Rate × `FX rate at close (USD)`, eToro's own applied rates. The ECB
+      converts the dollars to euros, as for any USD trade. A non-USD row
+      whose FX rate at close cannot be read, or that has no such column, is
+      kept as an unreadable row named by that cell.
+    - eToro: a row is in dollars only when both FX rates are 1. A row
+      with 1 at open read no FX rate at close, so a franc or euro quote at
+      dollar parity on the open day booked its close leg unconverted (a
+      120 USD gain became 0). With 1 at open, an FX rate at close that
+      cannot be read now makes the row unreadable too.
+    - eToro: a CFD kept its share's ISIN, so FIFO pooled it with the shares
+      and with other CFDs of that ISIN, and a share sale took a CFD's cost
+      (a 2025 gain moved into 2026). A CFD is a contract of its own, never
+      homogeneous with the shares (art. 37.2 LIRPF). Its two legs now carry
+      no ISIN and a `conid` of their own (`etoro-<Position ID>`, else the
+      ISIN or name, open date and row), so each CFD closes only its own
+      lot. Its description keeps the ISIN. The anti-churning rule never
+      read CFDs.
+    - eToro: an export with no FX rate column booked every quote as
+      dollars, so a quote in pence became a loss about 80 times too large.
+      A row is now booked only when its `Profit(USD)` confirms the rates:
+      units × (close − open), the other way round for a short, within 1 USD
+      or 2%. Any other row, or one with no readable Profit, is kept as an
+      unreadable row named by its Open Rate, Close Rate and Profit cells.
+    - eToro: a number cell formatted `#,##0` was read as its text "3,000",
+      which reads as 3, so a price, a unit count or a dividend of 1000 or
+      more was booked 1000 times too small. A number cell whose text has a
+      comma is now read at its value.
+    - eToro: an Account Activity row whose Type names staking was dropped
+      with no word, because only interest was read. DeclaRenta does not
+      import eToro crypto, so the reward is not booked and its value is not
+      guessed. `etoro.staking_not_imported` names each row by type,
+      details, amount and date, for the user to add by hand.
+    - DEGIRO Account CSV: a Dividendo, a Retención del dividendo or an
+      interest row whose amount cannot be read, or whose currency cell is
+      empty, is not booked, and neither are the withholdings of such a
+      dividend (same ISIN, product and date). The same warning names each
+      row by its amount or currency cell. Before, a textual amount stopped
+      the report, an empty one booked a dividend of 0 with its withholding,
+      an empty currency booked a pound or yen amount as euros, and a GBX
+      row with a textual amount refused the file. A positive interest row
+      (flatex Interest, Interés, Zinsen, Rente, Intérêts) is interest
+      received; it was dropped with no word. A negative one stays out,
+      which can only raise the tax. A Dividendo or a Retención with no ISIN
+      is not booked: its country, and so whether the withholding is Spanish
+      or foreign, would be a guess (a Spanish 19 € withheld became a 15 €
+      foreign deduction). `parser.cash_row_unidentified` names it, with the
+      withholding next to the dividend of the same product and date. A row
+      with no Descripción that names a security and moves money is named by
+      `degiro.cash_row_undescribed` and not booked; it was dropped with no
+      word.
+      A German `Fondsausschüttung` (an ETF distribution) is a dividend,
+      like `Dividende`; it was dropped with no word. A capital return
+      (Capital Return, Return of Capital, Remboursement de capital,
+      Kapitalrückzahlung, Kapitaalsuitkering, Devolución de capital) that
+      names a security and moves money is named by
+      `parser.cash_row_not_booked` and not booked: it lowers the cost of
+      the shares, and the part above that cost is income (art. 25.1.e
+      LIRPF). DeclaRenta books neither. It was dropped with no word.
+    - DEGIRO Transactions CSV: a buy or sale with an empty price-currency
+      cell is an unreadable row named by that cell, never a trade in euros
+      (a yen buy made a loss of thousands). An empty costs-currency cell is
+      EUR, the currency DEGIRO charges in. A GBX trade whose `Valor local`
+      or `Tipo de cambio` cannot be read is booked from its price and
+      quantity, never refused. A row with a readable quantity and a blank
+      or unreadable price is a trade of unknown price even with no order id
+      and no value: dropped, it hid a second purchase in the window. A
+      negative price is an unreadable row named by `Precio`, as in Flatex:
+      booked, a sale had negative proceeds and a false loss.
+    - Binance Trade History: a row whose `Side` is neither BUY nor SELL, or
+      whose `Executed` (or, for a crypto-quoted pair, `Amount`) is no
+      number ("", "abc", "1,000.5BTC"), keeps an unreadable row for each
+      coin. Before, the first was skipped and the second booked as zero
+      units, both with no word.
+    - `parser.trade_row_unreadable` says in its hint that a crypto row may
+      be a repurchase whose art. 33.5.e check DeclaRenta cannot make.
+    - IBKR: a trade with no `buySell` takes its side from the quantity's
+      sign; with no signed quantity, the side is unknown (""), never BUY.
+    - Binance Transaction History: a row with no readable `UTC_Time` (empty,
+      text, a date with no time) cannot be paired with the other legs of its
+      conversion or trade, so it books nothing and is no trade.
+      `binance.unparseable_timestamp` names each row by coin, operation,
+      change and the date cell. `binance.unparseable_amount` does the same
+      for a row whose `Change` is no number, empty, `NaN` or `Infinity`.
+      An undated row with no readable `Change` is named in the first
+      warning with both cells. `binance.unparseable_coin` names a row with
+      no `Coin` that moves a non-zero amount. A `--` or zero `Change`, and
+      a row with neither a coin nor an amount, move nothing and stay
+      skipped. The hints say that the coin's
+      gains, losses and income, and its art. 33.5.e check, are not reliable.
+      Before, both warnings gave only a count. A `UTC_Time` of the right
+      shape that is no real day ("2025-13-45 10:00:00") is still paired, and
+      its trades are undated rows, as in every parser. A Convert, fiat
+      purchase, Strategy or plain spot leg that no other leg pairs within
+      its 1 s window books nothing, and `binance.unpaired_leg` names it by
+      coin, operation, change and time, with the same art. 33.5.e caveat.
+      Before, an unpaired spot leg was dropped with no word, and a Convert
+      or Strategy leg was only counted by `binance.unhandled_operation`,
+      which now counts only operations no phase knows. The window stays at
+      1 s: every leg pair in the fixtures shares one second, and the code
+      already handles legs written 1 s apart. When several coins are bought
+      with one fiat in one window, each received row is paired with a fiat
+      row by order when their counts match (one payment per fill), and each
+      coin gets the sum of its own payments. Before, two fills of one coin
+      and one order of another split the total equally, so one coin took
+      the other's cost (ETH cost 5050 € instead of 100 €) with no word.
+      That pairing is trusted only when the file writes each payment next
+      to its fill: in file order, the rows form consecutive pairs of one
+      received row and one fiat row (the real export lists each order's
+      rows together, in either order). Equal counts alone prove nothing:
+      "Buy BTC 0.1, Buy ETH 1, Sell EUR -100, Sell EUR -10000" gave ETH the
+      10000 € and a 9800 € loss with no word. When the rows are not in
+      such pairs, or the counts do not match, the window is booked as
+      before (by order, else by coin when that count matches, else an
+      equal split; the total paid stays exact), and
+      `binance.spot_cost_split` names every leg of the window with the
+      art. 33.5.e caveat.
+      The same holds for every other Binance path that pairs two or more
+      coins. A spot window paid in two currencies, and a Convert window,
+      go through `pairAndEmit`, which pairs by closest EUR value and, with
+      no EUR value, by order: "Buy ETH 1, Buy BTC 0.1, Sell EUR -11000,
+      Sell USD -110" gave ETH the 11000 € and a 10800 € loss with no word.
+      Strategy pairs the k-th `Transaction Buy` with the k-th `Transaction
+      Spend`, and the k-th `Transaction Sold` with the k-th `Transaction
+      Revenue`. When a side has two or more legs to choose from (one pair
+      and a leftover included) and no EUR value on every leg decides them,
+      the pairing is trusted only when the file writes every leg in a pair
+      of two adjacent rows (fees and the other side's rows do not break a
+      pair). A leftover leg proves nothing on its own: in "Buy ETH, Sell
+      EUR, Buy BTC, Buy SOL, Sell USD" the pairs ETH/EUR and BTC/USD look
+      adjacent once SOL is ignored, but the USD sits next to SOL. Such a
+      window waits until every window has run. It is trusted only if a
+      later window pairs every leftover and all those pairs together are
+      adjacent rows: a trade that starts in one window's last second and
+      ends in the next. Strategy pairs of one coin on each side are trusted
+      only when the choice cannot change a lot, because FIFO keeps one lot
+      per Buy row: "Buy ETH 1, Buy ETH 2, Spend -100, Spend -200" gave a
+      later sale of 1 ETH a gain of 100 € where "Spend -200, Spend -100"
+      gave 0. So every Spend (or Revenue) must be the same amount, and
+      every Buy (or Sold) too when one is left over. Otherwise the numbers
+      are booked as before and `binance.spot_cost_split`, now worded for
+      purchases and sales, names every leg.
+      Fees follow the same rule. Binance writes an order's rows together,
+      with the fee first, between or last, so a fee belongs to the order
+      written beside it. A fee in a coin that only one order of its second
+      takes goes to that order. When two or more orders take its coin, the
+      nearest leg rows before and after the fee must belong to one of them;
+      otherwise the fee is deducted from no order, which can only raise a
+      gain, and `binance.fee_unassigned` names it. Before, the last spot
+      trade of a second took every fee ("Buy BTC, Sell EUR, Fee -5, Buy ETH,
+      Sell EUR, Fee -1" put 6 € on ETH), each Strategy pair took the first
+      fee row of its coin (BTC paid ETH's 5 € and the 1 € row vanished), and
+      a fiat-for-fiat Strategy pair wrote its fee onto an earlier, unrelated
+      trade. Dust rows and their BNB rows pair within 1 s, like every other
+      trade path; a dust row with no BNB row is named by
+      `binance.unpaired_leg`, and a dust window paired by order or with
+      fewer BNB rows than coins by `binance.spot_cost_split`. A negative
+      income row (a reward taken back) and a fiat-for-fiat swap book
+      nothing, as before, and are now named (`binance.income_negative`,
+      `binance.fiat_conversion_not_booked`). In the Trade History export,
+      FIFO values a fiat-pair trade at Price × Executed: a Price that
+      cannot be read was read as 0 (a 3000 € sale showed a 2000 € loss), so
+      the price is now Amount ÷ Executed, and a row with neither is an
+      unreadable row named by its Price. A row whose Pair cannot be split is
+      named by date, side, amount and the Pair cell.
   - `buildEvidenceCheck`, for EVERY account (broker and account id) that
     trades the key or lists it in any holdings list of the upload:
     1. it has a holdings list dated on or after the sale day; the earliest such

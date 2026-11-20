@@ -164,13 +164,16 @@ describe("scalableParser", () => {
       expect(result.trades).toHaveLength(0);
     });
 
-    it("should skip unrecognized trade types", () => {
+    it("keeps a row of an unrecognized type that moves shares as an unreadable row, never dropped (#467)", () => {
       const csv = [
         "date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency",
         "2025-03-15;09:15;Executed;REF001;Test;Security;Transfer;IE00BK5BQT80;5;100,00;-500;0;0;EUR",
+        "2025-03-16;09:15;Executed;REF002;Test;Security;Taxes;IE00BK5BQT80;0;0;-3;0;0;EUR",
       ].join("\n");
       const result = scalableParser.parse(csv);
-      expect(result.trades).toHaveLength(0);
+      expect(result.trades.map((t) => [t.isin, t.quantity, t.quantityUnknown, t.tradeMoney, t.unreadableRow])).toEqual([
+        ["IE00BK5BQT80", "0", true, "0", 'Test (IE00BK5BQT80) 20250315 [type: "Transfer"]'],
+      ]);
     });
 
     it("should handle distribution with no withholding tax", () => {

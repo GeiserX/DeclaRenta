@@ -2,6 +2,7 @@ import type { Statement } from "../types/broker.js";
 import Decimal from "decimal.js";
 import { formatDateDmy, isYearEndDate, normalizeDate } from "../engine/dates.js";
 import { plainOrExponent } from "../engine/amount-range.js";
+import { readableDay } from "./csv-utils.js";
 
 export function createEmptyStatement(): Statement {
   return {
@@ -38,16 +39,21 @@ export function mergeStatement(target: Statement, source: Statement, brokerName?
   target.toDate = maxDate(target.toDate, source.toDate);
   target.period = target.period || source.period;
 
-  target.trades.push(...source.trades);
-  target.cashTransactions.push(...source.cashTransactions);
-  target.corporateActions.push(...source.corporateActions);
-  target.openPositions.push(...source.openPositions);
-  target.securitiesInfo.push(...source.securitiesInfo);
+  // One push per row: push(...rows) passes every row as an argument and throws
+  // RangeError past about 125k rows, so a large export could not be merged.
+  for (const trade of source.trades) target.trades.push(trade);
+  for (const cash of source.cashTransactions) target.cashTransactions.push(cash);
+  for (const action of source.corporateActions) target.corporateActions.push(action);
+  for (const position of source.openPositions) target.openPositions.push(position);
+  for (const info of source.securitiesInfo) target.securitiesInfo.push(info);
   target.cashBalances = [...(target.cashBalances ?? []), ...(source.cashBalances ?? [])];
   target.optionExercises = [...(target.optionExercises ?? []), ...(source.optionExercises ?? [])];
   target.parserWarnings = [...(target.parserWarnings ?? []), ...(source.parserWarnings ?? [])];
   target.parserMessages = [...(target.parserMessages ?? []), ...(source.parserMessages ?? [])];
   target.pendingOrderLegs = [...(target.pendingOrderLegs ?? []), ...(source.pendingOrderLegs ?? [])];
+  if (source.krakenLedgerTrades) target.krakenLedgerTrades = [...(target.krakenLedgerTrades ?? []), ...source.krakenLedgerTrades];
+  if (source.krakenNamedTradeIds) target.krakenNamedTradeIds = [...(target.krakenNamedTradeIds ?? []), ...source.krakenNamedTradeIds];
+  if (source.flatexZeroFillOrders) target.flatexZeroFillOrders = [...(target.flatexZeroFillOrders ?? []), ...source.flatexZeroFillOrders];
   target.manualRateHints = [...(target.manualRateHints ?? []), ...(source.manualRateHints ?? [])];
   target.holdingsBySource = [
     ...(target.holdingsBySource ?? []),
@@ -129,6 +135,8 @@ export function yearEndHoldings(statement: Statement, year: number): Statement {
 
 export function finalizeMergedStatement(statement: Statement): Statement {
   reconcileOrderLegs(statement);
+  nameUnbookedKrakenLedgerTrades(statement);
+  dateUndatedRowsAtUploadStart(statement);
 
   // Same-day trades go by time of day, then keep the parser's row order (the
   // sort is stable). Never by tradeID: Kraken txids are random and row-index
@@ -152,6 +160,62 @@ export function finalizeMergedStatement(statement: Statement): Statement {
 }
 
 /**
+ * A Kraken ledger names each trade by refid, the txid of its row in the
+ * Trades CSV, and the ledger parser books none of them. A ledger uploaded
+ * with no Trades CSV that has the trade lost a sale or a purchase with no
+ * word (#467): each trade no Kraken trade of the upload books is named.
+ */
+function nameUnbookedKrakenLedgerTrades(statement: Statement): void {
+  const pending = statement.krakenLedgerTrades;
+  const named = statement.krakenNamedTradeIds ?? [];
+  delete statement.krakenLedgerTrades;
+  delete statement.krakenNamedTradeIds;
+  if (!pending?.length) return;
+  // A Trades row already named by its parser (a fiat-for-fiat pair) is in
+  // the upload: its ledger rows are not named again as missing.
+  const booked = new Set([...statement.trades.filter((t) => t.exchange === "KRAKEN").map((t) => t.tradeID), ...named]);
+  const rows = new Map(pending.filter((p) => !booked.has(p.refid)).map((p) => [p.refid, p.row]));
+  if (rows.size === 0) return;
+  const count = String(rows.size);
+  const text = [...rows.values()].join("; ");
+  addInfoMessage(statement, {
+    id: "kraken.ledger_trade_not_booked",
+    severity: "warning",
+    message: `Kraken: ${count} compraventa(s) del libro mayor (Ledgers) no están en ningún archivo de operaciones (Trades) subido y no se calculan: ${text}.`,
+    hint: "DeclaRenta lee las compras y las ventas de Kraken solo del archivo de operaciones (Trades). Cada fila trae el refid de la operación y su fecha. Entre corchetes van las monedas y los importes que mueve en el libro mayor. Descarga de Kraken el archivo Trades de esas fechas (History → Export → Trades) y súbelo junto al libro mayor. Sin él, puede faltar una venta en tu declaración, o el coste de una compra. Las compras y ventas instantáneas (tipos spend y receive), las conversiones (conversion) y las ventas (sale) pueden no estar en el archivo Trades. Si no están, añade a mano en Renta Web cada venta y cada cambio de una criptomoneda por otra, y usa cada compra como coste cuando vendas esa moneda. Las filas margin y settled son el resultado de una posición con margen. Una fila adjustment es un ajuste, como el cambio de una moneda que Kraken deja de ofrecer. Una fila nfttrade es la venta de un NFT. Si no están en el archivo Trades y te dan dinero o monedas, pueden ser una ganancia patrimonial: decláralas a mano en Renta Web.",
+    context: { count, rows: text },
+  });
+}
+
+/**
+ * A kept trade row whose file gives no readable date (`undatedRow`, #467)
+ * cannot be placed in time, so it must make the one-purchase evidence (#453)
+ * "unverified" whatever the window. With an ISIN it does at any date. With no
+ * ISIN the evidence reads it only before a sale's window start or between the
+ * window start and the year-end list it checks, never after that list. The
+ * earliest date of the whole upload (trades and cash rows) is on or before
+ * every sale, so the row stands in one of those two places for every sale.
+ * The engine needs a real date (crypto valuation throws on ""), and this one
+ * adds no year to the upload. The row books nothing, so no number moves.
+ * When the upload has no readable date at all it has no sale either: the row
+ * is left out of the merged trades and stays named by its parser's warning.
+ * A copy replaces each row: the parsed file's own statement keeps its trade.
+ */
+function dateUndatedRowsAtUploadStart(statement: Statement): void {
+  if (!statement.trades.some((t) => t.undatedRow === true)) return;
+  const days = [
+    ...statement.trades.map((t) => t.tradeDate),
+    ...statement.cashTransactions.map((c) => c.dateTime),
+  ]
+    .flatMap((d) => readableDay(d) ?? [])
+    .sort();
+  const earliest = days[0];
+  statement.trades = earliest === undefined
+    ? statement.trades.filter((t) => t.undatedRow !== true)
+    : statement.trades.map((t) => (t.undatedRow === true ? { ...t, tradeDate: earliest, settlementDate: earliest } : t));
+}
+
+/**
  * Reconcile per-trade commission for brokers (Flatex) that ship trades and
  * their cash settlement in two separate files. The trade carries the broker
  * order number in `notes`; the cash leg carries the same key in `orderKey`.
@@ -167,32 +231,182 @@ export function finalizeMergedStatement(statement: Statement): Statement {
  * the two files), emit an info message — commission can't be recovered then.
  *
  * One order filled in parts has several trades (and usually several legs) with
- * the same order number. Equal counts → pair them 1:1 by date, then by amount
- * within a day. Different counts → recover the order's total fee and split it
- * pro rata by trade value.
+ * the same order number. Flatex books a fill and its cash leg on the same
+ * Buchtag, so legs and fills are matched day by day (#467): every day of the
+ * order must have both, every leg a readable day, and no fill of the order may
+ * be a row the parser kept unreadable (its leg would have no fill). A day with
+ * as many legs as fills pairs them 1:1 by amount; when one pair gives no fee,
+ * no fill of that day gets one: the legs are not one per fill (a combined
+ * leg uploaded twice with no TA-Nr.), and a pair that passed booked 500 € of
+ * the other fill's value as its fee. A day with a different
+ * count (one combined leg for several fills) recovers the day's total fee and
+ * splits it pro rata by trade value. Legs paired with fills of another
+ * execution booked a fill's whole value as a fee with no word.
  * The fee is only derived when leg and trade share a currency: a USD-priced
  * trade settled in EUR would otherwise book the whole FX difference as a fee.
+ *
+ * A fee is kept only when the legs can give one (#467): every leg's amount is
+ * readable, and the fee is not below zero (a buy pays at least its gross, a
+ * sale gets at most its gross; one cent of rounding is allowed) and is below
+ * the gross and below 50 plus 2 % of the gross: a larger one is a leg that
+ * also pays a fill the Depot export does not list. An order with a Kauf or
+ * Verkauf of Nominal 0 gets no fee: that row books nothing, but its cash may
+ * be in a leg (Flatex settles fills in one combined leg). Both gave the
+ * listed fill the hidden fill's value as a fee (a 188 € gain became a 112 €
+ * loss). A hidden fill below the cap still passes: nothing in the files
+ * tells its cash from a fee. So a fee above an ordinary Flatex fee (10 € per
+ * leg net of Stornos plus 1 % of the gross) is not booked: the fills of that
+ * day keep a fee of 0 and `flatex.commission.above_usual` names the order. A
+ * hidden fill below that allowance still passes: only the order's Abrechnung
+ * PDF tells it from a stamp duty. A split fee is also below the day's smallest
+ * fill: a missing or extra leg of a fill of the day (a sale leg not
+ * exported, a leg uploaded twice with no TA-Nr.) moves the fee by at least
+ * that fill's value. A day
+ * with more legs than fills (net of Stornos) is never split: the extra leg
+ * may be that of a fill the Depot export does not list or writes with a
+ * Nominal of 0, and such a leg can be below the smallest fill. Otherwise
+ * the fills keep a fee of 0 and `flatex.commission.not_recovered` names the
+ * order: a leg with an empty amount made the whole trade a fee (a 1194 € gain
+ * became a 1006 € loss), and a missing or extra leg a fee as large as a fill.
+ * The legs are summed with their sign, so a Storno cancels the leg it reverses.
  */
 const FLATEX_ORDER_PREFIX = "flatex-order:";
 
 type Trade = Statement["trades"][number];
 type OrderLeg = NonNullable<Statement["pendingOrderLegs"]>[number];
 
-// Pair fills with cash legs by date, and same-day fills by size: sorting both
-// sides by amount minimises the total |net − gross| and the largest single
-// gap, so no same-day fill is booked more than the order's largest real fee.
-// File order is not used: the Depot and Konto exports need not list same-day
-// fills in the same order.
+// Pair same-day fills with cash legs by size: sorting both sides by amount
+// minimises the total |net − gross| and the largest single gap, so no fill
+// is booked more than the day's largest real fee. File order is not used:
+// the Depot and Konto exports need not list same-day fills in the same order.
 function tradeOrder(a: Trade, b: Trade): number {
-  const dateCmp = normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate));
-  if (dateCmp !== 0) return dateCmp;
   return new Decimal(a.tradeMoney).abs().cmp(new Decimal(b.tradeMoney).abs());
 }
 
 function legOrder(a: OrderLeg, b: OrderLeg): number {
-  const dateCmp = normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate));
-  if (dateCmp !== 0) return dateCmp;
   return new Decimal(a.netAmount).abs().cmp(new Decimal(b.netAmount).abs());
+}
+
+/**
+ * The fills and legs of one order, by day (oldest first), or undefined when
+ * they cannot be the same executions: a leg or fill with no readable day, or
+ * a day with fills and no leg or with legs and no fill (#467).
+ */
+function executionDays(trades: readonly Trade[], legs: readonly OrderLeg[]): { trades: Trade[]; legs: OrderLeg[] }[] | undefined {
+  const days = new Map<string, { trades: Trade[]; legs: OrderLeg[] }>();
+  const dayOf = (date: string): { trades: Trade[]; legs: OrderLeg[] } | undefined => {
+    const day = readableDay(date);
+    if (day === undefined) return undefined;
+    const entry = days.get(day) ?? { trades: [], legs: [] };
+    days.set(day, entry);
+    return entry;
+  };
+  for (const trade of trades) {
+    const day = dayOf(trade.tradeDate);
+    if (!day) return undefined;
+    day.trades.push(trade);
+  }
+  for (const leg of legs) {
+    const day = dayOf(leg.tradeDate);
+    if (!day) return undefined;
+    day.legs.push(leg);
+  }
+  const sorted = [...days].sort(([a], [b]) => a.localeCompare(b)).map(([, day]) => day);
+  return sorted.every((day) => day.trades.length > 0 && day.legs.length > 0) ? sorted : undefined;
+}
+
+// One cent: Flatex rounds the cash leg to cents, but not the gross (qty × Kurs).
+const FEE_ROUNDING = new Decimal("0.01");
+
+// No Flatex fee reaches 50 plus 2 % of the gross: the order fee is 5.90 €,
+// and exchange fees and stamp duties stay well below 2 %. A larger "fee" is
+// a leg that also pays a fill the Depot export does not list: nothing else
+// in the files tells them apart, and that fill's value became a fee (#467).
+const FEE_CAP_BASE = new Decimal(50);
+const FEE_CAP_SHARE = new Decimal("0.02");
+
+// An ordinary Flatex fee is the 5.90 € order fee, plus a few euros of
+// third-party fees abroad (the fixture's foreign orders pay 7.90 €, a savings
+// plan 0) and, in some countries, a stamp duty or a transaction tax of up to
+// 1 % of the gross (Ireland 1 %, the UK 0.5 %). A fee below the cap but above
+// 10 € per leg plus 1 % of the gross is not booked, and is named: the leg may
+// also pay a fill the Depot export does not list, a 30 € fill gave a 35.90 €
+// fee, and nothing in the files tells them apart. Booked, that fill's value
+// lowered the gain; left at 0, a real fee can only raise the tax (#467).
+const FEE_USUAL_BASE = new Decimal(10);
+const FEE_USUAL_SHARE = new Decimal("0.01");
+
+/** True when `fee`, from `legs` cash legs of fills worth `gross`, is above an ordinary Flatex fee. */
+function aboveUsualFee(fee: Decimal, gross: Decimal, legs: number): boolean {
+  return fee.greaterThan(FEE_USUAL_BASE.mul(legs).plus(gross.abs().mul(FEE_USUAL_SHARE)));
+}
+
+/**
+ * The fee readable legs give fills of one side and `gross` value, or
+ * undefined when they give none: a buy pays gross + fee (its legs are
+ * debits), a sale gets gross − fee (its legs are credits). The fee must be
+ * below `limit` (the gross, or a split fee's smallest fill) and below 50
+ * plus 2 % of the gross.
+ */
+function legFee(legs: readonly OrderLeg[], side: Trade["buySell"], gross: Decimal, limit: Decimal = gross): Decimal | undefined {
+  const signed = legs.reduce((sum, leg) => sum.plus(leg.netAmount), new Decimal(0));
+  const fee = side === "SELL" ? gross.minus(signed) : signed.negated().minus(gross);
+  const cap = Decimal.min(limit, FEE_CAP_BASE.plus(gross.abs().mul(FEE_CAP_SHARE)));
+  return fee.greaterThan(FEE_ROUNDING.negated()) && fee.lessThan(cap) ? fee : undefined;
+}
+
+/**
+ * True when a day has more legs than fills once each Storno cancels the leg it
+ * reverses: a buy's legs are debits, a sale's credits, and a leg of the other
+ * sign is a Storno. One combined leg serves several fills, but no fill has two
+ * legs, so a surplus leg is the leg of a fill that is not among them (missing
+ * from the Depot export, or written with a Nominal of 0). Below the smallest
+ * fill it passed the fee limit and became the other fills' fee (#467). Were
+ * a fill ever to have two legs, the order would only lose its fee (named).
+ */
+function moreLegsThanFills(legs: readonly OrderLeg[], trades: readonly Trade[]): boolean {
+  return netLegCount(legs, trades) > trades.length;
+}
+
+/**
+ * How many legs a day has once each Storno cancels the leg it reverses: a
+ * buy's legs are debits, a sale's credits, and a leg of the other sign is a
+ * Storno.
+ */
+function netLegCount(legs: readonly OrderLeg[], trades: readonly Trade[]): number {
+  const sign = trades[0]!.buySell === "SELL" ? 1 : -1;
+  return legs.reduce((count, leg) => count + new Decimal(leg.netAmount).cmp(0) * sign, 0);
+}
+
+/**
+ * How `flatex.order_leg_without_fill` names an order whose legs no fill of
+ * the upload has: its number, ISIN, first day, and in brackets the side the
+ * text names with the legs' sum (or the cells that cannot be read).
+ * Undefined when the legs are readable and cancel each other (a Storno and
+ * the leg it reverses): they move nothing.
+ */
+function legsWithoutFillRow(orderKey: string, legs: readonly OrderLeg[]): string | undefined {
+  const sides = [...new Set(legs.flatMap((leg) => leg.side ?? []))];
+  const unreadable = legs.flatMap((leg) => leg.unreadableCell ?? []);
+  const sums = new Map<string, Decimal>();
+  for (const leg of legs) sums.set(leg.currency, (sums.get(leg.currency) ?? new Decimal(0)).plus(leg.netAmount));
+  if (unreadable.length === 0 && [...sums.values()].every((sum) => sum.isZero())) return undefined;
+  const amounts = unreadable.length > 0 ? unreadable.join(", ") : [...sums].map(([currency, sum]) => `${sum.toFixed()} ${currency}`).join(", ");
+  const day = legs.flatMap((leg) => readableDay(leg.tradeDate) ?? []).sort()[0] ?? "—";
+  const isin = legs.find((leg) => leg.isin)?.isin ?? "—";
+  return `${orderKey} ${isin} ${day} [${sides.length > 0 ? `${sides.join("/")}: ` : ""}${amounts}]`;
+}
+
+/** How `flatex.commission.not_recovered` names an order's fills and legs. */
+function orderRow(orderKey: string, legs: readonly OrderLeg[], trades: readonly Trade[]): string {
+  const first = trades[0]!;
+  const unreadable = legs.flatMap((leg) => leg.unreadableCell ?? []);
+  const gross = trades.reduce((sum, trade) => sum.plus(trade.tradeMoney), new Decimal(0));
+  const net = legs.reduce((sum, leg) => sum.plus(leg.netAmount), new Decimal(0));
+  const cells = unreadable.length > 0
+    ? unreadable.join(", ")
+    : `${gross.toFixed()} ${first.currency} / ${net.toFixed()} ${legs[0]!.currency}`;
+  return `${orderKey} ${first.isin || first.symbol} ${first.tradeDate} [${cells}]`;
 }
 
 function reconcileOrderLegs(statement: Statement): void {
@@ -223,6 +437,14 @@ function reconcileOrderLegs(statement: Statement): void {
   // booking number, or FIFO would count every buy and sell twice.
   const seenFills = new Set<string>();
   const repeatedFills = new Set<Trade>();
+  // Orders with a fill the parser kept as a row that books nothing (a Kurs or
+  // Nominal it cannot read): that fill's leg is in the Konto export, so the
+  // legs cannot give the readable fills a fee (#467).
+  const keptFillOrders = new Set<string>();
+  // Orders with a Kauf or Verkauf of Nominal 0: it books nothing, but its
+  // cash may be in a leg of the order (#467). Not named as legs without fill.
+  const zeroFillOrders = new Set(statement.flatexZeroFillOrders ?? []);
+  delete statement.flatexZeroFillOrders;
   for (const trade of statement.trades) {
     const key = trade.notes ?? "";
     if (!key.startsWith(FLATEX_ORDER_PREFIX)) continue;
@@ -230,6 +452,10 @@ function reconcileOrderLegs(statement: Statement): void {
     // mistaken for an IBKR notes flag (AFx, P) downstream.
     delete trade.notes;
     const orderKey = key.slice(FLATEX_ORDER_PREFIX.length);
+    if (trade.quantityUnknown === true) {
+      keptFillOrders.add(orderKey);
+      continue;
+    }
     if (trade.tradeID) {
       const fill = `${orderKey}:${trade.tradeID}`;
       if (seenFills.has(fill)) {
@@ -246,6 +472,11 @@ function reconcileOrderLegs(statement: Statement): void {
   let unmatchedTrades = 0;
   let crossCurrencyTrades = 0;
   let proratedOrders = 0;
+  const notRecovered: string[] = [];
+  // Days of an order whose fee is above an ordinary Flatex fee, and the
+  // orders they belong to: their fills keep a fee of 0 (#467).
+  const aboveUsual: string[] = [];
+  const aboveUsualOrders = new Set<string>();
 
   // Commission = | net cash settled − gross trade value |. The FIFO engine
   // (fifo.ts) reads Trade.commission directly and folds it into cost basis
@@ -261,39 +492,104 @@ function reconcileOrderLegs(statement: Statement): void {
       continue;
     }
 
-    if (legs.length === trades.length) {
-      // One cash leg per fill: pair by date, then by amount within a day.
-      const sortedTrades = [...trades].sort(tradeOrder);
-      const sortedLegs = [...legs].sort(legOrder);
-      sortedTrades.forEach((trade, i) => {
-        const leg = sortedLegs[i]!;
-        if (leg.currency !== trade.currency) {
-          crossCurrencyTrades++;
-          return;
-        }
-        const gross = new Decimal(trade.tradeMoney);
-        const net = new Decimal(leg.netAmount).abs();
-        trade.commission = plainOrExponent(net.minus(gross).abs().negated());
-        trade.commissionCurrency = leg.currency || trade.commissionCurrency || trade.currency;
-      });
+    // A leg that cannot be read could be any fill's, and a fill that cannot
+    // be read, or written with a Nominal of 0, has its leg among them: no
+    // fill of the order gets a fee from them, and the order is named. So is
+    // an order whose legs and fills do not fall on the same days: they are
+    // not the same executions.
+    const days = executionDays(trades, legs);
+    if (legs.some((leg) => leg.unreadableCell !== undefined) || keptFillOrders.has(orderKey) || zeroFillOrders.has(orderKey) || days === undefined) {
+      notRecovered.push(orderRow(orderKey, legs, trades));
       continue;
     }
 
-    // Counts differ (e.g. one combined cash leg for several fills): we can't
-    // tell which leg belongs to which fill, so split the order's total fee
-    // across its fills in proportion to their gross value.
-    if (legs.some((leg) => trades.some((trade) => leg.currency !== trade.currency))) {
-      crossCurrencyTrades += trades.length;
-      continue;
+    let prorated = false;
+    for (const day of days) {
+      if (day.legs.length === day.trades.length) {
+        // One cash leg per fill: pair them by amount. A pair that gives no
+        // fee shows the day's legs are not one per fill (a combined leg
+        // uploaded twice with no TA-Nr.): the pairs that pass would then
+        // book another fill's value as a fee, so no fill of the day gets one.
+        const sortedTrades = [...day.trades].sort(tradeOrder);
+        const sortedLegs = [...day.legs].sort(legOrder);
+        const fees = sortedTrades.map((trade, i) => {
+          const leg = sortedLegs[i]!;
+          return leg.currency === trade.currency ? legFee([leg], trade.buySell, new Decimal(trade.tradeMoney)) : null;
+        });
+        if (fees.includes(undefined)) {
+          notRecovered.push(orderRow(orderKey, day.legs, day.trades));
+          continue;
+        }
+        // A fee above an ordinary Flatex fee may be a fill the Depot export
+        // does not list, and the pairs may then not match: no fill of the day
+        // gets a fee, and the order is named. Booked, it lowered the gain by
+        // that fill's value (#467).
+        const unusual = sortedTrades.some((trade, i) => {
+          const fee = fees[i];
+          return fee !== null && fee !== undefined && aboveUsualFee(fee, new Decimal(trade.tradeMoney), 1);
+        });
+        sortedTrades.forEach((trade, i) => {
+          const fee = fees[i];
+          if (fee === null || fee === undefined) {
+            crossCurrencyTrades++;
+            return;
+          }
+          if (unusual) return;
+          trade.commission = plainOrExponent(fee.abs().negated());
+          trade.commissionCurrency = sortedLegs[i]!.currency || trade.commissionCurrency || trade.currency;
+        });
+        if (unusual) {
+          aboveUsual.push(orderRow(orderKey, day.legs, day.trades));
+          aboveUsualOrders.add(orderKey);
+        }
+        continue;
+      }
+
+      // Counts differ (e.g. one combined cash leg for several fills): we can't
+      // tell which leg belongs to which fill, so split the day's total fee
+      // across its fills in proportion to their gross value.
+      if (day.legs.some((leg) => day.trades.some((trade) => leg.currency !== trade.currency))) {
+        crossCurrencyTrades += day.trades.length;
+        continue;
+      }
+      const gross = day.trades.reduce((sum, trade) => sum.plus(trade.tradeMoney), new Decimal(0));
+      const smallest = Decimal.min(...day.trades.map((trade) => trade.tradeMoney));
+      const sides = new Set(day.trades.map((trade) => trade.buySell));
+      const totalFee = sides.size === 1 && !moreLegsThanFills(day.legs, day.trades)
+        ? legFee(day.legs, day.trades[0]!.buySell, gross, smallest)
+        : undefined;
+      if (totalFee === undefined) {
+        notRecovered.push(orderRow(orderKey, day.legs, day.trades));
+        continue;
+      }
+      // The allowance counts legs net of Stornos: a Storno and the leg it
+      // rebooks are one payment, and counted as two they raised it by 20 €,
+      // so a 35.90 € fee on 1000 € went silent. A fee above it is not split:
+      // the fills keep 0 and the order is named, as above (#467).
+      if (aboveUsualFee(totalFee, gross, Math.max(1, netLegCount(day.legs, day.trades)))) {
+        aboveUsual.push(orderRow(orderKey, day.legs, day.trades));
+        aboveUsualOrders.add(orderKey);
+        continue;
+      }
+      for (const trade of day.trades) {
+        trade.commission = plainOrExponent(totalFee.mul(trade.tradeMoney).div(gross).abs().negated());
+        trade.commissionCurrency = day.legs[0]!.currency || trade.commissionCurrency || trade.currency;
+      }
+      prorated = true;
     }
-    const net = legs.reduce((sum, leg) => sum.plus(new Decimal(leg.netAmount).abs()), new Decimal(0));
-    const gross = trades.reduce((sum, trade) => sum.plus(trade.tradeMoney), new Decimal(0));
-    const totalFee = net.minus(gross).abs();
-    for (const trade of trades) {
-      trade.commission = plainOrExponent(totalFee.mul(trade.tradeMoney).div(gross).abs().negated());
-      trade.commissionCurrency = legs[0]!.currency || trade.commissionCurrency || trade.currency;
-    }
-    proratedOrders++;
+    if (prorated) proratedOrders++;
+  }
+
+  // A leg whose order has no fill in the upload is a purchase or a sale the
+  // Depot export does not show (it ends earlier, or was not uploaded): it was
+  // dropped with no word, and with it the sale (#467). It books nothing and
+  // is named. Legs that cancel each other (a Storno and the leg it reverses)
+  // move nothing. An order with a fill the parser kept is named by that fill.
+  const withoutFill: string[] = [];
+  for (const [orderKey, legs] of legsByKey) {
+    if (tradesByKey.has(orderKey) || keptFillOrders.has(orderKey)) continue;
+    const row = legsWithoutFillRow(orderKey, legs);
+    if (row !== undefined) withoutFill.push(row);
   }
 
   if (repeatedFills.size > 0) {
@@ -330,12 +626,49 @@ function reconcileOrderLegs(statement: Statement): void {
     });
   }
 
+  if (notRecovered.length > 0) {
+    const count = String(notRecovered.length);
+    const rows = notRecovered.join("; ");
+    addInfoMessage(statement, {
+      id: "flatex.commission.not_recovered",
+      severity: "warning",
+      message: `Flatex: ${count} operación(es) no tienen la comisión calculada, porque sus apuntes de caja no cuadran con la operación: ${rows}.`,
+      hint: "Cada fila trae el número de orden, el valor y la fecha. Entre corchetes va el importe de la operación y la suma de sus apuntes de caja. Si un importe no se puede leer, va su celda. Puede faltar un apunte o sobrar uno. Un apunte puede tener un importe o una fecha que no se puede leer, o una fecha que no es la de la operación. También puede haber una ejecución de la orden que no se puede leer o que tiene un Nominal de 0. Una comisión de 50 € más el 2 % del importe, o mayor, tampoco se calcula: el apunte puede pagar también otra ejecución que no está en el archivo. DeclaRenta deja esa comisión en 0. No la suma al coste de las compras ni la resta del valor de las ventas. Consulta la comisión en la liquidación de la orden en Flatex. Si quieres deducirla, añádela a mano en Renta Web.",
+      context: { count, rows },
+    });
+  }
+
+  if (aboveUsual.length > 0) {
+    // The count is of orders; an order filled on two days has a row per day.
+    const count = String(aboveUsualOrders.size);
+    const rows = aboveUsual.join("; ");
+    addInfoMessage(statement, {
+      id: "flatex.commission.above_usual",
+      severity: "warning",
+      message: `Flatex: ${count} orden(es) tienen una comisión mayor que la habitual de Flatex, y DeclaRenta no la resta: ${rows}.`,
+      hint: "Cada fila trae el número de orden, el valor y la fecha. Entre corchetes va el importe de la operación y la suma de sus apuntes de caja. La diferencia sería la comisión. Una comisión habitual de Flatex es de 5,90 € por orden, más unos pocos euros de gastos de la bolsa y, en algunos países, un impuesto de hasta el 1 % del importe. Esta es mayor. Puede ser real, pero el apunte de caja puede pagar también otra ejecución que no está en el CSV de Depotumsätze. Los dos CSV no permiten saberlo. Por eso DeclaRenta deja la comisión en 0. No la suma al coste de la compra ni la resta del valor de la venta. Consulta la comisión en la liquidación de la orden (Abrechnung) en Flatex. Si es real y quieres deducirla, añádela a mano en Renta Web. Si falta una ejecución, sube el CSV de Depotumsätze que la trae.",
+      context: { count, rows },
+    });
+  }
+
+  if (withoutFill.length > 0) {
+    const count = String(withoutFill.length);
+    const rows = withoutFill.join("; ");
+    addInfoMessage(statement, {
+      id: "flatex.order_leg_without_fill",
+      severity: "warning",
+      message: `Flatex: ${count} orden(es) de compra o venta están en el CSV de Kontoumsätze pero no en ningún CSV de Depotumsätze subido, y no se calculan: ${rows}.`,
+      hint: "DeclaRenta lee las compras y las ventas de Flatex solo del CSV de Depotumsätze. El de Kontoumsätze trae solo el dinero de cada orden. Cada fila trae el número de orden, el valor y la fecha. Entre corchetes va si es compra (Kauf) o venta (Verkauf) y la suma de sus apuntes de caja. Si un importe no se puede leer, va su celda. Descarga de Flatex el CSV de Depotumsätze de esas fechas y súbelo junto al de Kontoumsätze. Sin él, puede faltar una venta en tu declaración, o el coste de una compra.",
+      context: { count, rows },
+    });
+  }
+
   if (proratedOrders > 0) {
     addInfoMessage(statement, {
       id: "flatex.commission.multi_fill_prorated",
       severity: "info",
       message: `Órdenes de Flatex ejecutadas en varias partes: ${proratedOrders}. Su comisión se ha repartido entre las ejecuciones en proporción a su importe.`,
-      hint: "Flatex liquidó esas órdenes con un número de apuntes de caja distinto al de ejecuciones, así que no se puede saber qué comisión corresponde a cada una. El total de comisiones de cada orden es exacto; solo el reparto entre ejecuciones es aproximado.",
+      hint: "Flatex liquidó esas órdenes con un número de apuntes de caja distinto al de ejecuciones, así que no se puede saber qué comisión corresponde a cada una. El total sale de los apuntes de caja, y el reparto entre ejecuciones es aproximado. Si un apunte paga también una ejecución que no está en el CSV de Depotumsätze, la comisión sale mayor: revísala en la liquidación de la orden en Flatex.",
       context: { orders: String(proratedOrders) },
     });
   }
