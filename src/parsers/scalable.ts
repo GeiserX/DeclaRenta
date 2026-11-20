@@ -315,6 +315,18 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
           currency || "EUR", tradeDate, [unreadableCell(headers[cols.tax] ?? "tax", taxCell)]));
         continue;
       }
+      // A written zero amount whose tax cell is written but cannot be read
+      // ("abc", "+5,00 EUR") is no written zero either: read as 0, it was
+      // dropped with no word, and it may be a refund of the dividend next to
+      // it. Neither is booked, so the report keeps the dividend's own
+      // withholding, and the row is named with both cells (#467). An empty
+      // tax cell stays the file's written zero.
+      const zeroAmount = new Decimal(amount).isZero();
+      if (zeroAmount && (taxCell ?? "").trim() !== "" && quantityUnreadable(taxCell)) {
+        unreadableIncome.push(cashIncomeRowText((fields[cols.type] ?? "").trim(), `${description || "—"} (${isin})`, currency || "EUR", tradeDate,
+          [unreadableCell(headers[cols.amount] ?? "amount", fields[cols.amount]), unreadableCell(headers[cols.tax] ?? "tax", taxCell)]));
+        continue;
+      }
       // A written zero amount with a tax is no dividend: the row only carries
       // a tax (a late withholding, a refund). A 0 dividend took its own tax as
       // its pair, and that tax then counted against the treaty cap of the
@@ -331,15 +343,15 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       // writes withholdings positive the row may be a late withholding: booked
       // as a refund it can only raise the tax (#467). A tax of 0 is no refund:
       // decimal.js counts 0 as positive, so the test is greaterThan(0). A zero
-      // or unreadable tax (read as 0) on a zero row is the file's written
-      // zero and stays booked with no word.
+      // or empty tax on a zero row is the file's written zero and stays
+      // booked with no word.
       const taxNum = parseFloat(parseNumber(tax));
-      const zeroRefund = new Decimal(amount).isZero() && new Decimal(tax).greaterThan(0);
+      const zeroRefund = zeroAmount && new Decimal(tax).greaterThan(0);
       if (zeroRefund) {
         zeroDividendRefund.push(cashIncomeRowText((fields[cols.type] ?? "").trim(), `${description || "—"} (${isin})`, currency || "EUR", tradeDate,
           [unreadableCell(headers[cols.amount] ?? "amount", fields[cols.amount]), unreadableCell(headers[cols.tax] ?? "tax", fields[cols.tax])]));
       }
-      if (!(new Decimal(amount).isZero() && taxNum !== 0)) cashTransactions.push({
+      if (!(zeroAmount && taxNum !== 0)) cashTransactions.push({
         transactionID: `scalable-${tradeDate}-${isin}-${i}`,
         accountId: "",
         symbol: description,

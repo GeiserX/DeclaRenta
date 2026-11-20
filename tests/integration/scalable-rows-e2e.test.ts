@@ -25,6 +25,8 @@
  * - A Distribution with a written 0 amount and a positive tax (a refund) was
  *   booked as a new withholding, so the refund raised the 0597 or the 0588.
  * - A positive fee (a rebate) was booked as a charge, so it lowered the gain.
+ * - A Distribution with a written 0 amount and a tax cell that cannot be read
+ *   ("abc") was read as tax 0 and dropped with no word.
  */
 import { describe, it, expect } from "vitest";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
@@ -423,14 +425,31 @@ describe("Scalable round 4: a Distribution of 0 with a positive tax is a refund,
   });
 
   // decimal.js counts 0 as positive, so a zero tax once read as a refund.
-  it.each(METHODS)("[%s] a zero row whose tax is 0, 0,00, -0,00, empty or unreadable is the file's written zero: no refund, no word", (method) => {
-    for (const tax of ["0", "0,00", "-0,00", "", "abc"]) {
+  it.each(METHODS)("[%s] a zero row whose tax is 0, 0,00, -0,00 or empty is the file's written zero: no refund, no word", (method) => {
+    for (const tax of ["0", "0,00", "-0,00", ""]) {
       const rows = [dist(ES, "100,00", "-19,00", "2025-06-01"), dist(ES, "0,00", tax, "2025-06-03")];
       const s = parse(rows);
       expect(s.parserMessages, tax).toBeUndefined();
       expect(cash(s), tax).toEqual([`Dividends ${ES} 100`, `Withholding Tax ${ES} -19`, `Dividends ${ES} 0`]);
       const r = report(rows, method);
       expect(sums(r), tax).toBe("div=100.00 sw=19.00 dtd=0.00");
+      expect(r.messages.map((m) => m.id), tax).not.toContain(REFUND);
+    }
+  });
+
+  // Read as 0, such a tax was dropped with no word, although it may be a
+  // refund of the dividend two days before. It books nothing and is named.
+  it.each(METHODS)("[%s] a zero row whose tax is written but cannot be read (abc, +5,00 EUR) books nothing and is named", (method) => {
+    for (const tax of ["abc", "+5,00 EUR"]) {
+      const rows = [dist(ES, "100,00", "-19,00", "2025-06-01"), dist(ES, "0,00", tax, "2025-06-03")];
+      const s = parse(rows);
+      expect(s.parserMessages?.map((m) => m.id), tax).toEqual(["parser.cash_income_amount_unreadable"]);
+      expect(msg(s, "parser.cash_income_amount_unreadable"), tax)
+        .toBe(`Distribution Div (${ES}) EUR 20250603 [amount: "0,00", tax: ${JSON.stringify(tax)}]`);
+      expect(cash(s), tax).toEqual([`Dividends ${ES} 100`, `Withholding Tax ${ES} -19`]);
+      const r = report(rows, method);
+      expect(sums(r), tax).toBe("div=100.00 sw=19.00 dtd=0.00");
+      expect(r.messages.map((m) => m.id), tax).toContain("parser.cash_income_amount_unreadable");
       expect(r.messages.map((m) => m.id), tax).not.toContain(REFUND);
     }
   });

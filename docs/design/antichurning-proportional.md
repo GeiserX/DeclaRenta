@@ -1046,7 +1046,10 @@ práctico Renta 2025. The decisions, each pinned in
       A Scalable Distribution of a written zero with a positive `tax` is
       booked and named the same way (`scalable.dividend_tax_refund`):
       Scalable writes a withholding negative, and before, the refund was
-      booked as a new withholding.
+      booked as a new withholding. One whose `tax` is written but cannot
+      be read ("abc", "+5,00 EUR") books nothing and
+      `parser.cash_income_amount_unreadable` names it with both cells:
+      before, the tax was read as 0 and the row dropped with no word.
       A Trade Republic dividend read from `original_amount` took its sign
       from that cell alone. When `amount` is a readable nonzero number of
       the other sign, or `original_amount` is 0, the row says two things:
