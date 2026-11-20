@@ -159,7 +159,6 @@ function parseTrCsv(lines: string[]): Statement {
     const amountStr = numStr(fields, cols.amount);
     const sharesStr = numStr(fields, cols.shares);
     const priceStr = numStr(fields, cols.price);
-    const feeStr = numStr(fields, cols.fee);
     const taxStr = numStr(fields, cols.tax);
     // Numeric values used only for sign/zero comparisons (never as money).
     const amount = num(fields, cols.amount);
@@ -227,7 +226,10 @@ function parseTrCsv(lines: string[]): Statement {
         }, unreadableCell(headers[cols.symbol] ?? "symbol", field(fields, cols.symbol))));
         continue;
       }
-      const absAmountDec = toFiniteDecimal(amountStr).abs();
+      // Price, amount and fee are read once, from the cell. Read again from
+      // numStr, a cell such as "1.2,3,4" (first read "12.3,4", no number)
+      // became 123.4, and its raw text stopped the report (#467).
+      const absAmountDec = toFiniteDecimal(field(fields, cols.amount)).abs();
       // A real BUY/SELL with no usable amount (missing/garbage) would produce a
       // 0-cost / 0-proceeds trade (phantom gain). It is kept as a trade that
       // books nothing and named: dropped, it hid a purchase or a sale (#467).
@@ -244,12 +246,14 @@ function parseTrCsv(lines: string[]): Statement {
       const absSharesDec = toFiniteDecimal(sharesStr).abs();
       const absShares = absSharesDec.toString();
       const absAmount = absAmountDec.toString();
-      const absFee = toFiniteDecimal(feeStr).abs();
+      const absFee = toFiniteDecimal(field(fields, cols.fee)).abs();
       const absTax = toFiniteDecimal(taxStr).abs();
       // FIFO values the lot from tradePrice, not amount. When the price column
       // is empty, unreadable or negative, take it from amount / shares (amount
       // excludes the fee): a negative price sold the shares at a loss (#467).
-      const priceDec = toFiniteDecimal(priceStr);
+      // A positive priceDec was read from priceStr itself, so priceStr is a
+      // number; so is amountStr, booked as tradeMoney, once absAmountDec is not 0.
+      const priceDec = toFiniteDecimal(field(fields, cols.price));
       const tradePrice = (priceDec.isZero() || priceDec.isNegative()) && !absSharesDec.isZero()
         ? absAmountDec.div(absSharesDec).toString()
         : priceStr;

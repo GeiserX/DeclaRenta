@@ -789,7 +789,11 @@ práctico Renta 2025. The decisions, each pinned in
       `trade_republic.cash_type_not_read`; deposits, card payments and
       transfers name no ISIN and stay skipped. A negative `price` is
       |`amount`| ÷ `shares`, as an empty one: it sold the shares at a
-      negative price.
+      negative price. `price`, `amount` and `fee` are read once, from the
+      cell: read a second time, "1.2,3,4" (first read "12.3,4") became
+      123.4, and as a price its raw text stopped the report. Now such a
+      price is |`amount`| ÷ `shares`, such an amount names the row, and
+      such a fee is not booked, which can only raise the tax.
     - DEGIRO: a row with no ISIN but a readable quantity or price, or an
       order id. When the product name has the shape of an option
       (`AAPL C200.00 20DEC24`) or a future (`FDAX MAR25`), the row is kept as

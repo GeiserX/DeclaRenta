@@ -17,6 +17,8 @@
  * - A TRADING row of another type that wrote a share count but named no
  *   security was dropped, while the same row as a BUY was evidence.
  * - A negative price cell sold the shares at a negative price.
+ * - A price, amount or fee cell was read twice: "1.2,3,4" became 123.4, or
+ *   its raw text stopped the report.
  */
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
@@ -302,3 +304,34 @@ describe("Trade Republic price: a negative price cell never sells the shares at 
     }
   });
 });
+
+describe("Trade Republic price, amount and fee cells are read once: a cell that reads as a number only when read twice is no number", () => {
+  it.each(METHODS)("[%s] a buy or sell price of '1.2,3,4' never stops the report: the price is |amount| ÷ shares", (method) => {
+    for (const s of [tr(BUY({ price: "1.2,3,4" }), SELL()), tr(BUY(), SELL({ price: "1.2,3,4" }))]) {
+      expect(s.trades.map((t) => t.tradePrice)).toEqual(["100", "150"]);
+      const r = report(s, method);
+      expect([r.capitalGains.transmissionValue.toFixed(2), r.capitalGains.acquisitionValue.toFixed(2), r.capitalGains.netGainLoss.toFixed(2)])
+        .toEqual(["149.00", "101.00", "48.00"]);
+    }
+  });
+
+  it.each(METHODS)("[%s] a sale amount of '1.2,3,4' is no 123.40: the sale books nothing and is named", (method) => {
+    const s = tr(BUY(), SELL({ amount: "1.2,3,4" }));
+    expect(s.trades.map((t) => [t.quantity, t.proceeds, t.quantityUnknown])).toEqual([["1", "0", undefined], ["0", "0", true]]);
+    expect(rowsOf(s, "parser.trade_row_unreadable")).toBe('Acme Corp (US0000001001) 20250601 [amount: "1.2,3,4"]');
+    expect(report(s, method).capitalGains.transmissionValue.toFixed(2)).toBe("0.00");
+  });
+
+  it.each(METHODS)("[%s] a buy fee of '1.2,3,4' is no 123.40 cost: it is not booked", (method) => {
+    const s = tr(BUY({ fee: "1.2,3,4" }), SELL());
+    expect(s.trades.map((t) => t.commission)).toEqual(["0", "-1"]);
+    expect(report(s, method).capitalGains.acquisitionValue.toFixed(2)).toBe("100.00");
+  });
+
+  it("controls: '1.234,5', '1,234.5' and '(150.00)' still read as one number", () => {
+    expect(tr(BUY({ price: "1.234,5", shares: "1", amount: "-1234.50" })).trades.map((t) => t.tradePrice)).toEqual(["1234.5"]);
+    expect(tr(BUY({ price: "1,234.5", shares: "1", amount: "-1234.50" })).trades.map((t) => t.tradePrice)).toEqual(["1234.5"]);
+    expect(tr(BUY({ fee: "(1.50)" })).trades.map((t) => t.commission)).toEqual(["-1.5"]);
+  });
+});
+
