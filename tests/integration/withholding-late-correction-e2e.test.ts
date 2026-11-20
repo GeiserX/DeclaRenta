@@ -665,6 +665,21 @@ describe("issue #467 — a refund dated more than 7 days from its dividend", () 
     });
   }
 
+  // Limit: a refund dated 20 February of a 15 December dividend reaches no
+  // dividend of 2024. When the ISIN paid again on 15 January, pass 3c gives
+  // the refund to that dividend: 2025's 0588 loses it, 2024 keeps the tax.
+  for (const method of METHODS) {
+    const opts = reportOptionsForMethod(method);
+    it(`limit: a 20 February refund of a 15 December dividend lowers January's dividend, not 2024 (${method})`, () => {
+      const dec15 = statement([msft("Dividends", "100", "20241215"), msft("Withholding Tax", "-10", "20241215")], "20240101", "20241231");
+      const both = merged(dec15, statement([msft("Dividends", "100", "20250115"), msft("Withholding Tax", "-10", "20250115"), msft("Withholding Tax", "10", "20250220"), ...goog]));
+      expect(generateTaxReport(both, rates, 2024, opts).doubleTaxation.deduction.toFixed(2)).toBe("9.00");
+      const r2025 = generateTaxReport(both, rates, 2025, opts);
+      expect(r2025.doubleTaxation.deduction.toFixed(2)).toBe("18.00");
+      expect(unjoined(r2025)).toBeUndefined();
+    });
+  }
+
   it("the Spanish text is the es locale's, byte for byte", () => {
     const r = generateTaxReport(merged(statement([msft("Withholding Tax", "10", "20250701")])), rates, 2025);
     const m = unjoined(r)!;
