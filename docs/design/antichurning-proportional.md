@@ -900,7 +900,14 @@ práctico Renta 2025. The decisions, each pinned in
       row with a textual amount refused the file. A positive interest row
       (flatex Interest, Interés, Zinsen, Rente, Intérêts) is interest
       received; it was dropped with no word. A negative one stays out,
-      which can only raise the tax.
+      which can only raise the tax. A Dividendo or a Retención with no ISIN
+      is not booked: its country, and so whether the withholding is Spanish
+      or foreign, would be a guess (a Spanish 19 € withheld became a 15 €
+      foreign deduction). `parser.cash_row_unidentified` names it, with the
+      withholding next to the dividend of the same product and date. A row
+      with no Descripción that names a security and moves money is named by
+      `degiro.cash_row_undescribed` and not booked; it was dropped with no
+      word.
     - DEGIRO Transactions CSV: a buy or sale with an empty price-currency
       cell is an unreadable row named by that cell, never a trade in euros
       (a yen buy made a loss of thousands). An empty costs-currency cell is
@@ -908,7 +915,9 @@ práctico Renta 2025. The decisions, each pinned in
       or `Tipo de cambio` cannot be read is booked from its price and
       quantity, never refused. A row with a readable quantity and a blank
       or unreadable price is a trade of unknown price even with no order id
-      and no value: dropped, it hid a second purchase in the window.
+      and no value: dropped, it hid a second purchase in the window. A
+      negative price is an unreadable row named by `Precio`, as in Flatex:
+      booked, a sale had negative proceeds and a false loss.
     - Binance Trade History: a row whose `Side` is neither BUY nor SELL, or
       whose `Executed` (or, for a crypto-quoted pair, `Amount`) is no
       number ("", "abc", "1,000.5BTC"), keeps an unreadable row for each

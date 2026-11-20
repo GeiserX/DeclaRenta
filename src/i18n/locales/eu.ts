@@ -1053,6 +1053,9 @@ const eu: TranslationKeys = {
   "degiro.transaction_tax": "Finantza-transakzioen gaineko zerga ordaindua {{product}} baloreagatik ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degirok zerga hau kobratzen du Espainiako, Frantziako edo Italiako akzioak erostean, eta Kontuaren CSVan bakarrik erakusten du. Eskuratze-balioaren parte da (PFEZL 35.1.b art.): gehitu balore horren erosketen kostuari, DeclaRentak ez baitu automatikoki gehitzen.",
+  "degiro.cash_row_undescribed": "DEGIRO: Kontuaren CSVko {{count}} errenkadak ez dute esaten zer mugimendu diren, eta ez dira kalkulatzen: {{rows}}.",
+  "degiro.cash_row_undescribed.hint":
+    "Kortxete artean dago deskribapenaren gelaxka, fitxategian dagoen bezala. Hura gabe, DeclaRentak ez daki errenkada dibidendu bat, atxikipen bat, interes bat edo beste mugimendu bat den. Horregatik, ez du batzen eta ez du motarik asmatzen. Aitortzen duzun urteko diru-sarrera bada, aitortu egin behar duzu hala ere. Deskargatu berriro DEGIROren Kontuaren jatorrizko CSVa, eta igo editatu gabe. Errenkadak deskribapenik gabe jarraitzen badu, kopiatu datua DEGIROren laburpenetik, eta igo berriro fitxategia. Zenbatekoa eskuz ere gehi dezakezu Renta Web-en.",
   "binance.unparseable_timestamp":
     "Binance: {{count}} errenkadak ez dute data eta ordu (UTC_Time) irakurgarririk, eta ez dira kalkulatzen: {{rows}}.",
   "binance.unparseable_timestamp.hint":

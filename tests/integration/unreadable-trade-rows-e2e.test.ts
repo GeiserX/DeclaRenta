@@ -1763,7 +1763,7 @@ describe("#466 #467 #468 the warnings of these issues read as plain short senten
     "parser.trade_row_unreadable", "parser.corporate_action_not_applied", "parser.cash_row_undated",
     "parser.cash_row_unidentified", "parser.crypto_income_unidentified", "parser.crypto_income_amount_unreadable", "parser.cash_income_amount_unreadable",
     "revolut.bad_fx_rate", "revolut.holding_size_unknown", "revolut.dividend_tax_correction",
-    "etoro.columns_not_detected",
+    "etoro.columns_not_detected", "degiro.cash_row_undescribed",
   ];
   const sentences = (text: string): string[] => text.split(/(?<=[.?!])\s+(?=[A-ZÁÉÍÓÚÑ¿¡])/);
   it.each([["es", es], ["en", en]] as [string, Record<string, string>][])("%s: no hint joins clauses with a semicolon, and no sentence is longer than 25 words", (_name, locale) => {
@@ -2731,6 +2731,67 @@ describe("#467 DEGIRO: a cash row or a trade the file does not fully give is nam
     });
   });
 
+  // A dividend's ISIN sets the country of its withholding: with no ISIN a
+  // Spanish 19.00 € withheld was read as foreign tax under country XX.
+  const SAN = "ES0113900J37";
+  const san = (product: string, isin: string, withheldIsin = isin): Statement =>
+    account(arow("Dividendo", "100.00", "EUR", product, isin), arow("Retención del dividendo", "-19.00", "EUR", product, withheldIsin));
+  const spanish = (r: TaxReport): string[] =>
+    [r.dividends.grossIncome, r.dividends.spanishWithholding, r.doubleTaxation.deduction].map((d) => new Decimal(d).toFixed(2));
+  describe.each(["", "BANCO SANTANDER"])("a Spanish dividend and withholding with no ISIN, Producto %j", (product) => {
+    it.each(METHODS)("[%s] are named and not booked, never a 15.00 € foreign deduction on a 19.00 € Spanish withholding", (method) => {
+      expect(spanish(report(san("BANCO SANTANDER", SAN), method))).toEqual(["100.00", "19.00", "0.00"]);
+      const parsed = san(product, "");
+      expect(parsed.cashTransactions).toEqual([]);
+      expect(message(parsed, "parser.cash_row_unidentified")?.context?.rows).toBe(
+        `Dividendo ${product || "—"} 100.00 EUR (Retención del dividendo -19.00 EUR) 20240112`);
+      expect(spanish(report(parsed, method))).toEqual(["0.00", "0.00", "0.00"]);
+    });
+  });
+  it.each(METHODS)("[%s] a withholding with no ISIN next to a dividend with one is named; the dividend stays, with no deduction", (method) => {
+    const parsed = san("BANCO SANTANDER", SAN, "");
+    expect(parsed.cashTransactions.map((c) => `${c.type} ${c.isin}`)).toEqual([`Dividends ${SAN}`]);
+    expect(message(parsed, "parser.cash_row_unidentified")?.context?.rows).toBe("Retención del dividendo BANCO SANTANDER -19.00 EUR 20240112");
+    expect(spanish(report(parsed, method))).toEqual(["100.00", "0.00", "0.00"]);
+  });
+  it.each(METHODS)("[%s] a US dividend with no security is named, never booked under country XX", (method) => {
+    const parsed = account(arow("Dividendo", "100.00", "USD", "", ""), arow("Retención del dividendo", "-15.00", "USD", "", ""));
+    expect(parsed.cashTransactions).toEqual([]);
+    expect(message(parsed, "parser.cash_row_unidentified")?.context?.rows).toBe("Dividendo — 100.00 USD (Retención del dividendo -15.00 USD) 20240112");
+    expect(cash(report(parsed, method))).toEqual(["0.00", "0.00", "0.00"]);
+  });
+  it("control: a written 0 with no ISIN stays an explicit zero with no warning", () => {
+    const zero = account(arow("Dividendo", "0", "EUR", "", ""), arow("Retención del dividendo", "0", "EUR", "", ""));
+    expect([zero.cashTransactions.map((c) => c.amount), zero.parserMessages]).toEqual([["0", "0"], undefined]);
+  });
+
+  // A row with no Descripción cannot be typed: one that names a security and
+  // moves money may be a dividend, so it is named, never dropped with no word.
+  const UNDESCRIBED = "degiro.cash_row_undescribed";
+  it.each(METHODS)("[%s] a row with a security and an amount but no Descripción is named and not booked", (method) => {
+    const bat = (desc: string): Statement => account(arow(desc, "100.00", "GBP", "BAT", "GB0002875804"));
+    expect(cash(report(bat("Dividendo"), method))).toEqual(["117.00", "0.00", "0.00"]);
+    expect(message(bat("Dividendo"), UNDESCRIBED)).toBeUndefined();
+    const parsed = bat("");
+    expect(parsed.cashTransactions).toEqual([]);
+    expect(message(parsed, UNDESCRIBED)?.context).toEqual({ count: "1", rows: 'BAT (GB0002875804) 100.00 GBP 20240112 [Descripción: ""]' });
+    expect(cash(report(parsed, method))).toEqual(["0.00", "0.00", "0.00"]);
+  });
+  it("controls: a row with no Descripción and no security, a written 0 or no amount stays skipped with no warning", () => {
+    expect(account(arow("", "100.00", "EUR", "", "")).parserMessages).toBeUndefined();
+    expect(account(arow("", "0,00")).parserMessages).toBeUndefined();
+    expect(account(arow("", "")).parserMessages).toBeUndefined();
+  });
+  it("the warning for a row with no Descripción exists in the five locales and the parser emits the Spanish text", () => {
+    expect(isTranslationKey(UNDESCRIBED) && isTranslationKey(`${UNDESCRIBED}.hint`)).toBe(true);
+    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) expect(locale[UNDESCRIBED]).toContain("{{rows}}");
+    const emitted = message(account(arow("", "abc")), UNDESCRIBED)!;
+    expect(emitted.context?.rows).toBe(`APPLE INC (${AAPL}) USD 20240112 [Descripción: "", Variación: "abc"]`);
+    const esText = es as Record<string, string>;
+    expect(emitted.message).toBe(esText[UNDESCRIBED]!.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => emitted.context?.[k] ?? ""));
+    expect(emitted.hint).toBe(esText[`${UNDESCRIBED}.hint`]);
+  });
+
   // Transactions CSV, 19-col layout.
   const TX = "Fecha,Hora,Producto,ISIN,Bolsa de,Centro de ejecución,Número,Precio,,Valor local,,Valor,,Tipo de cambio,Costes de transacción,,Total,,ID Orden";
   type Row = { d?: string; q?: string; p?: string; ccy?: string; lv?: string; ev?: string; fx?: string; cc?: string; id?: string };
@@ -2761,6 +2822,23 @@ describe("#467 DEGIRO: a cash row or a trade the file does not fully give is nam
   it.each(METHODS)("[%s] an empty costs-currency cell books the commission in EUR, never in the price currency", (method) => {
     expect(gains(report(pair({ ccy: "GBP", cc: "" }, { ccy: "GBP", cc: "" }), method))).toEqual(["1402.00", "1172.00", "230.00"]);
     expect(gains(report(pair({ ccy: "GBP" }, { ccy: "GBP" }), method))).toEqual(["1402.00", "1172.00", "230.00"]);
+  });
+
+  // The quoted cell is how a comma-delimited file writes "(120,00)".
+  describe.each([["-120.00", "-120.00"], ["\"(120,00)\"", "(120,00)"]])("a sale with a Precio of %s", (cell, p) => {
+    it.each(METHODS)("[%s] is named and books nothing, never negative proceeds (a loss of 2,028.00 € on a gain of 180.00 €)", (method) => {
+      expect(gains(report(pair({}), method))).toEqual(["1102.00", "922.00", "180.00"]);
+      const parsed = pair({ p: cell });
+      expect(unreadableRows(parsed)).toBe(`APPLE INC (${AAPL}) 20240310 [Precio: ${JSON.stringify(p)}]`);
+      expect(parsed.trades.map((t) => [t.buySell, t.quantity, t.quantityUnknown ?? false])).toEqual([["BUY", "10", false], ["SELL", "0", true]]);
+      expect(gains(report(parsed, method))).toEqual(["0.00", "0.00", "0.00"]);
+    });
+  });
+  it.each(METHODS)("[%s] a buy with a Precio of \"-100.00\" is named and books nothing, never a negative cost", (method) => {
+    const parsed = pair({}, { p: "-100.00" });
+    expect(unreadableRows(parsed)).toBe(`APPLE INC (${AAPL}) 20240110 [Precio: "-100.00"]`);
+    // The sale has no lot: its whole value is a gain, more tax, never less.
+    expect(gains(report(parsed, method))).toEqual(["1102.00", "0.00", "1102.00"]);
   });
 
   // A buy or sale with a readable quantity and an empty price is a trade, with

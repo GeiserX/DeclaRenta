@@ -65,7 +65,7 @@ La web muestra la misma guía de cada broker bajo «¿No se detectó tu broker?�
 
 **Datos extraídos:** Operaciones de compraventa, dividendos, retenciones e intereses cobrados (CSV de Cuenta).
 
-**Limitaciones:** Degiro no exporta acciones corporativas. Los splits deben reflejarse ya en el historial de operaciones. Si tienes operaciones en varios ejercicios, exporta todos los años.
+**Limitaciones:** Degiro no exporta acciones corporativas. Los splits deben reflejarse ya en el historial de operaciones. Si tienes operaciones en varios ejercicios, exporta todos los años. Si un dividendo o una retención del CSV de Cuenta no trae el ISIN, DeclaRenta no lo calcula y te avisa: sin el ISIN no sabe si la retención es española o extranjera.
 
 ### Flatex
 

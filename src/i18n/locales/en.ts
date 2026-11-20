@@ -1049,6 +1049,9 @@ const en: TranslationKeys = {
   "degiro.transaction_tax": "Financial transaction tax paid on {{product}} ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degiro charges this tax when you buy Spanish, French or Italian shares and only shows it in the Account CSV. It is part of the acquisition value (art. 35.1.b LIRPF): add it to the cost of your purchases of that security, because DeclaRenta does not add it automatically.",
+  "degiro.cash_row_undescribed": "DEGIRO: {{count}} row(s) of the Account CSV do not say what movement they are and are not calculated: {{rows}}.",
+  "degiro.cash_row_undescribed.hint":
+    "The brackets show the description cell as it is in the file. Without it, DeclaRenta does not know if the row is a dividend, a withholding, interest or another movement. So it does not add the row and does not make up its type. If it is income of the year you declare, you must still declare it. Download the original Account CSV from DEGIRO again and upload it unedited. If the row still has no description, copy the data from the DEGIRO statement and upload the file again. You can also add the amount by hand in Renta Web.",
   "binance.unparseable_timestamp":
     "Binance: {{count}} row(s) have no readable date and time (UTC_Time) and are not calculated: {{rows}}.",
   "binance.unparseable_timestamp.hint":

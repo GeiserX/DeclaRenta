@@ -1088,6 +1088,9 @@ const es = {
   "degiro.transaction_tax": "Impuesto sobre transacciones financieras pagado en {{product}} ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degiro cobra este impuesto al comprar acciones españolas, francesas o italianas y solo lo muestra en el CSV de Cuenta. Forma parte del valor de adquisición (art. 35.1.b LIRPF): súmalo al coste de las compras de ese valor, porque DeclaRenta no lo añade automáticamente.",
+  "degiro.cash_row_undescribed": "DEGIRO: {{count}} fila(s) del CSV de Cuenta no dicen qué movimiento son y no se calculan: {{rows}}.",
+  "degiro.cash_row_undescribed.hint":
+    "Entre corchetes va la celda de la descripción, tal como está en el archivo. Sin ella, DeclaRenta no sabe si la fila es un dividendo, una retención, un interés u otro movimiento. Por eso no la suma y no se inventa el tipo. Si es un ingreso del año que declaras, tienes que declararlo igualmente. Vuelve a descargar el CSV de Cuenta original de DEGIRO y súbelo sin editarlo. Si la fila sigue sin descripción, copia el dato del extracto de DEGIRO y vuelve a subirlo. También puedes añadir el importe a mano en Renta Web.",
   "binance.unparseable_timestamp":
     "Binance: {{count}} fila(s) no tienen una fecha y hora (UTC_Time) legible y no se calculan: {{rows}}.",
   "binance.unparseable_timestamp.hint":

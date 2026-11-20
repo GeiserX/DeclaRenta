@@ -1051,6 +1051,9 @@ const ca: TranslationKeys = {
   "degiro.transaction_tax": "Impost sobre les transaccions financeres pagat en {{product}} ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degiro cobra aquest impost en comprar accions espanyoles, franceses o italianes i només el mostra al CSV de Compte. Forma part del valor d'adquisició (art. 35.1.b LIRPF): suma'l al cost de les compres d'aquest valor, perquè DeclaRenta no l'afegeix automàticament.",
+  "degiro.cash_row_undescribed": "DEGIRO: {{count}} fila(es) del CSV de Compte no diuen quin moviment són i no es calculen: {{rows}}.",
+  "degiro.cash_row_undescribed.hint":
+    "Entre claudàtors hi ha la cel·la de la descripció, tal com és al fitxer. Sense ella, DeclaRenta no sap si la fila és un dividend, una retenció, un interès o un altre moviment. Per això no la suma i no s'inventa el tipus. Si és un ingrés de l'any que declares, l'has de declarar igualment. Torna a descarregar el CSV de Compte original de DEGIRO i puja'l sense editar-lo. Si la fila continua sense descripció, copia la dada de l'extracte de DEGIRO i torna a pujar el fitxer. També pots afegir l'import a mà a Renta Web.",
   "binance.unparseable_timestamp":
     "Binance: {{count}} fila(es) no tenen una data i hora (UTC_Time) llegible i no es calculen: {{rows}}.",
   "binance.unparseable_timestamp.hint":

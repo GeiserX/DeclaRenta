@@ -36,6 +36,7 @@ import {
   dropUndatedCash,
   cashIncomeRowText,
   cashIncomeAmountUnreadableMessages,
+  cashRowsUnidentifiedMessages,
 } from "./csv-utils.js";
 import { formatDateDmy } from "../engine/dates.js";
 
@@ -400,6 +401,17 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       }, unreadableCell((headers[cols.priceCurrency] ?? "").trim() || `${(headers[cols.price] ?? "Precio").trim()}, divisa`, fields[cols.priceCurrency])));
       continue;
     }
+    // A negative price ("-120.00", "(120,00)") is no price: booked, a sale
+    // had negative proceeds (a loss of 2,028 € on a gain of 180 €) and a buy a
+    // negative cost, with no word. Kept as a row that books nothing and named
+    // by that cell, as in Flatex (#467).
+    if (toFiniteDecimal(price, "0", false).isNegative()) {
+      trades.push(unreadableTrade({
+        tradeID: orderId, symbol: product, description: product, isin, assetCategory: "STK", currency: fractional.currency,
+        tradeDate, tradeTime, buySell: isSell ? "SELL" : "BUY", exchange,
+      }, unreadableCell((headers[cols.price] ?? "").trim() || "Precio", fields[cols.price])));
+      continue;
+    }
     if (!fractional.divisor.equals(1)) {
       // A Valor local or a Tipo de cambio that cannot be read is no number to
       // divide: it reads "0" (FIFO values the trade at price × quantity), so
@@ -596,6 +608,11 @@ function parseAccountCsv(lines: string[], delimiter: string): Statement {
   const amountName = (headers[cols.amount] ?? "").trim() || (headers[cols.currency] ?? "").trim() || "Importe";
   const currencyName = `${amountName}, divisa`;
   const incomeKey = (isin: string, product: string, date: string): string => `${isin}|${product}|${date}`;
+  // Dividend and withholding rows with no ISIN (#467): `key` pairs a
+  // withholding with its dividend by product and date.
+  const unidentified: { key: string; dividend: boolean; type: string; product: string; amount: string; date: string; withheld: string[] }[] = [];
+  // Rows with no Descripción that name a security and move money (#467).
+  const undescribed: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -624,7 +641,23 @@ function parseAccountCsv(lines: string[], delimiter: string): Statement {
       }
     }
 
-    if (!description) continue;
+    // A row with no Descripción cannot be typed. One that names a security
+    // and moves money may be a dividend: it is named, never dropped with no
+    // word (#467). A written zero, an empty amount or no security stays skipped.
+    if (!description) {
+      const security = isin ? (product ? `${product} (${isin})` : isin) : product;
+      const amountCell = (fields[cols.amount] ?? "").trim();
+      const amountUnreadable = quantityUnreadable(amountCell);
+      if (security && amountCell && (amountUnreadable || !toFiniteDecimal(amount, "0", false).isZero())) {
+        const cells = [
+          unreadableCell((headers[cols.description] ?? "").trim() || "Descripción", fields[cols.description]),
+          ...(amountUnreadable ? [unreadableCell(amountName, fields[cols.amount])] : []),
+        ];
+        const head = [security, amountUnreadable ? "" : amount, currency, tradeDate || "—"].filter((part) => part !== "").join(" ");
+        undescribed.push(`${head} [${cells.join(", ")}]`);
+      }
+      continue;
+    }
 
     // Determine transaction type from description
     let type: CashTransaction["type"] | null = null;
@@ -671,6 +704,20 @@ function parseAccountCsv(lines: string[], delimiter: string): Statement {
       continue;
     }
 
+    // A dividend or withholding with no ISIN names no security: its country,
+    // and so whether its withholding is Spanish or foreign, would be a guess
+    // (a Spanish 19 € read as a foreign 15 € deduction). It is named, not
+    // booked, as in Scalable (#467). A written zero stays an explicit zero.
+    if (!isin && type !== "Broker Interest Received" && !toFiniteDecimal(amount, "0", false).isZero()) {
+      unidentified.push({
+        key: incomeKey("", product, tradeDate),
+        dividend: type === "Dividends",
+        type: description, product, amount: `${amount} ${currency}`, date: tradeDate,
+        withheld: [],
+      });
+      continue;
+    }
+
     cashTransactions.push({
       transactionID: `degiro-${tradeDate}-${isin}-${i}`,
       accountId: "",
@@ -696,8 +743,29 @@ function parseAccountCsv(lines: string[], delimiter: string): Statement {
     return cashIncomeRowText(row.type, row.security, row.currency, row.date, row.cells, tax);
   });
 
+  // A withholding with no ISIN is shown with the dividend of its product and
+  // date, when that dividend has no ISIN either.
+  const unidentifiedRows = unidentified.filter((row) => {
+    if (row.dividend) return true;
+    const dividend = unidentified.find((d) => d.dividend && d.key === row.key);
+    dividend?.withheld.push(`${row.type} ${row.amount}`);
+    return !dividend;
+  }).map((row) => `${row.type} ${row.product || "—"} ${row.amount}${row.withheld.length > 0 ? ` (${row.withheld.join(", ")})` : ""} ${row.date || "—"}`);
+
   const parserMessages: TaxMessage[] = dropUndatedCash("DEGIRO", cashTransactions, headers[cols.date] ?? "Fecha");
   parserMessages.push(...cashIncomeAmountUnreadableMessages("DEGIRO", unreadableRows));
+  parserMessages.push(...cashRowsUnidentifiedMessages("DEGIRO", unidentifiedRows));
+  if (undescribed.length > 0) {
+    const count = String(undescribed.length);
+    const rows = undescribed.join("; ");
+    parserMessages.push({
+      id: "degiro.cash_row_undescribed",
+      severity: "warning",
+      message: `DEGIRO: ${count} fila(s) del CSV de Cuenta no dicen qué movimiento son y no se calculan: ${rows}.`,
+      hint: "Entre corchetes va la celda de la descripción, tal como está en el archivo. Sin ella, DeclaRenta no sabe si la fila es un dividendo, una retención, un interés u otro movimiento. Por eso no la suma y no se inventa el tipo. Si es un ingreso del año que declaras, tienes que declararlo igualmente. Vuelve a descargar el CSV de Cuenta original de DEGIRO y súbelo sin editarlo. Si la fila sigue sin descripción, copia el dato del extracto de DEGIRO y vuelve a subirlo. También puedes añadir el importe a mano en Renta Web.",
+      context: { count, rows },
+    });
+  }
   for (const { product, isin, currency, total } of transactionTax.values()) {
     const paid = total.negated();
     if (!paid.greaterThan(0)) continue;
