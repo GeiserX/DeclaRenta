@@ -231,6 +231,8 @@ function parseCoinbaseCsv(lines: string[]): Statement {
   const unidentifiedIncome: string[] = [];
   // Income rows whose Total and Subtotal both cannot be read, named (#467).
   const unreadableIncome: string[] = [];
+  // Income rows with a negative amount (a reward taken back), named (#467).
+  const negativeIncome: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -343,9 +345,19 @@ function parseCoinbaseCsv(lines: string[]): Statement {
         unreadableIncome.push(`${rawType} ${(rawQty ?? "").trim() || "—"} ${asset} ${shownDate} [${cells}]`);
         continue;
       }
-      if (txType === "rewards income") rewardsIncomeCount++;
       const amount = totalReadable ? total : subtotal;
       const amountDec = toFiniteDecimal(amount);
+      // A negative row takes a reward back. It was booked as negative income
+      // and cut the year's income with no word. DeclaRenta does not know
+      // which reward, maybe of another year, it cancels, so it books nothing
+      // and names the row, like Binance and Kraken. A written 0 (also "-0")
+      // stays the file's word (#467).
+      if (amountDec.lessThan(0)) {
+        const shownDate = isReadableTradeDate(tradeDate) ? tradeDate : timestamp || "—";
+        negativeIncome.push(`${rawType} ${asset} ${(rawQty ?? "").trim() || "—"} (${amount} ${spotCurrency}) ${shownDate}`);
+        continue;
+      }
+      if (txType === "rewards income") rewardsIncomeCount++;
       const quantityDec = toFiniteDecimal(quantity);
       cashTransactions.push({
         transactionID: `coinbase-${txType.replace(/\s+/g, "-")}-${tradeDate}-${asset}-${rowId}`,
@@ -530,6 +542,17 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     ...cryptoIncomeUnidentifiedMessages("Coinbase", unidentifiedIncome),
     ...cryptoIncomeAmountUnreadableMessages("Coinbase", unreadableIncome),
   ];
+  if (negativeIncome.length > 0) {
+    const count = String(negativeIncome.length);
+    const rows = negativeIncome.join("; ");
+    parserMessages.push({
+      id: "coinbase.income_negative",
+      severity: "warning",
+      message: `Coinbase: ${count} ingreso(s) en criptomonedas son negativos y no se calculan: ${rows}.`,
+      hint: "Un ingreso negativo suele ser una recompensa que Coinbase te ha retirado. DeclaRenta no sabe qué recompensa anula, así que no cambia ningún importe. Sigue contando las demás recompensas como ingreso y sus monedas como compradas a su valor de ese día. Si la fila anula un ingreso del año que declaras, quítalo a mano en Renta Web. Si después vendiste esa criptomoneda, el coste de la venta puede ser demasiado alto. Revisa en Renta Web el coste de esas ventas.",
+      context: { count, rows },
+    });
+  }
   // "rewards income" is treated as savings-base income by default, but it can
   // also cover promotional cashback that is legally base-general. Nudge the user
   // to verify if any is present (info — no action needed for the common case).

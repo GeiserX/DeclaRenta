@@ -1160,6 +1160,10 @@ const eu: TranslationKeys = {
     "Coinbase-ren Advanced Trade-ko {{count}} eragiketa balorazio-monetaz bestelako moneta batean ordaindu edo kobratu d(ir)a ({{pairs}}); erositako edo saldutako kriptomoneta soilik erregistratu da, ez kontrapartidako moneta.",
   "coinbase.advanced_trade_quote_leg_missing.hint":
     "Bikote horietan kotizazio-moneta ere eskualdatzen duzu (erostean) edo eskuratzen duzu (saltzean), beste kriptomoneta bat edo dibisa bat izan, eta eragiketa horrek ere tributatzen du. Gehitu eskuz moneta horren salmenta edo erosketa, eragiketaren euro-balio berberarekin, haren irabazia eta eskuratze-kostua bat etor daitezen.",
+  "coinbase.income_negative":
+    "Coinbase: kriptomonetetako {{count}} diru-sarrera negatiboak dira, eta ez dira kalkulatzen: {{rows}}.",
+  "coinbase.income_negative.hint":
+    "Diru-sarrera negatibo bat Coinbase-k kendu dizun sari bat izan ohi da. DeclaRentak ez daki zein sari baliogabetzen duen, beraz, ez du zenbatekorik aldatzen. Beste sariak diru-sarreratzat hartzen jarraitzen du, eta haien monetak egun horretako balioan erositakotzat. Errenkadak aitortzen duzun urteko diru-sarrera bat baliogabetzen badu, kendu eskuz Renta Web-en. Gero kriptomoneta hori saldu bazenuen, salmentaren kostua handiegia izan daiteke. Berrikusi Renta Web-en salmenta horien kostua.",
   "trade_republic.corporate_action_not_applied":
     "Trade Republic: DeclaRentak ez ditu aplikatu {{isins}} baloreen ekintza korporatiboko {{count}} mugimendu (fusioa, trukea, split-a).",
   "trade_republic.corporate_action_not_applied.hint":

@@ -1156,6 +1156,10 @@ const en: TranslationKeys = {
     "{{count}} Coinbase Advanced Trade fill(s) were paid or received in a currency other than the valuation currency ({{pairs}}); only the crypto bought or sold was recorded, not the counterpart currency.",
   "coinbase.advanced_trade_quote_leg_missing.hint":
     "In these pairs you also dispose of (when buying) or acquire (when selling) the quote currency, whether another crypto or a fiat currency, and that is taxable too. Add the sale or purchase of that currency manually, for the same euro value as the trade, so its gain and acquisition cost add up.",
+  "coinbase.income_negative":
+    "Coinbase: {{count}} cryptocurrency income row(s) are negative and are not calculated: {{rows}}.",
+  "coinbase.income_negative.hint":
+    "A negative income row is usually a reward that Coinbase took back. DeclaRenta does not know which reward it cancels, so it changes no amount. It still counts the other rewards as income, and their coins as bought at their value on that day. If the row cancels income of the year you file, remove it by hand in Renta Web. If you later sold that cryptocurrency, the cost of the sale may be too high. Check the cost of those sales in Renta Web.",
   "trade_republic.corporate_action_not_applied":
     "Trade Republic: DeclaRenta did not apply {{count}} corporate action row(s) (merger, exchange, split) for {{isins}}.",
   "trade_republic.corporate_action_not_applied.hint":

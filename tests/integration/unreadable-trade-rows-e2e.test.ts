@@ -1773,7 +1773,7 @@ describe("#467 crypto income whose coin cannot be read is named, never skipped w
 describe("#466 #467 #468 the warnings of these issues read as plain short sentences in Spanish and English", () => {
   const KEYS = [
     "binance.unparseable_amount", "binance.unparseable_coin", "binance.unpaired_leg", "binance.spot_cost_split",
-    "binance.fee_unassigned", "binance.income_negative", "binance.fiat_conversion_not_booked", "binance.unsupported_pair",
+    "binance.fee_unassigned", "binance.income_negative", "binance.fiat_conversion_not_booked", "binance.unsupported_pair", "coinbase.income_negative",
     "freedom24.row_skipped_malformed", "freedom24.dividend_amount_unreadable", "freedom24.tax_amount_unreadable",
     "parser.trade_row_unreadable", "parser.corporate_action_not_applied", "parser.cash_row_undated",
     "parser.cash_row_unidentified", "parser.crypto_income_unidentified", "parser.crypto_income_amount_unreadable", "parser.cash_income_amount_unreadable",
@@ -2526,20 +2526,22 @@ describe("#467 Coinbase: a price, currency or money column that cannot be read i
     });
   });
 
-  // A reversal (negative) income row lowered the income but still opened a
-  // second 0.01 ETH lot at 30 €, so a sale of a coin with no lot got a made-up
-  // cost and its fifo.insufficient_lots warning was hidden.
+  // A reversal (negative) income row still opened a second 0.01 ETH lot at
+  // 30 €, so a sale of a coin with no lot got a made-up cost and its
+  // fifo.insufficient_lots warning was hidden. It also cut the income with no
+  // word: it now books nothing and is named (coinbase-rows-e2e.test.ts).
   describe("a negative income row", () => {
     const rows = (second: string): Statement => coinbase(
       "2025-04-01T10:00:00Z,Staking Income,ETH,0.01,EUR,3000.00,30.00,30.00,0,",
       second,
       "2025-06-01T10:00:00Z,Sell,ETH,0.02,EUR,3000.00,60.00,60.00,0,",
     );
-    it.each(METHODS)("[%s] lowers the income and opens no lot", (method) => {
+    it.each(METHODS)("[%s] books nothing, is named and opens no lot", (method) => {
       const parsed = rows("2025-05-01T10:00:00Z,Staking Income,ETH,-0.01,EUR,3000.00,-30.00,-30.00,0,");
-      expect(parsed.cashTransactions.map((c) => c.rewardQuantity)).toEqual(["0.01", undefined]);
+      expect(parsed.cashTransactions.map((c) => c.rewardQuantity)).toEqual(["0.01"]);
       const r = run([[parsed, "Coinbase"]], 2025, method);
-      expect(r.interest.earned.toFixed(2)).toBe("0.00");
+      expect(message(r.messages, "coinbase.income_negative")?.context).toEqual({ count: "1", rows: "Staking Income ETH -0.01 (-30.00 EUR) 20250501" });
+      expect(r.interest.earned.toFixed(2)).toBe("30.00");
       expect(r.capitalGains.acquisitionValue.toFixed(2)).toBe("30.00");
       expect(net(r)).toBe("30.00");
       expect(r.messages.some((m) => m.id === "fifo.insufficient_lots")).toBe(true);

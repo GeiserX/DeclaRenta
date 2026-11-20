@@ -1195,6 +1195,10 @@ const es = {
     "{{count}} operación(es) de Advanced Trade de Coinbase se pagaron o cobraron en una moneda distinta de la de valoración ({{pairs}}); solo se ha registrado la criptomoneda comprada o vendida, no la moneda de contrapartida.",
   "coinbase.advanced_trade_quote_leg_missing.hint":
     "En estos pares también transmites (al comprar) o adquieres (al vender) la moneda de cotización, sea otra criptomoneda o una divisa, y esa operación también tributa. Añade manualmente la venta o la compra de esa moneda por el mismo valor en euros de la operación para que su ganancia y su coste de adquisición cuadren.",
+  "coinbase.income_negative":
+    "Coinbase: {{count}} ingreso(s) en criptomonedas son negativos y no se calculan: {{rows}}.",
+  "coinbase.income_negative.hint":
+    "Un ingreso negativo suele ser una recompensa que Coinbase te ha retirado. DeclaRenta no sabe qué recompensa anula, así que no cambia ningún importe. Sigue contando las demás recompensas como ingreso y sus monedas como compradas a su valor de ese día. Si la fila anula un ingreso del año que declaras, quítalo a mano en Renta Web. Si después vendiste esa criptomoneda, el coste de la venta puede ser demasiado alto. Revisa en Renta Web el coste de esas ventas.",
   "trade_republic.corporate_action_not_applied":
     "Trade Republic: DeclaRenta no ha aplicado {{count}} movimiento(s) de acción corporativa (fusión, canje, split) de {{isins}}.",
   "trade_republic.corporate_action_not_applied.hint":

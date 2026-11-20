@@ -1158,6 +1158,10 @@ const ca: TranslationKeys = {
     "{{count}} operació(ns) d'Advanced Trade de Coinbase es van pagar o cobrar en una moneda diferent de la de valoració ({{pairs}}); només s'ha registrat la criptomoneda comprada o venuda, no la moneda de contrapartida.",
   "coinbase.advanced_trade_quote_leg_missing.hint":
     "En aquests parells també transmets (en comprar) o adquireixes (en vendre) la moneda de cotització, sigui una altra criptomoneda o una divisa, i aquesta operació també tributa. Afegeix manualment la venda o la compra d'aquesta moneda pel mateix valor en euros de l'operació perquè el seu guany i el seu cost d'adquisició quadrin.",
+  "coinbase.income_negative":
+    "Coinbase: {{count}} ingrés(sos) en criptomonedes són negatius i no es calculen: {{rows}}.",
+  "coinbase.income_negative.hint":
+    "Un ingrés negatiu sol ser una recompensa que Coinbase t'ha retirat. DeclaRenta no sap quina recompensa anul·la, així que no canvia cap import. Continua comptant les altres recompenses com a ingrés i les seves monedes com a comprades al seu valor d'aquell dia. Si la fila anul·la un ingrés de l'any que declares, treu-lo a mà a Renta Web. Si després vas vendre aquesta criptomoneda, el cost de la venda pot ser massa alt. Revisa a Renta Web el cost d'aquestes vendes.",
   "trade_republic.corporate_action_not_applied":
     "Trade Republic: DeclaRenta no ha aplicat {{count}} moviment(s) d'acció corporativa (fusió, bescanvi, split) de {{isins}}.",
   "trade_republic.corporate_action_not_applied.hint":
