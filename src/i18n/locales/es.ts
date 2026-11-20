@@ -1061,7 +1061,7 @@ const es = {
   "kraken.ledger_trade_not_booked":
     "Kraken: {{count}} compraventa(s) del libro mayor (Ledgers) no están en ningún archivo de operaciones (Trades) subido y no se calculan: {{rows}}.",
   "kraken.ledger_trade_not_booked.hint":
-    "DeclaRenta lee las compras y las ventas de Kraken solo del archivo de operaciones (Trades). Cada fila trae el refid de la operación y su fecha. Entre corchetes van las monedas y los importes que mueve en el libro mayor. Descarga de Kraken el archivo Trades de esas fechas (History → Export → Trades) y súbelo junto al libro mayor. Sin él, puede faltar una venta en tu declaración, o el coste de una compra. Las compras y ventas instantáneas (tipos spend y receive), las conversiones (conversion) y las ventas (sale) pueden no estar en el archivo Trades. Si no están, añade a mano en Renta Web cada venta y cada cambio de una criptomoneda por otra, y usa cada compra como coste cuando vendas esa moneda.",
+    "DeclaRenta lee las compras y las ventas de Kraken solo del archivo de operaciones (Trades). Cada fila trae el refid de la operación y su fecha. Entre corchetes van las monedas y los importes que mueve en el libro mayor. Descarga de Kraken el archivo Trades de esas fechas (History → Export → Trades) y súbelo junto al libro mayor. Sin él, puede faltar una venta en tu declaración, o el coste de una compra. Las compras y ventas instantáneas (tipos spend y receive), las conversiones (conversion) y las ventas (sale) pueden no estar en el archivo Trades. Si no están, añade a mano en Renta Web cada venta y cada cambio de una criptomoneda por otra, y usa cada compra como coste cuando vendas esa moneda. Las filas margin y settled son el resultado de una posición con margen. Una fila adjustment es un ajuste, como el cambio de una moneda que Kraken deja de ofrecer. Una fila nfttrade es la venta de un NFT. Si no están en el archivo Trades y te dan dinero o monedas, pueden ser una ganancia patrimonial: decláralas a mano en Renta Web.",
   "kraken.fiat_conversion_not_booked":
     "Kraken: {{count}} operación(es) cambian una moneda oficial por otra (por ejemplo, euros por dólares) y no se calculan: {{rows}}.",
   "kraken.fiat_conversion_not_booked.hint":
@@ -1077,7 +1077,7 @@ const es = {
   "kraken.ledger_income_not_booked":
     "Kraken: {{count}} movimiento(s) del libro mayor pueden ser ingresos y no se calculan: {{rows}}.",
   "kraken.ledger_income_not_booked.hint":
-    "Son filas de tipo reward, dividend o credit que te dan monedas o dinero. DeclaRenta no sabe de qué ingreso se trata, así que no las suma. Una recompensa o un bono puede ser una ganancia patrimonial (base general). Un dividendo puede ser un rendimiento del capital mobiliario (base del ahorro). Si es un ingreso del año que declaras, decláralo a mano en Renta Web con su valor en euros de ese día.",
+    "Son filas de tipo reward, dividend, credit, nftrebate o nftcreatorfee que te dan monedas o dinero. DeclaRenta no sabe de qué ingreso se trata, así que no las suma. Una recompensa o un bono puede ser una ganancia patrimonial (base general). Un dividendo puede ser un rendimiento del capital mobiliario (base del ahorro). Si es un ingreso del año que declaras, decláralo a mano en Renta Web con su valor en euros de ese día.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} operación(es) no tienen la comisión calculada, porque sus apuntes de caja no cuadran con la operación: {{rows}}.",
   "flatex.commission.not_recovered.hint":

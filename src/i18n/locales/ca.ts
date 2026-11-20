@@ -1024,7 +1024,7 @@ const ca: TranslationKeys = {
   "kraken.ledger_trade_not_booked":
     "Kraken: {{count}} compravenda(es) del llibre major (Ledgers) no són a cap fitxer d'operacions (Trades) pujat i no es calculen: {{rows}}.",
   "kraken.ledger_trade_not_booked.hint":
-    "DeclaRenta llegeix les compres i les vendes de Kraken només del fitxer d'operacions (Trades). Cada fila porta el refid de l'operació i la data. Entre claudàtors hi ha les monedes i els imports que mou al llibre major. Descarrega de Kraken el fitxer Trades d'aquestes dates (History → Export → Trades) i puja'l amb el llibre major. Sense ell, pot faltar una venda a la teva declaració, o el cost d'una compra. Les compres i vendes instantànies (tipus spend i receive), les conversions (conversion) i les vendes (sale) poden no ser al fitxer Trades. Si no hi són, afegeix a mà a Renta Web cada venda i cada canvi d'una criptomoneda per una altra, i fes servir cada compra com a cost quan vengis aquesta moneda.",
+    "DeclaRenta llegeix les compres i les vendes de Kraken només del fitxer d'operacions (Trades). Cada fila porta el refid de l'operació i la data. Entre claudàtors hi ha les monedes i els imports que mou al llibre major. Descarrega de Kraken el fitxer Trades d'aquestes dates (History → Export → Trades) i puja'l amb el llibre major. Sense ell, pot faltar una venda a la teva declaració, o el cost d'una compra. Les compres i vendes instantànies (tipus spend i receive), les conversions (conversion) i les vendes (sale) poden no ser al fitxer Trades. Si no hi són, afegeix a mà a Renta Web cada venda i cada canvi d'una criptomoneda per una altra, i fes servir cada compra com a cost quan vengis aquesta moneda. Les files margin i settled són el resultat d'una posició amb marge. Una fila adjustment és un ajust, com el canvi d'una moneda que Kraken deixa d'oferir. Una fila nfttrade és la venda d'un NFT. Si no són al fitxer Trades i et donen diners o monedes, poden ser un guany patrimonial: declara-les a mà a Renta Web.",
   "kraken.fiat_conversion_not_booked":
     "Kraken: {{count}} operació(ns) canvien una moneda oficial per una altra (per exemple, euros per dòlars) i no es calculen: {{rows}}.",
   "kraken.fiat_conversion_not_booked.hint":
@@ -1040,7 +1040,7 @@ const ca: TranslationKeys = {
   "kraken.ledger_income_not_booked":
     "Kraken: {{count}} moviment(s) del llibre major poden ser ingressos i no es calculen: {{rows}}.",
   "kraken.ledger_income_not_booked.hint":
-    "Són files de tipus reward, dividend o credit que et donen monedes o diners. DeclaRenta no sap de quin ingrés es tracta, així que no les suma. Una recompensa o un bo pot ser un guany patrimonial (base general). Un dividend pot ser un rendiment del capital mobiliari (base de l'estalvi). Si és un ingrés de l'any que declares, declara'l a mà a Renta Web amb el seu valor en euros d'aquell dia.",
+    "Són files de tipus reward, dividend, credit, nftrebate o nftcreatorfee que et donen monedes o diners. DeclaRenta no sap de quin ingrés es tracta, així que no les suma. Una recompensa o un bo pot ser un guany patrimonial (base general). Un dividend pot ser un rendiment del capital mobiliari (base de l'estalvi). Si és un ingrés de l'any que declares, declara'l a mà a Renta Web amb el seu valor en euros d'aquell dia.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} operació(ns) no tenen la comissió calculada, perquè els seus apunts de caixa no quadren amb l'operació: {{rows}}.",
   "flatex.commission.not_recovered.hint":

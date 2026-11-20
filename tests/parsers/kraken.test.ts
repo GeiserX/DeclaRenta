@@ -397,8 +397,8 @@ describe("krakenParser — Ledgers CSV staking assets and Earn rewards", () => {
   it("ledger rows of types the parser does not read are counted in an info message", () => {
     const result = krakenParser.parse([
       HEADER,
-      row("L1", "adjustment", "", "ZEUR", "-1000"),
-      row("L2", "margin", "", "XXBT", "0.02"),
+      row("L1", "rollover", "", "ZEUR", "-2"),
+      row("L2", "custodytransfer", "", "XXBT", "0.02"),
       row("L3", "deposit", "", "ZEUR", "1000"),
       row("L4", "withdrawal", "", "ZEUR", "-10"),
       row("L5", "trade", "", "XXBT", "0.01"),
@@ -410,10 +410,10 @@ describe("krakenParser — Ledgers CSV staking assets and Earn rewards", () => {
     const msg = result.parserMessages![0]!;
     expect(msg.id).toBe("kraken.ledger_rows_ignored");
     expect(msg.severity).toBe("info");
-    expect(msg.message).toContain("adjustment");
-    expect(msg.message).toContain("margin");
+    expect(msg.message).toContain("rollover");
+    expect(msg.message).toContain("custodytransfer");
     expect(msg.message).not.toContain("deposit");
     expect(msg.message).not.toContain("trade");
-    expect(msg.context).toEqual({ count: "2", types: "adjustment (1), margin (1)" });
+    expect(msg.context).toEqual({ count: "2", types: "rollover (1), custodytransfer (1)" });
   });
 });

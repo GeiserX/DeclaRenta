@@ -1022,7 +1022,7 @@ const en: TranslationKeys = {
   "kraken.ledger_trade_not_booked":
     "Kraken: {{count}} trade(s) of the ledger (Ledgers) are in no uploaded trades file (Trades) and are not calculated: {{rows}}.",
   "kraken.ledger_trade_not_booked.hint":
-    "DeclaRenta reads Kraken purchases and sales only from the trades file (Trades). Each row shows the refid of the trade and its date. The square brackets show the coins and the amounts it moves in the ledger. Download the Trades file for those dates from Kraken (History → Export → Trades) and upload it with the ledger. Without it, a sale can be missing from your return, or the cost of a purchase. Instant buys and sells (types spend and receive), conversions (conversion) and sales (sale) may not be in the Trades file. If they are not, add each sale and each swap of one cryptocurrency for another by hand in Renta Web, and use each purchase as the cost when you sell that coin.",
+    "DeclaRenta reads Kraken purchases and sales only from the trades file (Trades). Each row shows the refid of the trade and its date. The square brackets show the coins and the amounts it moves in the ledger. Download the Trades file for those dates from Kraken (History → Export → Trades) and upload it with the ledger. Without it, a sale can be missing from your return, or the cost of a purchase. Instant buys and sells (types spend and receive), conversions (conversion) and sales (sale) may not be in the Trades file. If they are not, add each sale and each swap of one cryptocurrency for another by hand in Renta Web, and use each purchase as the cost when you sell that coin. Rows of type margin and settled are the result of a margin position. A row of type adjustment is an adjustment, such as the swap of a coin that Kraken stops offering. A row of type nfttrade is the sale of an NFT. If they are not in the Trades file and give you money or coins, they can be a capital gain: declare them by hand in Renta Web.",
   "kraken.fiat_conversion_not_booked":
     "Kraken: {{count}} trade(s) exchange one fiat currency for another (for example, euros for dollars) and are not calculated: {{rows}}.",
   "kraken.fiat_conversion_not_booked.hint":
@@ -1038,7 +1038,7 @@ const en: TranslationKeys = {
   "kraken.ledger_income_not_booked":
     "Kraken: {{count}} ledger movement(s) may be income and are not calculated: {{rows}}.",
   "kraken.ledger_income_not_booked.hint":
-    "They are rows of type reward, dividend or credit that give you coins or money. DeclaRenta does not know what income they are, so it does not add them. A reward or a bonus can be a capital gain (general base). A dividend can be income from movable capital (savings base). If it is income of the year you file, declare it by hand in Renta Web at its value in euros on that day.",
+    "They are rows of type reward, dividend, credit, nftrebate or nftcreatorfee that give you coins or money. DeclaRenta does not know what income they are, so it does not add them. A reward or a bonus can be a capital gain (general base). A dividend can be income from movable capital (savings base). If it is income of the year you file, declare it by hand in Renta Web at its value in euros on that day.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} trade(s) have no calculated commission, because their cash entries do not match the trade: {{rows}}.",
   "flatex.commission.not_recovered.hint":

@@ -899,7 +899,12 @@ práctico Renta 2025. The decisions, each pinned in
       message `kraken.ledger_rows_ignored`, so a sale's gain vanished. They
       are now collected by refid like `trade` rows (each leg with its type)
       and named by `kraken.ledger_trade_not_booked` when no Kraken trade of
-      the upload has that txid.
+      the upload has that txid. So are rows of type `margin` and `settled`
+      (the result of a margin position), `adjustment` (such as a delisting
+      conversion) and `nfttrade` (an NFT sale): each may be a gain, and a
+      500 € margin profit uploaded as a ledger alone vanished. A margin
+      close uploaded with its Trades row is booked once from the Trades CSV
+      and not named. A `rollover` fee stays counted by type.
       Every ledger `transfer` was skipped with no word, so an airdrop
       (subtype `airdrop`, FLR or SGB) went undeclared. It is now crypto
       income of the base general (art. 33.1 LIRPF), as at Binance. Only the
@@ -913,8 +918,8 @@ práctico Renta 2025. The decisions, each pinned in
       cancels, so it books nothing and `kraken.income_negative` names it
       by type, coin, amount, fee and date, as at Binance. A reward whose
       fee equals its amount is booked as 0, as before.
-      A ledger row of type `reward`, `dividend` or `credit` that gives coins
-      or money (or whose amount cannot be read) may be income. It was only
+      A ledger row of type `reward`, `dividend`, `credit`, `nftrebate` or
+      `nftcreatorfee` that gives coins or money (or whose amount cannot be read) may be income. It was only
       counted by type in an info message whose hint never said so. It books
       nothing, since DeclaRenta does not know what income it is, and
       `kraken.ledger_income_not_booked` names it by type, coin, amount and

@@ -452,12 +452,14 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
 /**
  * Ledger types that buy, sell or swap a coin. "trade" comes from the Trades
  * CSV; an instant buy or sale in the Kraken app (spend and receive), a
- * conversion or a sale may be in no Trades CSV at all (#467).
+ * conversion or a sale may be in no Trades CSV at all (#467). So may the
+ * result of a margin position (margin, settled), a delisting conversion
+ * (adjustment) and an NFT sale (nfttrade): each may be a gain.
  */
-const LEDGER_TRADE_TYPES = new Set(["trade", "spend", "receive", "conversion", "sale"]);
+const LEDGER_TRADE_TYPES = new Set(["trade", "spend", "receive", "conversion", "sale", "margin", "settled", "adjustment", "nfttrade"]);
 
 /** Ledger types that give coins or money and may be income (#467). */
-const LEDGER_INCOME_TYPES = new Set(["reward", "dividend", "credit"]);
+const LEDGER_INCOME_TYPES = new Set(["reward", "dividend", "credit", "nftrebate", "nftcreatorfee"]);
 
 /** Ledger transfer subtypes that move the user's own coins between wallets. */
 const OWN_COIN_TRANSFERS = new Set([
@@ -587,7 +589,8 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
       entry.legs.push(`${type === "trade" ? "" : `${type} `}${asset || "—"} ${(fields[cols.amount] ?? "").trim() || "—"}`);
       ledgerTrades.set(refid, entry);
     } else if (LEDGER_INCOME_TYPES.has(type) && (amountDec.gt(0) || quantityUnreadable(fields[cols.amount]))) {
-      // A reward, dividend or credit that gives coins or money may be income.
+      // A reward, dividend, credit, NFT rebate or NFT creator fee that gives
+      // coins or money may be income.
       // It was only counted by type, so the income could go undeclared with
       // no row named. DeclaRenta does not know what income it is, so it
       // books nothing and names the row (#467).
@@ -622,7 +625,7 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
         id: "kraken.ledger_income_not_booked",
         severity: "warning" as const,
         message: `Kraken: ${possibleIncome.length} movimiento(s) del libro mayor pueden ser ingresos y no se calculan: ${possibleIncome.join("; ")}.`,
-        hint: "Son filas de tipo reward, dividend o credit que te dan monedas o dinero. DeclaRenta no sabe de qué ingreso se trata, así que no las suma. Una recompensa o un bono puede ser una ganancia patrimonial (base general). Un dividendo puede ser un rendimiento del capital mobiliario (base del ahorro). Si es un ingreso del año que declaras, decláralo a mano en Renta Web con su valor en euros de ese día.",
+        hint: "Son filas de tipo reward, dividend, credit, nftrebate o nftcreatorfee que te dan monedas o dinero. DeclaRenta no sabe de qué ingreso se trata, así que no las suma. Una recompensa o un bono puede ser una ganancia patrimonial (base general). Un dividendo puede ser un rendimiento del capital mobiliario (base del ahorro). Si es un ingreso del año que declaras, decláralo a mano en Renta Web con su valor en euros de ese día.",
         context: { count: String(possibleIncome.length), rows: possibleIncome.join("; ") },
       }]
     : []), ...(ignoredCount > 0

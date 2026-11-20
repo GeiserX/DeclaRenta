@@ -4387,6 +4387,48 @@ describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and a
       });
     });
 
+    // A realised margin profit (margin), a position settled in coins
+    // (settled), a delisting conversion (adjustment) and an NFT sale
+    // (nfttrade) may be a gain. They were only counted by type in an info
+    // message that named no row, so a 500 € margin profit uploaded as a
+    // ledger alone vanished.
+    describe.each([
+      ["margin", "P1 20250301 [margin ZEUR 500]"],
+      ["settled", "P1 20250301 [settled ZEUR 500]"],
+      ["adjustment", "P1 20250301 [adjustment ZEUR 500]"],
+      ["nfttrade", "P1 20250301 [nfttrade ZEUR 500]"],
+    ])("a ledger row of type %s", (type, rows) => {
+      it.each(METHODS)("[%s] is named by refid, date and leg, never only counted by type", (method) => {
+        const parsed = ledger(`"L1","P1","2025-03-01 10:00:00","${type}","","currency","ZEUR","500","0","500"`);
+        expect([parsed.trades, parsed.cashTransactions, parsed.parserMessages]).toEqual([[], [], undefined]);
+        const r = run([[parsed, "Kraken"]], 2025, method);
+        expect(notBooked(r)?.context).toEqual({ count: "1", rows });
+        expect([net(r), r.messages.some((m) => m.id === "kraken.ledger_rows_ignored")]).toEqual(["0.00", false]);
+      });
+    });
+
+    it.each(METHODS)("[%s] the two legs of a delisting adjustment are named together", (method) => {
+      const r = run([[ledger(`"L1","AD1","2025-03-01 10:00:00","adjustment","","currency","XXBT","-0.1","0","0"`,
+        `"L2","AD1","2025-03-01 10:00:00","adjustment","","currency","ZEUR","9000","0","9000"`), "Kraken"]], 2025, method);
+      expect(notBooked(r)?.context).toEqual({ count: "1", rows: "AD1 20250301 [adjustment XXBT -0.1, adjustment ZEUR 9000]" });
+    });
+
+    it.each(METHODS)("[%s] control: a margin close uploaded with its Trades row is not named and gains 500 € once", (method) => {
+      const trades = kraken(`"T5","O5","XBTEUR","2025-02-01 10:00:00","buy","market","30000.00","3000.00","0","0.1","600.0","",""`,
+        `"T6","O6","XBTEUR","2025-03-01 10:00:00","sell","market","35000.00","3500.00","0","0.1","700.0","closing",""`);
+      const margin = ledger(`"L6","T6","2025-03-01 10:00:00","margin","","currency","ZEUR","500","0","500"`);
+      const r = run([[margin, "Kraken"], [trades, "Kraken"]], 2025, method);
+      expect(notBooked(r)).toBeUndefined();
+      expect(net(r)).toBe("500.00");
+      expect(net(run([[trades, "Kraken"]], 2025, method))).toBe("500.00");
+    });
+
+    it("control: a rollover fee stays counted by type, with no row named", () => {
+      const parsed = ledger(`"L1","T6","2025-03-01 10:00:00","rollover","","currency","ZEUR","-2","0","0"`);
+      expect(parsed.krakenLedgerTrades).toBeUndefined();
+      expect(parsed.parserMessages?.find((m) => m.id === "kraken.ledger_rows_ignored")?.context).toEqual({ count: "1", types: "rollover (1)" });
+    });
+
     it("two ledger files with the same trade name it once", () => {
       const r = run([[ledger(...saleLegs), "Kraken"], [ledger(...saleLegs), "Kraken"]], 2025, "multidivisa");
       expect(notBooked(r)?.context).toEqual({ count: "1", rows: ROWS });
@@ -4402,6 +4444,8 @@ describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and a
         expect(locale["kraken.ledger_trade_not_booked"]).toContain("{{rows}}");
         expect(locale["kraken.ledger_trade_not_booked.hint"]).toContain("Trades");
         expect(locale["kraken.ledger_trade_not_booked.hint"]).toContain("spend");
+        expect(locale["kraken.ledger_trade_not_booked.hint"]).toContain("margin");
+        expect(locale["kraken.ledger_trade_not_booked.hint"]).toContain("settled");
       }
     });
   });
@@ -4427,6 +4471,19 @@ describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and a
       expect([r.interest.entries.length, r.generalGains.entries.length]).toEqual([0, 0]);
     });
 
+    // An NFT rebate or creator fee paid to the user may be income too. It was
+    // only counted by type, with no row named.
+    it.each(METHODS)("[%s] a positive nftrebate or nftcreatorfee row is named; a negative one stays counted", (method) => {
+      const parsed = ledger(`"L1","N1","2025-03-01 00:00:00","nftrebate","","currency","ZEUR","5","0","5"`,
+        `"L2","N2","2025-03-02 00:00:00","nftcreatorfee","","currency","ZEUR","20","0","25"`,
+        `"L3","N3","2025-03-03 00:00:00","nftcreatorfee","","currency","ZEUR","-1","0","24"`);
+      expect(named(parsed.parserMessages)?.context).toEqual({ count: "2", rows: "nftrebate EUR 5 20250301; nftcreatorfee EUR 20 20250302" });
+      expect(parsed.parserMessages?.find((m) => m.id === "kraken.ledger_rows_ignored")?.context).toEqual({ count: "1", types: "nftcreatorfee (1)" });
+      const r = runWith([[parsed, "Kraken"]], 2025, method, manual({ ETH: "2000" }));
+      expect(named(r.messages)?.severity).toBe("warning");
+      expect([r.interest.entries.length, r.generalGains.entries.length]).toEqual([0, 0]);
+    });
+
     it("control: a row of those types that takes money away or writes zero stays counted, with no row named", () => {
       const parsed = ledger(`"L4","R4","2025-03-04 00:00:00","credit","","currency","ZEUR","-5","0","95"`,
         `"L5","R5","2025-03-05 00:00:00","reward","","currency","XETH","0","0","0.5"`);
@@ -4442,13 +4499,14 @@ describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and a
       for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
         expect(locale["kraken.ledger_income_not_booked"]).toContain("{{rows}}");
         expect(locale["kraken.ledger_income_not_booked.hint"]).toContain("Renta Web");
+        expect(locale["kraken.ledger_income_not_booked.hint"]).toContain("nftrebate");
       }
     });
   });
 
   it("the ignored ledger rows message is the es locale and exists in the five locales", () => {
     const m = krakenParser.parse([`"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"`,
-      `"L1","R1","2025-03-01 00:00:00","adjustment","","currency","XXBT","-0.1","0","0"`].join("\n")).parserMessages!.find((x) => x.id === "kraken.ledger_rows_ignored")!;
+      `"L1","R1","2025-03-01 00:00:00","rollover","","currency","ZEUR","-2","0","0"`].join("\n")).parserMessages!.find((x) => x.id === "kraken.ledger_rows_ignored")!;
     const fill = (text: string): string => text.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => m.context?.[k] ?? "");
     expect(m.message).toBe(fill((es as Record<string, string>)["kraken.ledger_rows_ignored"]!));
     expect(m.hint).toBe((es as Record<string, string>)["kraken.ledger_rows_ignored.hint"]);
