@@ -371,11 +371,26 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     if (sharesNum === 0) continue;
     if (!isSell && !isBuy) continue;
 
-    const absShares = Math.abs(sharesNum);
     const feeNum = parseFloat(parseNumber(fee));
     // Scalable's assetType column flags ETFs/funds explicitly ("ETF").
     // Map those to FUND; "Security" and others remain STK.
     const assetCategory: Trade["assetCategory"] = /etf|fund/.test(assetType) ? "FUND" : "STK";
+
+    // A Buy with a negative share count says the shares moved back (a
+    // reversed purchase). Read with its sign dropped it was one more purchase,
+    // so the reversed lot stayed in FIFO and a gain could become a loss with
+    // no word. It books nothing and is named by its shares cell, as in Flatex
+    // and Lightyear. A Sell with a positive count stays a sale: a sale count
+    // may be written unsigned (#467).
+    if (isBuy && !isSell && sharesNum < 0) {
+      trades.push(unreadableTrade({
+        tradeID: reference || `scalable-row-${tradeDate}-${isin}-${i}`,
+        symbol: description, description, isin, assetCategory, currency: currency || "EUR", tradeDate, tradeTime,
+        buySell: "BUY", exchange: "XETR",
+      }, unreadableCell(headers[cols.shares] ?? "shares", fields[cols.shares])));
+      continue;
+    }
+    const absShares = Math.abs(sharesNum);
 
     // FIFO values a trade at quantity × tradePrice, never from the amount. A
     // price it cannot read ("abc", "-") stopped the report, and an empty,

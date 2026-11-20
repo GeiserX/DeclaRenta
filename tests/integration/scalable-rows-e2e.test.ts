@@ -19,6 +19,7 @@
  *   with no refund, so the reversed dividend kept its whole withholding.
  * - A status that named an execution and a cancelled rest dropped the row
  *   with no word.
+ * - A Buy with a negative share count was booked as a second purchase.
  */
 import { describe, it, expect } from "vitest";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
@@ -323,5 +324,23 @@ describe("Scalable round 3: rows booked against what the file says", () => {
     for (const status of ["Cancelled", "Storniert", "Suspended"]) {
       expect(parse([buy(), withStatus(sell(), status), withStatus(dividend, status)]).parserMessages, status).toBeUndefined();
     }
+  });
+
+  it.each(METHODS)("[%s] a Buy with a negative share count is named, never booked as a second purchase", (method) => {
+    const rebuy = "2025-03-03;09:15;Executed;U3;Apple;Security;Buy;US0378331005;10;100,00;-1000,00;0;0;USD";
+    const control = report([rebuy, sell()], method);
+    expect(control.capitalGains.netGainLoss.toFixed(2)).toBe("550.00");
+    const first = "2025-01-10;09:15;Executed;U1;Apple;Security;Buy;US0378331005;10;200,00;-2000,00;0;0;USD";
+    const back = "2025-01-15;09:15;Executed;U1S;Apple;Security;Buy;US0378331005;-10;200,00;2000,00;0;0;USD";
+    const rows = [first, back, rebuy, sell()];
+    const s = parse(rows);
+    expect(msg(s, "parser.trade_row_unreadable")).toBe('Apple (US0378331005) 20250115 [shares: "-10"]');
+    expect(s.trades.filter((t) => !t.unreadableRow).map((t) => t.quantity)).toEqual(["10", "10", "-10"]);
+    const r = report(rows, method);
+    expect(r.messages.map((m) => m.id)).toContain("parser.trade_row_unreadable");
+    // The named row books nothing: no second lot of 10 at 200 stays behind.
+    // The purchase it reverses is still booked, so the sale takes that lot
+    // until the user corrects it, and the warning says which row to check.
+    expect(r.capitalGains.acquisitionValue.toFixed(2)).toBe("2200.00");
   });
 });
