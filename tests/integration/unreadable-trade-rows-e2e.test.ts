@@ -3836,10 +3836,26 @@ describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and a
       ["XDAIEUR", "XDAI", "EUR"], ["XUSDEUR", "XUSD", "EUR"], ["XXBTZEUR", "BTC", "EUR"], ["XETHXXBT", "ETH", "BTC"],
       ["XXDGZUSD", "DOGE", "USD"], ["XICNXXBT", "ICN", "BTC"], ["XNMCXXBT", "NMC", "BTC"], ["XXVNZEUR", "XVN", "EUR"], ["XTZEUR", "XTZ", "EUR"],
       ["XTZUSD", "XTZ", "USD"], ["DOTXBT", "DOT", "BTC"], ["XDGEUR", "DOGE", "EUR"], ["XBTUSDT", "BTC", "USDT"],
+      ["USDTZUSD", "USDT", "USD"], ["IMXXBT", "IMX", "BTC"],
     ])("pair %s is %s/%s", (pair, base, quote) => {
       const parsed = kraken(`"T1","O1","${pair}","2024-06-01 10:00:00","buy","limit","2.00","2000.00","0","1000","0.0","",""`);
       expect([parsed.trades[0]!.symbol, parsed.trades[0]!.currency]).toEqual([base, quote]);
       expect(parsed.parserMessages).toBeUndefined();
+    });
+
+    // Kraken's own key for USDT/USD is USDTZUSD: a modern base before a
+    // legacy quote. It was booked as the coin "USDTZ", so a USDT rebuy at
+    // Binance did not block the Kraken loss (art. 33.5.e LIRPF).
+    describe.each(["USDTZUSD", "USDTUSD"])("USDT bought and sold at a loss as %s, bought back at Binance", (pair) => {
+      it.each(METHODS)("[%s] the loss of 242 € is blocked on USDT", (method) => {
+        const r = run([
+          [kraken(`"T1","O1","${pair}","2025-01-10 10:00:00","buy","limit","1.10","1100.0","0","1000","0.0","",""`,
+            `"T2","O2","${pair}","2025-03-01 10:00:00","sell","market","0.88","880.0","0","1000","0.0","",""`), "Kraken"],
+          [binanceParser.parse([BN_H, "2025-03-20 10:30:00,USDTEUR,BUY,0.90,1000,900.00,0EUR"].join("\n")), "Binance"],
+        ], 2025, method);
+        expect(r.capitalGains.disposals.map((d) => d.symbol)).toEqual(["USDT"]);
+        expect([net(r), r.capitalGains.blockedLosses.toFixed(2)]).toEqual(["-242.00", "242.00"]);
+      });
     });
 
     it.each(METHODS)("[%s] an Earn reward in XUSD is a coin, never dollars", (method) => {

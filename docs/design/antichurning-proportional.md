@@ -799,8 +799,10 @@ práctico Renta 2025. The decisions, each pinned in
       lose their X or Z prefix. Any other code was cut too, so ZETA became
       ETA, XAUT became AUT and XUSD became dollars: a rebuy of the same
       coin at another broker did not block a Kraken loss. A legacy quote
-      (ZEUR, XXBT) is split off only after a legacy base, so Tezos
-      (XTZEUR) is no longer read as XT/ZEUR.
+      (ZEUR, XXBT) is split off only after a legacy base or a known coin,
+      so Tezos (XTZEUR) is no longer read as XT/ZEUR, and USDTZUSD
+      (Kraken's own key for USDT/USD) is USDT, never the coin "USDTZ"
+      that no USDT rebuy at another broker could match.
       A pair written with a slash (BTC/EUR) was booked as the coin "BTC/",
       so it matched no BTC lot, reward or rebuy. It is now split at the
       slash; a slash pair that is not two sides, or whose quote is no known

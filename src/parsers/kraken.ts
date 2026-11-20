@@ -124,9 +124,10 @@ function splitPair(pair: string): { base: string; quote: string; assumedQuote: b
   for (const suffix of QUOTE_SUFFIXES) {
     if (p.endsWith(suffix) && p.length > suffix.length) {
       const baseRaw = p.slice(0, p.length - suffix.length);
-      // A legacy quote (ZEUR, XXBT) follows only a legacy base (XXBTZEUR,
-      // XETHXXBT). Tezos is XTZEUR: read as XT/ZEUR it lost its Z (#467).
-      if (/^[XZ]...$/.test(suffix) && !(baseRaw in KRAKEN_ASSET_MAP)) continue;
+      // A legacy quote (ZEUR, XXBT) follows a legacy base (XXBTZEUR,
+      // XETHXXBT) or a known coin (USDTZUSD, Kraken's own key for USDT/USD).
+      // Tezos is XTZEUR: read as XT/ZEUR it lost its Z (#467).
+      if (/^[XZ]...$/.test(suffix) && !(baseRaw in KRAKEN_ASSET_MAP) && !KNOWN_CRYPTO_SYMBOLS.has(cleanSymbol(baseRaw))) continue;
       return { base: cleanSymbol(baseRaw), quote: cleanSymbol(suffix), assumedQuote: false };
     }
   }
