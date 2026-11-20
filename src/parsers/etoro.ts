@@ -56,7 +56,7 @@ const CLOSE_RATE_HEADERS = ["close rate", "tipo de cierre", "close price", "tasa
 const PROFIT_HEADERS = ["profit", "profit(usd)", "ganancia", "ganancias (usd)", "p/l"];
 const PROFIT_EUR_HEADERS = ["profit(eur)", "ganancias (eur)"];
 // Instrument currency → USD rate at open (1 for USD-quoted instruments)
-const FX_OPEN_HEADERS = ["tipo de cambio de apertura (usd)"];
+const FX_OPEN_HEADERS = ["fx rate at open (usd)", "tipo de cambio de apertura (usd)"];
 const OPEN_DATE_HEADERS = ["open date", "fecha de apertura"];
 const CLOSE_DATE_HEADERS = ["close date", "fecha de cierre"];
 const TYPE_HEADERS = ["type", "tipo"];

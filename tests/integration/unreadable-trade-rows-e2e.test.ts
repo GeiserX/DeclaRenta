@@ -3024,6 +3024,24 @@ describe("#467 eToro: a row or a sheet the parser cannot read is named, never bo
     expect(nums(report(usd, method))).toEqual(["0.00", "0.00", "0.00", "460.00"]);
   });
 
+  // The same SAP position in the English export, whose FX column is "FX rate at open (USD)".
+  const EN_H = ["Position ID", "Action", "Long / Short", "Amount", "Units / Contracts", "Open Date", "Close Date", "Leverage",
+    "Profit(USD)", "Profit(EUR)", "FX rate at open (USD)", "Open Rate", "Close Rate", "Type", "ISIN"];
+  const sapEn = (fx: string, open = "100", close = "150"): Promise<Statement> => book([["Closed Positions", [EN_H,
+    ["1", "SAP", "Long", "1000", "10", "01/02/2025 10:00:00", "15/06/2025 16:00:00", "1", "540", "500", fx, open, close, "Stocks", "DE0007164600"]]]]);
+  it.each(METHODS)("[%s] the English FX rate at open is read like the Spanish one, never a EUR gain booked in dollars", async (method) => {
+    const es = await sap("1.08");
+    const en = await sapEn("1.08");
+    expect(en.trades.map((t) => [t.currency, t.tradePrice])).toEqual(es.trades.map((t) => [t.currency, t.tradePrice]));
+    expect(nums(report(en, method))).toEqual(nums(report(es, method)));
+    // The loss case too: 150 → 100 in EUR is no larger loss in dollars.
+    const esLoss = await book([["Posiciones cerradas", [SP_H,
+      ["1", "SAP", "Long", "1000", "10", "01/02/2025 10:00:00", "15/06/2025 16:00:00", "1", "-540", "-500", "1.08", "150", "100", "Acciones", "DE0007164600"]]]]);
+    expect(nums(report(await sapEn("1.08", "150", "100"), method))).toEqual(nums(report(esLoss, method)));
+    // An English FX rate that cannot be read is named like the Spanish one.
+    expect(unreadableRows(await sapEn("abc"))).toBe('SAP (DE0007164600) 20250201 [FX rate at open (USD): "abc"]; SAP (DE0007164600) 20250615 [FX rate at open (USD): "abc"]');
+  });
+
   it("a sheet whose needed columns are not recognised is named by an error, in the five locales; a sheet with only a header is not", async () => {
     const cases: [string, string[][], string, string][] = [
       ["Dividends", [["Date of Payment", "Instrument Name", "Net Dividend Received", "ISIN"], ["15/06/2025", "AAPL", "42.50", AAPL]], "Dividends", "Net Dividend Received"],

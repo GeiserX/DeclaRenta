@@ -896,6 +896,10 @@ práctico Renta 2025. The decisions, each pinned in
       row is now booked at its net with no withholding, which can only
       raise the tax. A reversal (a negative net) refunds its withholding:
       the text "--7.5000" stopped the report.
+    - eToro: the English export's `FX rate at open (USD)` column is read
+      like the Spanish `Tipo de cambio de apertura (USD)`. Only the Spanish
+      name was known, so an English export booked a EUR instrument's legs
+      as dollars with no word.
     - DEGIRO Account CSV: a Dividendo, a Retención del dividendo or an
       interest row whose amount cannot be read, or whose currency cell is
       empty, is not booked, and neither are the withholdings of such a
