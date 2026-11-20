@@ -498,6 +498,20 @@ describe("#468 a row whose type is neither a buy nor a sale is never booked as a
     const odd = flatex("1;20.09.2024;20.09.2024;US0000000002;ACME INC.;-10;Stk.;Ausführung ORDER Kauf US0000000002 1;101;175,00;EUR;x");
     expect(unreadableRows(odd)).toBe('ACME INC. (US0000000002) 20240920 [Nominal: "-10"]');
   });
+
+  // Sweep 2: a Storno of a sale reads "Verkauf" too, with a positive
+  // Nominal, so it was booked as a second sale and the loss counted twice.
+  it.each(METHODS)("[%s] Flatex: a Storno of a sale is no second sale: it books nothing and is named", (method) => {
+    const sale = "1;03.06.2024;03.06.2024;US0000000002;ACME INC.;-10;Stk.;Ausführung ORDER Verkauf US0000000002 1;101;80,00;EUR;x";
+    const control = run([[flatex(sale), "Flatex"]], 2024, method);
+    expect([control.capitalGains.disposals.length, control.capitalGains.netGainLoss.toFixed(2)]).toEqual([1, "-700.00"]);
+    for (const [nominal, info] of [["10", "Storno Ausführung ORDER Verkauf US0000000002 1"], ["-10", "Storno Ausführung ORDER Kauf US0000000002 0"]]) {
+      const parsed = flatex(sale, `1;03.06.2024;03.06.2024;US0000000002;ACME INC.;${nominal};Stk.;${info};102;80,00;EUR;x`);
+      expect(unreadableRows(parsed)).toBe(`ACME INC. (US0000000002) 20240603 [Buchungsinformationen: ${JSON.stringify(info).slice(0, 40)}…"]`);
+      const r = run([[parsed, "Flatex"]], 2024, method);
+      expect([r.capitalGains.disposals.length, r.capitalGains.netGainLoss.toFixed(2)]).toEqual([1, "-700.00"]);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

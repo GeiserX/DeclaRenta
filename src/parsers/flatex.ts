@@ -79,6 +79,8 @@ function extractOrderKey(text: string): string {
 /** Buy/sell keywords in the Buchungsinformationen column. */
 const BUY_RE = /\bkauf\b/i;
 const SELL_RE = /\bverkauf\b/i;
+/** A reversal ("Storno Ausführung ORDER Verkauf ..."): no purchase or sale. */
+const STORNO_RE = /\bstorno\b/i;
 
 /** Dividend cash patterns (Kontoumsätze). */
 const DIVIDEND_PATTERNS = [/dividendenzahlung/i, /dividende/i];
@@ -164,9 +166,13 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     // An empty or unreadable Nominal is no "0" (see below).
     const qtyUnknown = quantityUnreadable(fields[qtyCol]);
     // The side comes from the booking text, Kauf or Verkauf (#468); only a
-    // file with no Buchungsinformationen column leaves the Nominal's sign.
-    const buyText = infoCol >= 0 ? BUY_RE.test(info) : !qtyUnknown && qtyNum.isPositive();
-    const sellText = infoCol >= 0 ? SELL_RE.test(info) && !buyText : !qtyUnknown && qtyNum.isNegative();
+    // file with no Buchungsinformationen column leaves the Nominal's sign. A
+    // Storno reverses a Kauf or Verkauf and is neither: its text has the word
+    // and its Nominal the opposite sign, so a reversed sale was booked as a
+    // second sale and its loss deducted twice. It is kept unreadable below.
+    const storno = STORNO_RE.test(info);
+    const buyText = infoCol >= 0 ? !storno && BUY_RE.test(info) : !qtyUnknown && qtyNum.isPositive();
+    const sellText = infoCol >= 0 ? !storno && SELL_RE.test(info) && !buyText : !qtyUnknown && qtyNum.isNegative();
     // Broker order id embedded in the Buchungsinformationen text: used after
     // merge to recover the commission from the matching Kontoumsätze cash leg.
     // A kept row (below) carries it too, so the order of a fill that cannot be
@@ -241,8 +247,8 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     }
 
     // A row whose text is neither Kauf nor Verkauf (a transfer in or out, a
-    // corporate action) is no purchase or sale the parser can book: the sign
-    // of its Nominal alone booked it as one (#468). A Kauf with a negative
+    // corporate action, a Storno) is no purchase or sale the parser can book:
+    // the sign of its Nominal alone booked it as one (#468). A Kauf with a negative
     // Nominal contradicts itself (a Verkauf with a positive one is a sale:
     // the count may be unsigned).
     if (!buyText && !sellText) {
