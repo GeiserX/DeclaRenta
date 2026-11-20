@@ -124,6 +124,16 @@ export interface FxEvent {
    * rebuy of the same position (see {@link FxFifoEngine.orderSameDayStockLegs}).
    */
   heldBefore?: true;
+  /**
+   * Stock sell only: a sale whose proceeds are no number (a trade with a
+   * number no broker writes, report.ts, #470). Its shares left the position,
+   * so it releases their parked principal, but nothing it brought back is
+   * known: `proceedsFcy` is 0 and the principal is retired with no currency
+   * row, in every method (no lost-dollar or cross row). A trap: skipping the
+   * sale left that principal parked, and a later sale of the same position
+   * released it instead of its own (CodeRabbit on 10e1918).
+   */
+  retire?: true;
 }
 
 /**
@@ -270,6 +280,9 @@ interface CoverPass {
   /** The trial failed before the last event: the pass stopped there. */
   stopped: boolean;
 }
+
+/** Trace note of the principal a sale with proceeds that are no number retires (`FxEvent.retire`). */
+const RETIRED_NOTE = "venta con importe que no es un número: su principal sale de la posición sin efecto de divisa";
 
 export class FxFifoEngine {
   /**
@@ -1744,11 +1757,18 @@ export class FxFifoEngine {
     for (const raw of disposals) {
       // A trade with a number no broker writes reaches FIFO with amounts that
       // are no number, and never reaches this engine (report.ts, #470). Its
-      // sale brings in no known currency: skipped. A lot with no cost parked
-      // nothing, so its sale releases nothing: cost 0, the safe re-add of the
-      // whole proceeds at the sale rate. A NaN here would poison the pool.
-      if (!raw.proceedsFcy.isFinite()) continue;
-      const d = raw.costBasisFcy.isFinite() ? raw : { ...raw, costBasisFcy: new Decimal(0) };
+      // sale brings in no known currency, but its shares left the position:
+      // it retires the principal they parked (`retire`, proceeds 0), so a
+      // later sale of the position releases its own. A lot with no cost
+      // parked nothing, so its sale releases nothing: cost 0, the safe re-add
+      // of the whole proceeds at the sale rate, and nothing at all when the
+      // proceeds are no number either. A NaN here would poison the pool.
+      const retire = !raw.proceedsFcy.isFinite();
+      if (retire && !raw.costBasisFcy.isFinite()) continue;
+      const d = retire
+        ? { ...raw, proceedsFcy: new Decimal(0) }
+        : raw.costBasisFcy.isFinite() ? raw : { ...raw, costBasisFcy: new Decimal(0) };
+      const retired = retire ? { retire: true as const } : {};
       // Shares bought in one currency and sold in another (same ISIN, another
       // listing; the stock FIFO matches by ISIN). Issue #434 for «Tradicional
       // con divisa», issue #441 for the default; `FifoEngine({ markLotCurrency })`
@@ -1789,10 +1809,12 @@ export class FxFifoEngine {
             // released the next lot's slice, 200 on an economic 100 in the
             // default, PR #445 review; issue #446 for «Tradicional con divisa»).
             ...(normalizeDate(d.acquireDate) < date ? { heldBefore: true as const } : {}),
+            ...retired,
           });
         }
-        // The default skips a sale with no positive proceeds, as below.
-        if (d.currency !== "EUR" && isEcbResolvable(d.currency) && (traditionalFx || d.proceedsFcy.greaterThan(0))) {
+        // The default skips a sale with no positive proceeds, as below. A
+        // retired sale brings in nothing in its own currency.
+        if (!retire && d.currency !== "EUR" && isEcbResolvable(d.currency) && (traditionalFx || d.proceedsFcy.greaterThan(0))) {
           events.push({
             kind: "stock_sell",
             date,
@@ -1830,8 +1852,9 @@ export class FxFifoEngine {
       // «Tradicional con divisa» lets every long sale through, at 0 too
       // (worthless or delisted with a zero sale, spec row 7) or below 0 (the
       // commission exceeds the gross): its lost principal books its lost-dollar
-      // rows. The default skips both, as before.
-      if (!traditionalFx && !d.proceedsFcy.greaterThan(0)) continue;
+      // rows. The default skips both, as before. A retired sale goes on in
+      // both: its principal must leave the parked queue.
+      if (!retire && !traditionalFx && !d.proceedsFcy.greaterThan(0)) continue;
       events.push({
         kind: "stock_sell",
         // Dated on the sale's trade date, like the buy's park (rule R0), so the
@@ -1854,6 +1877,7 @@ export class FxFifoEngine {
         // same-day rebuy (issue #437 for the default, #446 for «Tradicional con
         // divisa»).
         ...(normalizeDate(d.acquireDate) < normalizeDate(d.sellDate) ? { heldBefore: true as const } : {}),
+        ...retired,
       });
     }
     return events;
@@ -2669,7 +2693,8 @@ export class FxFifoEngine {
 
     let need = cost;
     // A sale with proceeds of 0 or less reaches the default only in a loan
-    // currency (issue #449, see report.ts): nothing comes back.
+    // currency (issue #449, see report.ts) or retired (`retire`): nothing
+    // comes back, and every parked slice it takes is discarded.
     const readd = Decimal.max(Decimal.min(cost, proc), 0);
     let placed = new Decimal(0);
     const park = this.parked.get(FxFifoEngine.parkKey(event.currency, event.positionKey));
@@ -2742,7 +2767,9 @@ export class FxFifoEngine {
           this.record("discard", event, {
             quantityFcy: discarded,
             rate: p.rate,
-            note: "principal perdido en la venta — sin efecto de divisa (nunca convertido a EUR)",
+            note: event.retire
+              ? RETIRED_NOTE
+              : "principal perdido en la venta — sin efecto de divisa (nunca convertido a EUR)",
           });
           this.accumulate("discard", event.currency, discarded);
         }
@@ -3214,15 +3241,17 @@ export class FxFifoEngine {
 
         if (discarded.greaterThan(EPS)) {
           // Lost principal. A covered slice books its drift as a lost-dollar row
-          // (skipped when zero); an untracked one has no drift to book.
-          const booked = p.rate !== null && this.bookLostDollars(event, discarded, p, p.buyRate ?? saleRate, "lost");
+          // (skipped when zero); an untracked one has no drift to book. A
+          // retired sale books none: nothing about it is counted.
+          const booked = !event.retire && p.rate !== null && this.bookLostDollars(event, discarded, p, p.buyRate ?? saleRate, "lost");
           if (booked) lostRows++;
           else {
             this.record("discard", event, {
               quantityFcy: discarded,
               rate: p.rate,
-              note:
-                p.rate === null
+              note: event.retire
+                ? RETIRED_NOTE
+                : p.rate === null
                   ? "principal perdido en la venta, sin origen rastreado: sin diferencia de cambio"
                   : "principal perdido en la venta: diferencia de cambio 0 (fila omitida)",
             });
@@ -3317,13 +3346,14 @@ export class FxFifoEngine {
       need = need.minus(x);
       if (p.q.lessThan(EPS)) park.shift();
       if (!x.greaterThan(EPS)) continue;
-      const booked = p.rate !== null && this.bookLostDollars(event, x, p, p.buyRate ?? event.ecbRate, "cross");
+      const booked = !event.retire && p.rate !== null && this.bookLostDollars(event, x, p, p.buyRate ?? event.ecbRate, "cross");
       if (!booked) {
         this.record("discard", event, {
           quantityFcy: x,
           rate: p.rate,
-          note:
-            p.rate === null
+          note: event.retire
+            ? RETIRED_NOTE
+            : p.rate === null
               ? "acciones vendidas en otra moneda, divisa sin origen rastreado: sin diferencia de cambio"
               : "acciones vendidas en otra moneda: diferencia de cambio 0 (fila omitida)",
         });

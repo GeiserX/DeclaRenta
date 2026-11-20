@@ -1,0 +1,163 @@
+import { describe, it, expect } from "vitest";
+import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
+import type { CashTransaction, FlexStatement, Trade } from "../../src/types/ibkr.js";
+import type { TaxSummary } from "../../src/types/tax.js";
+import type { EcbRateMap } from "../../src/types/ecb.js";
+
+// ===========================================================================
+// A row DeclaRenta leaves out (a number no broker writes, or a value in euros
+// it cannot count) must leave out only itself. What it is linked to keeps its
+// own place: the principal its sale releases, the lot its sale takes, the
+// loss the boxes count for it, and the withholding of its dividend
+// (CodeRabbit on 10e1918, #469 and #470). Every case runs through the real
+// generateTaxReport.
+// ===========================================================================
+
+/** EUR per unit of each currency, by day: `rates[date]` overrides `base`. */
+function rateMap(base: Record<string, string>, rates: Record<string, Record<string, string>> = {}): EcbRateMap {
+  const map: EcbRateMap = new Map();
+  for (let t = Date.UTC(2024, 11, 1); t <= Date.UTC(2026, 0, 31); t += 86_400_000) {
+    const day = new Date(t).toISOString().slice(0, 10);
+    map.set(day, new Map(Object.entries({ ...base, ...(rates[day] ?? {}) })));
+  }
+  return map;
+}
+
+let seq = 0;
+function trade(overrides: Partial<Trade>): Trade {
+  seq++;
+  const tradeDate = overrides.tradeDate ?? "2025-01-15";
+  return {
+    tradeID: `T${seq}`,
+    accountId: "U1",
+    symbol: "XYZ",
+    description: "XYZ INC",
+    isin: "US0000004531",
+    assetCategory: "STK",
+    currency: "USD",
+    tradeDate,
+    settlementDate: tradeDate,
+    quantity: "10",
+    tradePrice: "10",
+    tradeMoney: "100",
+    proceeds: "-100",
+    cost: "100",
+    fifoPnlRealized: "0",
+    fxRateToBase: "1",
+    buySell: "BUY",
+    openCloseIndicator: overrides.buySell === "SELL" ? "C" : "O",
+    exchange: "NASDAQ",
+    commissionCurrency: overrides.currency ?? "USD",
+    commission: "0",
+    taxes: "0",
+    multiplier: "1",
+    ...overrides,
+  };
+}
+
+function stock(date: string, side: "BUY" | "SELL", qty: string, price: string, extra: Partial<Trade> = {}): Trade {
+  const money = side === "SELL" ? `-${qty}` : qty;
+  return trade({ tradeDate: date, buySell: side, quantity: side === "SELL" ? `-${qty}` : qty, tradePrice: price, tradeMoney: money, ...extra });
+}
+
+/** A conversion of `usd` dollars: from euros (`fund`) or to euros. */
+function conversion(date: string, usd: string, direction: "fund" | "toEur"): Trade {
+  return trade({
+    symbol: "EUR.USD",
+    description: "EUR.USD",
+    isin: "",
+    assetCategory: "CASH",
+    tradeDate: date,
+    quantity: usd,
+    tradePrice: "1",
+    tradeMoney: usd,
+    proceeds: direction === "fund" ? usd : `-${usd}`,
+    cost: usd,
+    buySell: direction === "fund" ? "SELL" : "BUY",
+    openCloseIndicator: "O",
+    exchange: "IDEALFX",
+  });
+}
+
+function statement(trades: Trade[], cashTransactions: CashTransaction[] = []): FlexStatement {
+  return {
+    accountId: "U1",
+    fromDate: "20250101",
+    toDate: "20251231",
+    period: "Annual",
+    trades,
+    cashTransactions,
+    corporateActions: [],
+    openPositions: [],
+    securitiesInfo: [],
+  };
+}
+
+function message(r: TaxSummary, id: string) {
+  return r.messages.find((m) => m.id === id);
+}
+
+describe("a sale left out releases the principal of its own shares (fx-fifo, CodeRabbit 4634270109)", () => {
+  // 100 USD bought at 1.00 € pay the first 10 shares; their sale has a price
+  // no broker writes, so FIFO books it with proceeds that are no number. 200
+  // USD bought at 0.80 € pay the next 20 shares, sold for 250 USD at 0.90 €,
+  // and those 250 USD go back to euros at 0.90 €. Their cost is 200 × 0.80 +
+  // 50 × 0.90 = 205 €: a gain of 20 €. A trap: the left-out sale kept its 100
+  // USD parked, the second sale released them instead of its own (cost 100 ×
+  // 1.00 + 100 × 0.80 + 50 × 0.90 = 225 €) and the gain read 0.
+  const rates = rateMap({ USD: "0.90" }, {
+    "2025-01-10": { USD: "1.00" },
+    "2025-01-15": { USD: "1.05" },
+    "2025-03-03": { USD: "0.80" },
+    "2025-03-05": { USD: "0.85" },
+  });
+  const trades = (badPrice: string, badCurrency = "USD") => [
+    conversion("2025-01-10", "100", "fund"),
+    stock("2025-01-15", "BUY", "10", "10"),
+    stock("2025-02-03", "SELL", "10", badPrice, { currency: badCurrency, commissionCurrency: badCurrency }),
+    conversion("2025-03-03", "200", "fund"),
+    stock("2025-03-05", "BUY", "20", "10"),
+    stock("2025-04-01", "SELL", "20", "12.5"),
+    conversion("2025-05-02", "250", "toEur"),
+  ];
+
+  it("the default gains 20 € on the 250 USD, from the 200 USD that paid the shares sold", () => {
+    const r = generateTaxReport(statement(trades("1e25")), rates, 2025, reportOptionsForMethod("multidivisa"));
+    expect(message(r, "report.trade_out_of_range")?.context?.rows).toBe("XYZ (03/02/2025)");
+    expect(r.fxGains.acquisitionValue.toString()).toBe("205");
+    expect(r.fxGains.netGainLoss.toString()).toBe("20");
+  });
+
+  it("the same holds when the sale left out is in euros, on another listing of the shares", () => {
+    for (const method of ["multidivisa", "tradicional-divisa"] as const) {
+      const r = generateTaxReport(statement(trades("1e25", "EUR")), rates, 2025, reportOptionsForMethod(method));
+      expect(message(r, "report.trade_out_of_range")?.context?.rows).toBe("XYZ (03/02/2025)");
+      // The 100 USD drifted 0.05 € each up to the shares' purchase: a sale
+      // counted nowhere books no currency row for them either.
+      for (const d of r.fxGains.disposals) expect(d.disposeDate.startsWith("2025-02-03"), method).toBe(false);
+      if (method === "multidivisa") {
+        expect(r.fxGains.acquisitionValue.toString()).toBe("205");
+        expect(r.fxGains.netGainLoss.toString()).toBe("20");
+      }
+    }
+  });
+
+  it("«Tradicional con divisa» leaves no principal of the second shares parked once they are sold", () => {
+    const r = generateTaxReport(statement(trades("1e25")), rates, 2025, reportOptionsForMethod("tradicional-divisa"));
+    expect(message(r, "report.trade_out_of_range")).toBeDefined();
+    // The 200 USD left inside XYZ drifted 0.05 € each from their purchase to
+    // the shares': their own sale declares it. Parked behind the 100 USD of
+    // the left-out sale, 100 of them stayed with nothing to release them.
+    expect(message(r, "report.fx_traditional_orphan")).toBeUndefined();
+    // The left-out sale books no currency row of its own.
+    for (const d of r.fxGains.disposals) expect(d.disposeDate.startsWith("2025-02-03")).toBe(false);
+  });
+
+  it("a sale whose proceeds are 0 € keeps the default's behaviour (control)", () => {
+    // A worthless sale is no left-out row: the default still skips it, as
+    // before, and the gain is the old 0 €. Only a sale with no number moves.
+    const r = generateTaxReport(statement(trades("0")), rates, 2025, reportOptionsForMethod("multidivisa"));
+    expect(message(r, "report.trade_out_of_range")).toBeUndefined();
+    expect(r.fxGains.netGainLoss.toString()).toBe("0");
+  });
+});

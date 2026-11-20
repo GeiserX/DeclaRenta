@@ -1132,11 +1132,12 @@ export function generateTaxReport(
     // sale's gross), so the default's ledger must see that sale too (a trap:
     // the 5 USD such a commission cost stayed in the default's pool). The two
     // producers differ only in that filter, so every other currency keeps the
-    // default's own sales, in the same order.
+    // default's own sales, in the same order. A sale whose proceeds are no
+    // number (`retire`, proceeds 0) is in both: it retires its principal.
     const sales =
       traditionalFx || loan.size === 0
         ? stockProceedsFxEvents
-        : allSales.filter((e) => e.crossCurrency === true || (e.proceedsFcy ?? new Decimal(0)).greaterThan(0) || loan.has(e.currency));
+        : allSales.filter((e) => e.crossCurrency === true || e.retire === true || (e.proceedsFcy ?? new Decimal(0)).greaterThan(0) || loan.has(e.currency));
     const allFxEvents = [...tradeFxEvents, ...cashFxEvents, ...stockPurchaseFxEvents, ...manualOpeningLotFxEvents, ...sales];
     // «Tradicional con divisa» runs the same producers and engine in its own
     // mode; `new FxFifoEngine()` (no options) is the default, unchanged.
