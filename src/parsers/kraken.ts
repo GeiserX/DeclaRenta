@@ -555,7 +555,7 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
         id: "kraken.ledger_rows_ignored",
         severity: "info" as const,
         message: `Se han ignorado ${ignoredCount} movimiento(s) del libro mayor de Kraken de tipos que no se procesan: ${[...ignoredTypes].map(([t, n]) => `${t} (${n})`).join(", ")}.`,
-        hint: "Del libro mayor solo se leen las recompensas de staking y Earn y los airdrops; las compraventas se leen del CSV de operaciones (Trades). Una transferencia (transfer) que no mueve monedas entre tus propias cuentas puede ser un ingreso, como una bifurcación (fork): si lo es, decláralo a mano en Renta Web. Las compras instantáneas (tipos spend y receive) pueden no aparecer en ese CSV: si es tu caso, añádelas para que la moneda comprada tenga coste de adquisición.",
+        hint: "DeclaRenta lee del libro mayor solo las recompensas de staking y Earn y los airdrops. Lee las compraventas del CSV de operaciones (Trades). Una transferencia (transfer) que no mueve monedas entre tus propias cuentas puede ser un ingreso, como una bifurcación (fork). Si lo es, decláralo a mano en Renta Web. Las compras instantáneas (tipos spend y receive) pueden no aparecer en ese CSV. Si es tu caso, añádelas para que la moneda comprada tenga coste de adquisición.",
         context: { count: String(ignoredCount) },
       }]
     : [])];

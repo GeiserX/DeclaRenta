@@ -474,8 +474,8 @@ function parseTrCsv(lines: string[]): Statement {
     parserMessages.push({
       id: "trade_republic.corporate_action_not_applied",
       severity: "warning",
-      message: `Trade Republic: no se han aplicado ${corporateActionRows} movimiento(s) de acción corporativa (fusión, canje, split) de ${isins}.`,
-      hint: "El coste de los títulos antiguos no pasa a los nuevos, así que una venta posterior del nuevo valor puede salir sin lotes y con coste 0. Si fue una fusión o un canje, añade el coste de adquisición original en «Lotes manuales para posiciones transferidas».",
+      message: `Trade Republic: DeclaRenta no ha aplicado ${corporateActionRows} movimiento(s) de acción corporativa (fusión, canje, split) de ${isins}.`,
+      hint: "DeclaRenta no pasa el coste de los títulos antiguos a los nuevos. Por eso una venta posterior del nuevo valor puede salir sin lotes y con coste 0. Si fue una fusión o un canje, añade el coste de adquisición original en «Lotes manuales para posiciones transferidas».",
       context: { count: String(corporateActionRows), isins },
     });
   }

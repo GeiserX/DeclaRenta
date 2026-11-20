@@ -802,7 +802,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       id: "binance.unparseable_timestamp",
       severity: "warning",
       message: `Binance: ${count} fila(s) no tienen una fecha y hora (UTC_Time) legible y no se calculan: ${rows}.`,
-      hint: "Entre corchetes va la celda de la fecha. Sin ella, DeclaRenta no sabe con qué otra fila va cada movimiento. Por eso no suma ni resta unidades ni dinero por esas filas. Las ganancias, las pérdidas y los ingresos de esas criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF). DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance, no lo edites y súbelo de nuevo.",
+      hint: "Entre corchetes va la celda de la fecha. Sin ella, DeclaRenta no sabe con qué otra fila va cada movimiento. Por eso no suma ni resta unidades ni dinero por esas filas. Las ganancias, las pérdidas y los ingresos de esas criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF). DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance y súbelo sin editarlo. Si la fila sigue mal en el original, copia el dato que falta de tu historial de Binance y vuelve a subirlo.",
       context: { count, rows },
     });
   }
@@ -813,7 +813,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       id: "binance.unparseable_amount",
       severity: "warning",
       message: `Binance: ${count} fila(s) no tienen un importe (Change) legible y no se calculan: ${rows}.`,
-      hint: "Entre corchetes va la celda del importe. DeclaRenta no suma ni resta unidades ni dinero por esas filas. Por eso las ganancias, las pérdidas y los ingresos de esas criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF). DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance, no lo edites y súbelo de nuevo.",
+      hint: "Entre corchetes va la celda del importe. DeclaRenta no suma ni resta unidades ni dinero por esas filas. Por eso las ganancias, las pérdidas y los ingresos de esas criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF). DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance y súbelo sin editarlo. Si la fila sigue mal en el original, copia el dato que falta de tu historial de Binance y vuelve a subirlo.",
       context: { count, rows },
     });
   }
@@ -824,7 +824,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       id: "binance.unparseable_coin",
       severity: "warning",
       message: `Binance: ${count} fila(s) no dicen de qué moneda son (Coin) y no se calculan: ${rows}.`,
-      hint: "Entre corchetes va la celda de la moneda. Sin ella, DeclaRenta no sabe qué criptomoneda entra o sale. Por eso no suma ni resta unidades ni dinero por esas filas. Las ganancias, las pérdidas y los ingresos de tus criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF). DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance, no lo edites y súbelo de nuevo.",
+      hint: "Entre corchetes va la celda de la moneda. Sin ella, DeclaRenta no sabe qué criptomoneda entra o sale. Por eso no suma ni resta unidades ni dinero por esas filas. Las ganancias, las pérdidas y los ingresos de tus criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF). DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance y súbelo sin editarlo. Si la fila sigue mal en el original, copia el dato que falta de tu historial de Binance y vuelve a subirlo.",
       context: { count, rows },
     });
   }
@@ -1668,8 +1668,8 @@ function parseBinanceCsv(lines: string[]): Statement {
     parserMessages.push({
       id: "binance.unsupported_pair",
       severity: "warning",
-      message: `Se ${count === 1 ? "ha omitido 1 operación" : `han omitido ${count} operaciones`} del CSV de Binance con un par no reconocido: ${rows}.`,
-      hint: "Entre corchetes va la celda del par. Estas operaciones no se han incluido en el cálculo. Añádelas a mano en tu declaración y comunica el par para que se pueda incorporar.",
+      message: `DeclaRenta ha omitido ${count === 1 ? "1 operación" : `${count} operaciones`} del CSV de Binance con un par no reconocido: ${rows}.`,
+      hint: "Entre corchetes va la celda del par. DeclaRenta no ha incluido estas operaciones en el cálculo. Añádelas a mano en tu declaración y comunica el par para que DeclaRenta lo incorpore.",
       context: { count: String(count), pairs, rows },
     });
   }

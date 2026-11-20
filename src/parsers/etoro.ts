@@ -107,7 +107,7 @@ function columnsNotDetected(parserMessages: TaxMessage[], sheet: string, rows: s
     parserMessages.push({
       id: "etoro.columns_not_detected",
       severity: "error",
-      message: `eToro: no se reconocen las columnas ${list} de la hoja «${sheet}». No se ha importado ninguna fila de esa hoja.`,
+      message: `eToro: DeclaRenta no reconoce las columnas ${list} de la hoja «${sheet}». No ha importado ninguna fila de esa hoja.`,
       hint: "eToro cambia a veces los nombres de las columnas. Si DeclaRenta no las reconoce, no puede leer las filas de esa hoja y no suma ninguna. Vuelve a descargar el informe XLSX completo de la cuenta y súbelo otra vez. Si el aviso sigue, añade a mano en Renta Web las operaciones, los dividendos o los intereses de esa hoja.",
       context: { sheet, columns: list },
     });
@@ -401,8 +401,8 @@ function parseClosedPositions(
     parserMessages.push({
       id: "etoro.closed_rows_skipped",
       severity: "warning",
-      message: `Se ha(n) omitido ${skippedDataRows} fila(s) de "Posiciones cerradas" de eToro con 0 unidades.`,
-      hint: "Una posición de 0 unidades no compra ni vende nada. Si no es así, revisa la columna de unidades y vuelve a descargar el informe XLSX completo de la cuenta.",
+      message: `DeclaRenta ha omitido ${skippedDataRows} fila(s) de "Posiciones cerradas" de eToro con 0 unidades.`,
+      hint: "Una posición de 0 unidades no compra ni vende nada. Si no es así, revisa la columna de unidades. Después vuelve a descargar el informe XLSX completo de la cuenta.",
       context: { count: String(skippedDataRows) },
     });
   }

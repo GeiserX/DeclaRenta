@@ -246,7 +246,7 @@ export function dropUndatedCash(broker: string, cash: CashTransaction[], dateCol
     id: "parser.cash_row_undated",
     severity: "warning",
     message: `${broker}: ${count} movimiento(s) de dinero no tienen una fecha legible y no se calculan: ${list}.`,
-    hint: "Entre corchetes va la celda de la fecha. Sin fecha, DeclaRenta no sabe a qué año pertenece el importe ni qué tipo de cambio del BCE le toca. Por eso no lo suma y no se inventa una fecha. Puede ser un dividendo, una retención, un interés u otro ingreso del año que declaras. Entonces corrige la fecha en el archivo del broker y vuelve a subirlo. También puedes añadir el importe a mano en Renta Web.",
+    hint: "Entre corchetes va la celda de la fecha. Sin fecha, DeclaRenta no sabe a qué año pertenece el importe ni qué tipo de cambio del BCE le toca. Por eso no lo suma y no se inventa una fecha. Puede ser un dividendo, una retención, un interés u otro ingreso del año que declaras. Entonces vuelve a descargar el archivo original del broker y súbelo sin editarlo. Si la fecha sigue mal en el original, cópiala del extracto del broker y vuelve a subirlo. También puedes añadir el importe a mano en Renta Web.",
     context: { broker, count, rows: list },
   }];
 }
@@ -266,7 +266,7 @@ export function cashRowsUnidentifiedMessages(broker: string, rows: readonly stri
     id: "parser.cash_row_unidentified",
     severity: "warning",
     message: `${broker}: ${count} dividendo(s) o retención(es) no dicen de qué valor son y no se calculan: ${list}.`,
-    hint: "La fila no trae ni el ticker ni el ISIN. Sin el valor, DeclaRenta no sabe de qué país viene el dividendo ni con qué retención va. Por eso no lo suma y no se inventa el valor. Si es un ingreso del año que declaras, corrige la fila en el archivo del broker y vuelve a subirlo. También puedes añadir el importe a mano en Renta Web.",
+    hint: "La fila no trae ni el ticker ni el ISIN. Sin el valor, DeclaRenta no sabe de qué país viene el dividendo ni con qué retención va. Por eso no lo suma y no se inventa el valor. Si es un ingreso del año que declaras, vuelve a descargar el archivo original del broker y súbelo sin editarlo. Si la fila sigue sin el valor, copia el ticker o el ISIN del extracto del broker y vuelve a subirlo. También puedes añadir el importe a mano en Renta Web.",
     context: { broker, count, rows: list },
   }];
 }
@@ -286,7 +286,7 @@ export function cryptoIncomeUnidentifiedMessages(broker: string, rows: readonly 
     id: "parser.crypto_income_unidentified",
     severity: "warning",
     message: `${broker}: ${count} ingreso(s) en criptomonedas no dicen qué criptomoneda recibiste y no se calculan: ${list}.`,
-    hint: "Entre corchetes va la celda de la criptomoneda. Sin ella, DeclaRenta no sabe qué recibiste. Tampoco sabe qué coste darle cuando la vendas. Por eso no suma ese ingreso y no se inventa la criptomoneda. Si es un ingreso del año que declaras, tienes que declararlo igualmente. Corrige la fila en el archivo del exchange y vuelve a subirlo. También puedes añadir el ingreso a mano en Renta Web.",
+    hint: "Entre corchetes va la celda de la criptomoneda. Sin ella, DeclaRenta no sabe qué recibiste. Tampoco sabe qué coste darle cuando la vendas. Por eso no suma ese ingreso y no se inventa la criptomoneda. Si es un ingreso del año que declaras, tienes que declararlo igualmente. Vuelve a descargar el archivo original del exchange y súbelo sin editarlo. Si la fila sigue mal en el original, copia el dato que falta del historial del exchange y vuelve a subirlo. También puedes añadir el ingreso a mano en Renta Web.",
     context: { broker, count, rows: list },
   }];
 }
@@ -306,7 +306,7 @@ export function cryptoIncomeAmountUnreadableMessages(broker: string, rows: reado
     id: "parser.crypto_income_amount_unreadable",
     severity: "warning",
     message: `${broker}: ${count} ingreso(s) en criptomonedas no tienen un importe legible y no se calculan: ${list}.`,
-    hint: "Entre corchetes va el importe tal como está en el archivo. Sin un importe, DeclaRenta no sabe cuánto recibiste. Por eso no suma ese ingreso y no lo cuenta como cero. Si es un ingreso del año que declaras, tienes que declararlo igualmente. Corrige la fila en el archivo del exchange y vuelve a subirlo. También puedes añadir el ingreso a mano en Renta Web.",
+    hint: "Entre corchetes va el importe tal como está en el archivo. Sin un importe, DeclaRenta no sabe cuánto recibiste. Por eso no suma ese ingreso y no lo cuenta como cero. Si es un ingreso del año que declaras, tienes que declararlo igualmente. Vuelve a descargar el archivo original del exchange y súbelo sin editarlo. Si la fila sigue mal en el original, copia el dato que falta del historial del exchange y vuelve a subirlo. También puedes añadir el ingreso a mano en Renta Web.",
     context: { broker, count, rows: list },
   }];
 }
@@ -337,7 +337,7 @@ export function cashIncomeAmountUnreadableMessages(broker: string, rows: readonl
     id: "parser.cash_income_amount_unreadable",
     severity: "warning",
     message: `${broker}: ${count} dividendo(s), interés(es) u otro(s) ingreso(s) no tienen un importe legible y no se calculan: ${list}.`,
-    hint: "Entre corchetes va la celda del importe o de su divisa, tal como está en el archivo. Sin ella, DeclaRenta no sabe cuánto cobraste. Por eso no suma ese ingreso ni su retención y no lo cuenta como cero. Si es un ingreso del año que declaras, tienes que declararlo igualmente. Corrige la fila en el archivo del broker y vuelve a subirlo. También puedes añadir el importe y la retención a mano en Renta Web.",
+    hint: "Entre corchetes va la celda del importe o de su divisa, tal como está en el archivo. Sin ella, DeclaRenta no sabe cuánto cobraste. Por eso no suma ese ingreso ni su retención y no lo cuenta como cero. Si es un ingreso del año que declaras, tienes que declararlo igualmente. Vuelve a descargar el archivo original del broker y súbelo sin editarlo. Si la fila sigue mal en el original, copia el dato que falta del extracto del broker y vuelve a subirlo. También puedes añadir el importe y la retención a mano en Renta Web.",
     context: { broker, count, rows: list },
   }];
 }
@@ -383,7 +383,7 @@ export function tradeQuantityUnknownMessages(broker: string, trades: readonly Tr
       id: "parser.trade_row_unreadable",
       severity: "warning",
       message: `${broker}: ${count} fila(s) de operación no se pueden leer y no se calculan: ${list}.`,
-      hint: "Entre corchetes va la celda que falla. Falta, está vacía, no se puede leer o trae un tipo de operación que DeclaRenta no reconoce. DeclaRenta no suma ni resta acciones, unidades ni dinero por esas filas. Por eso las ganancias y pérdidas de esos valores no son fiables. Tampoco aplica la excepción de compra única de la regla de los 2 meses a ningún valor al que pueda pertenecer una de esas filas. Una fila puede ser la recompra de una criptomoneda en el año siguiente a una venta con pérdidas. Entonces esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF). DeclaRenta no la bloquea. Si una fila es una compra o una venta real, corrige esa celda en el archivo del broker y vuelve a subirlo.",
+      hint: "Entre corchetes va la celda que falla. Falta, está vacía, no se puede leer o trae un tipo de operación que DeclaRenta no reconoce. DeclaRenta no suma ni resta acciones, unidades ni dinero por esas filas. Por eso las ganancias y pérdidas de esos valores no son fiables. Tampoco aplica la excepción de compra única de la regla de los 2 meses a ningún valor al que pueda pertenecer una de esas filas. Una fila puede ser la recompra de una criptomoneda en el año siguiente a una venta con pérdidas. Entonces esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF). DeclaRenta no la bloquea. Si una fila es una compra o una venta real, vuelve a descargar el archivo original del broker y súbelo sin editarlo. Si la celda sigue mal en el original, copia el dato del extracto del broker y vuelve a subirlo.",
       context: { broker, count, rows: list },
     });
   }
