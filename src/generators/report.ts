@@ -723,11 +723,13 @@ const isDividendRow = (c: CashTransaction): boolean => c.type === "Dividends" ||
  * The withholding rows that belong to a dividend the report leaves out. The
  * matcher runs as the report runs it (`collapseCorrections`, then
  * `matchWithholdings`) on the rows the report keeps plus the dividends it
- * leaves out, so each such dividend takes its own withholding before any
- * other dividend can. A row goes with the dividend only when no part of it
- * belongs to a dividend the report keeps: a refund split between both stays
- * (it can only lower the deduction), so every kept dividend keeps the
- * withholding it has with the excluded one in the rows.
+ * leaves out, listed first, so each such dividend takes its own withholding
+ * before any other dividend can, whatever the file order. A row goes with
+ * the dividend only when no part of it belongs to a dividend the report
+ * keeps: a refund split between both stays (it can only lower the
+ * deduction). A withholding in reach of a dividend left out that has none of
+ * its own goes with it too: the rows cannot tell whose it is, the kept
+ * dividend can only deduct less, and the warning names the row.
  */
 function withholdingsOfExcluded(
   rows: CashTransaction[],
@@ -735,9 +737,12 @@ function withholdingsOfExcluded(
   outOfRange: ReadonlySet<CashTransaction>,
   uncountable: ReadonlySet<CashTransaction>,
 ): CashTransaction[] {
-  const match = matchWithholdings(
-    collapseCorrections(rows.filter((c) => excludedDividends.has(c) || (!outOfRange.has(c) && !uncountable.has(c)))),
-  );
+  const kept = collapseCorrections(rows.filter((c) => excludedDividends.has(c) || (!outOfRange.has(c) && !uncountable.has(c))));
+  // The dividends left out go first: pass 1 gives each withholding to the
+  // first dividend in reach in list order. A trap: in file order a kept
+  // dividend four days earlier took the 15 USD withheld from a 9e15 USD one,
+  // and box 0588 deducted tax it never paid, with no warning.
+  const match = matchWithholdings([...kept.filter((c) => excludedDividends.has(c)), ...kept.filter((c) => !excludedDividends.has(c))]);
   const toExcluded = new Set<number>();
   const toKept = new Set<number>();
   match.parts.forEach((parts, divIndex) => {

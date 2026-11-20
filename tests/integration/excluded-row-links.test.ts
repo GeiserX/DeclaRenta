@@ -332,6 +332,39 @@ describe("the withholding of a dividend left out goes with it (dividends, CodeRa
     expect(message(r, "report.withholding_of_excluded_dividend")?.context).toMatchObject({ count: "1" });
   });
 
+  for (const method of METHODS) {
+    it(`a dividend left out takes its withholding even when a kept dividend comes first (${method})`, () => {
+      // XYZ pays 50 USD on 10 March with nothing withheld, then 9e15 USD on
+      // 14 March (left out) with 15 USD withheld that day. A trap: the
+      // matcher gives a withholding to the first dividend in reach in list
+      // order, so the 10 March dividend took the 15 USD and box 0588
+      // deducted tax it never paid, with no warning.
+      const r = generateTaxReport(statement([], [
+        cash("D0", "2025-03-10", "50", "Dividends"),
+        cash("D1", "2025-03-14", "9e15", "Dividends"),
+        cash("W1", "2025-03-14", "-15", "Withholding Tax"),
+      ]), rates, 2025, reportOptionsForMethod(method));
+      expect(r.dividends.entries.map((e) => e.withholdingTaxEur.toString())).toEqual(["0"]);
+      expect(r.doubleTaxation.deduction.toString()).toBe("0");
+      expect(message(r, "report.withholding_of_excluded_dividend")?.context).toMatchObject({ count: "1", rows: "XYZ (14/03/2025)" });
+    });
+  }
+
+  it("a dividend left out with no withholding of its own may take a kept one's: the deduction can only drop, and it is named", () => {
+    // The 9e15 USD dividend of 14 March has no withholding; the 7.5 USD of 16
+    // March are in its reach too. The rows cannot tell which dividend they
+    // belong to, so they go with the one left out: the 50 USD dividend
+    // deducts nothing (the user may pay more, never less), and the warning
+    // names the withholding row so the user can check it.
+    const r = generateTaxReport(statement([], [
+      cash("D1", "2025-03-14", "9e15", "Dividends"),
+      cash("D2", "2025-03-16", "50", "Dividends"),
+      cash("W2", "2025-03-16", "-7.5", "Withholding Tax"),
+    ]), rates, 2025, reportOptionsForMethod("multidivisa"));
+    expect(r.dividends.entries.map((e) => e.withholdingTaxEur.toString())).toEqual(["0"]);
+    expect(message(r, "report.withholding_of_excluded_dividend")?.context).toMatchObject({ count: "1", rows: "XYZ (16/03/2025)" });
+  });
+
   it("a refund split between a dividend left out and a kept one stays, so it can only lower the deduction", () => {
     // The 20 USD refund corrects 15 of D1's withholding and 5 of D2's. Its
     // part of D2 must stay; dropping the whole row would give D2 its 10 USD
