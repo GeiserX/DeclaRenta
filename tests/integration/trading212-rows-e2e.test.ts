@@ -219,6 +219,23 @@ describe("Trading 212 dividends: tax-exempt dividends, refunds and unreadable di
     expect(r.doubleTaxation.deduction.toFixed(2)).toBe("0.00");
   });
 
+  // The engine pairs a withholding with a dividend by ISIN alone, so a
+  // withholding that writes no Ticker is still the unreadable dividend's.
+  it.each(METHODS)("[%s] the same when only one of the two rows writes the Ticker: the withholding goes with the dividend by ISIN", (method) => {
+    const noTicker = (row: string) => row.replace(",AAPL,Apple,", ",,Apple,");
+    for (const [rows, tax] of [
+      [[div("Dividend (Ordinary)", "15", "abc", "d1"), noTicker(wht("15", "-16.5", "w1")), div("Dividend (Ordinary)", "18", "11", "d2")], `Withholding tax - ${AAPL} -16.5 USD`],
+      [[noTicker(div("Dividend (Ordinary)", "15", "abc", "d1")), wht("15", "-16.5", "w1"), div("Dividend (Ordinary)", "18", "11", "d2")], "Withholding tax - AAPL -16.5 USD"],
+    ] as const) {
+      const s = parse([...rows]);
+      expect(s.cashTransactions.map((c) => `${c.type} ${c.amount}`), tax).toEqual(["Dividends 11"]);
+      expect(msg(s, "parser.cash_income_amount_unreadable"), tax).toContain(`(${tax}) [Total: "abc"]`);
+      const r = report([...rows], method);
+      expect(r.dividends.grossIncome.toFixed(2), tax).toBe("12.10");
+      expect(r.doubleTaxation.deduction.toFixed(2), tax).toBe("0.00");
+    }
+  });
+
   it("control: the withholding of a readable dividend on another day stays booked", () => {
     const s = parse([div("Dividend (Ordinary)", "15", "abc", "d1"), wht("18", "-1.65", "w1"), div("Dividend (Ordinary)", "18", "11", "d2")]);
     expect(s.cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual(["Withholding Tax -1.65", "Dividends 11"]);

@@ -196,7 +196,10 @@ function parseTrading212Csv(lines: string[]): Statement {
   // Dividend, interest and withholding rows whose Total or currency cannot
   // be read (#467). A dividend's `key` finds its withholdings below.
   const unreadableIncome: { key?: string; type: string; security: string; currency: string; date: string; cells: string[] }[] = [];
-  const incomeKey = (isin: string, security: string, date: string): string => `${isin}|${security}|${date}`;
+  // The engine pairs a withholding with a dividend by ISIN alone, so the key
+  // is the ISIN when there is one: a withholding that writes no Ticker is
+  // still that dividend's.
+  const incomeKey = (isin: string, security: string, date: string): string => isin ? `${isin}|${date}` : `|${security}|${date}`;
   const currencyCells = (fields: string[]): string[] => [
     unreadableCell(headers[cols.priceCurrency] ?? "Currency (Price / share)", fields[cols.priceCurrency]),
     unreadableCell(headers[cols.totalCurrency] ?? "Currency (Total)", fields[cols.totalCurrency]),
