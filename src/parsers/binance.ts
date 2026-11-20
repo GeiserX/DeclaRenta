@@ -1637,24 +1637,49 @@ function parseBinanceCsv(lines: string[]): Statement {
     // does not say, so the row is named by its numeric cells as written. A
     // trailing empty cell (a trailing comma) moves nothing.
     // With an empty Fee the split leaves only an empty cell past the header,
-    // as a trailing comma does. Such a row is shifted too when a numeric
-    // cell is a plain integer that reads with the next cell as one number
-    // with a comma ("1" and "5BTC", "1" and "5") and Price × Executed does
-    // not give Amount, as it does on every row Binance writes.
+    // as a trailing comma does. Every row Binance writes squares: Price ×
+    // Executed gives Amount. So a row with a cell past the header is shifted
+    // too when it does not square ("1.234,5XRP" read as Executed "1.234" and
+    // Amount "5XRP"), or when it squares once two numeric cells are read as
+    // one number with a comma ("5.00,1,5,7.50": 5.00 × 1 = 5 by chance, but
+    // 5.00 × 1,5 = 7.50). Before, both were booked with the Amount as the Fee
+    // (verify of 8ba74cd, #467).
     const numericFrom = Math.min(...[cols.price, cols.executed, cols.amount, cols.fee].filter((c) => c >= 0));
     const executedCell = readCoinAmount(fields[cols.executed], [symbol]);
     const amountCell = readCoinAmount(fields[cols.amount], [currency]);
     const priceCell = readCoinAmount(fields[cols.price], [currency]);
-    const squares = (): boolean => {
-      if (!priceCell || !executedCell || !amountCell) return false;
-      const expected = new Decimal(priceCell.amount).mul(executedCell.amount);
-      const written = new Decimal(amountCell.amount);
-      return expected.minus(written).abs().lessThanOrEqualTo(written.abs().mul("0.01"));
+    const squaresAt = (p: string | undefined, e: string | undefined, a: string | undefined): boolean => {
+      if (p === undefined || e === undefined || a === undefined) return false;
+      const written = new Decimal(a);
+      return new Decimal(p).mul(e).minus(written).abs().lessThanOrEqualTo(written.abs().mul("0.01"));
     };
-    const commaSplit = (): boolean => [cols.price, cols.executed, cols.amount].some((c) =>
-      c >= 0 && /^[+-]?\d+$/.test((fields[c] ?? "").trim()) && /^\d+(\.\d+)?[A-Za-z]*$/.test((fields[c + 1] ?? "").trim()));
+    /** A comma number written as two cells: "1,5", "1.234,5" (comma decimal) or "1,234.5" (thousands). */
+    const commaNumber = (first: string, second: string): string | undefined => {
+      const text = `${first},${second.replace(/[A-Za-z]+$/, "")}`;
+      const plain = /^\d{1,3}(\.\d{3})*,\d+$/.test(text) || /^\d+,\d+$/.test(text) ? text.replace(/\./g, "").replace(",", ".")
+        : /^\d{1,3}(,\d{3})+(\.\d+)?$/.test(text) ? text.replace(/,/g, "") : undefined;
+      // A second part that adds nothing ("5,0") reads as the first cell alone.
+      return plain !== undefined && !new Decimal(plain).equals(first) ? plain : undefined;
+    };
+    const joinedSquares = (): boolean => [cols.price, cols.executed, cols.amount].some((c) => {
+      if (c < 0) return false;
+      const first = (fields[c] ?? "").trim();
+      const second = (fields[c + 1] ?? "").trim();
+      if (!/^\d+(\.\d+)?$/.test(first) || second === "") return false;
+      // Amount and a Fee in a coin ("40000" and "1EUR", then a trailing
+      // comma) read the same as an Amount of "40000,1EUR" split before an
+      // empty Fee: the file cannot tell them apart, and the row Binance
+      // writes is the first, so it keeps its booking. A bare second part
+      // ("2000" and "99") is no Fee Binance writes, so it is joined.
+      if (c === cols.amount && !/^\d+$/.test(second)) return false;
+      const joined = commaNumber(first, second);
+      if (joined === undefined) return false;
+      const cells = [...fields.slice(0, c), joined, ...fields.slice(c + 2)];
+      const read = (col: number, coin: string): string | undefined => col === c ? joined : readCoinAmount(cells[col], [coin])?.amount;
+      return squaresAt(read(cols.price, currency), read(cols.executed, symbol), read(cols.amount, currency));
+    });
     const shifted = fields.slice(headerWidth).some((f) => f.trim() !== "") ||
-      (fields.length > headerWidth && commaSplit() && !squares());
+      (fields.length > headerWidth && (!squaresAt(priceCell?.amount, executedCell?.amount, amountCell?.amount) || joinedSquares()));
     const badCell = shifted ? numericFrom
       : sideLower !== "buy" && sideLower !== "sell" ? cols.side
       : !executedCell ? cols.executed

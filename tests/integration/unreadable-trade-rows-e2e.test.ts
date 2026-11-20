@@ -1584,6 +1584,45 @@ describe("#467 a crypto buy or sale whose quantity, side or coin cannot be read 
     }
   });
 
+  // Two splits the first rule missed (verify of 8ba74cd): "1.234,5XRP" leaves
+  // Executed "1.234", no plain integer, and "1,5" at a Price of 5.00 squares
+  // by chance (5.00 × 1 = 5). Both were booked with the Amount as the Fee. A
+  // row with a cell past the header is named whenever it does not square,
+  // and also when the reading with two cells joined squares.
+  const xrp = (sale: string): Statement => binance(
+    "2025-02-01 10:00:00,XRPEUR,BUY,0.5,2000XRP,1000.00,0EUR",
+    `2025-06-01 10:00:00,XRPEUR,SELL,${sale}`,
+  );
+  const dot = (sale: string): Statement => binance(
+    "2025-02-01 10:00:00,DOTEUR,BUY,4.00,10,40.00,0",
+    `2025-06-01 10:00:00,DOTEUR,SELL,${sale}`,
+  );
+  const netOf = (parsed: Statement, method: FxMethod): string => run([[parsed, "Binance"]], 2025, method).capitalGains.netGainLoss.toFixed(2);
+  it.each(METHODS)("[%s] control: 1234.5XRP and 1.5 DOT with an empty Fee and a trailing empty cell keep their booking", (method) => {
+    for (const [parsed, gain] of [[xrp("0.6,1234.5XRP,740.70,"), "123.45"], [xrp("0.6,1234.5XRP,740.70,0EUR"), "123.45"], [xrp("0.6,1234.5XRP,740.70,1EUR,"), "122.45"],
+      [dot("5.00,1.5,7.50,"), "1.50"], [dot("5.00,1.5,7.50,,"), "1.50"], [dot("5,1.5,7.5,0EUR,"), "1.50"],
+      // An integer Amount and a Fee in a coin, then a trailing comma, as BH13.
+      [dot("5,2,10,1EUR,"), "1.00"]] as const) {
+      expect(parsed.parserMessages ?? [], gain).toEqual([]);
+      expect(netOf(parsed, method), gain).toBe(gain);
+    }
+  });
+  it.each(METHODS)("[%s] 1.234,5XRP and a bare 1,5 at 5.00, with no quotes and an empty Fee, book nothing and are named", (method) => {
+    for (const [parsed, rows] of [
+      [xrp("0.6,1.234,5XRP,740.70,"), 'XRP 20250601 [Price,Executed,Amount,Fee: "0.6,1.234,5XRP,740.70,"]'],
+      [dot("5.00,1,5,7.50,"), 'DOT 20250601 [Price,Executed,Amount,Fee: "5.00,1,5,7.50,"]'],
+      // An Amount of "2000,04" split before an empty Fee squares as "2000"
+      // within 1 % (4.00 × 500.01 = 2000.04), and "2000,04" read whole squares
+      // exactly: named, never booked with a Fee of "04".
+      [dot("4.00,500.01,2000,04,"), 'DOT 20250601 [Price,Executed,Amount,Fee: "4.00,500.01,2000,04,"]'],
+    ] as const) {
+      expect(unreadableRows(parsed), rows).toBe(rows);
+      const r = run([[parsed, "Binance"]], 2025, method);
+      expect(r.capitalGains.disposals, rows).toEqual([]);
+      expect(r.capitalGains.netGainLoss.toFixed(2), rows).toBe("0.00");
+    }
+  });
+
   // The same at Kraken: read with its sign dropped, a buy of vol "-0.05"
   // (coins going out) was one more lot of 0.05 with no word (#467). Kraken
   // writes vol positive on both sides, so the row books nothing and is named.
