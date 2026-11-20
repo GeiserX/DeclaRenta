@@ -628,6 +628,43 @@ describe("issue #467 — a refund dated more than 7 days from its dividend", () 
     });
   }
 
+  // A refund dated 5 January, 35 days after its 1 December dividend: the
+  // prior-year warning tells the user to upload 2024's file and recalculate
+  // 2024, so 2024 must then lose the refunded tax.
+  const dec2024 = statement([msft("Dividends", "100", "20241201"), msft("Withholding Tax", "-10", "20241201")], "20240101", "20241231");
+  for (const method of METHODS) {
+    const opts = reportOptionsForMethod(method);
+    const priorYear = (r: TaxSummary) => r.messages.filter((m) => m.id === MSG_ID).map((m) => m.context);
+    it(`a refund dated 5 January lowers the 1 December dividend's 2024 tax, as the 2025 warning says (${method})`, () => {
+      const both = merged(dec2024, statement([msft("Withholding Tax", "10", "20250105"), ...goog]));
+      expect(generateTaxReport(both, rates, 2024, opts).doubleTaxation.deduction.toFixed(2)).toBe("0.00");
+      const r2025 = generateTaxReport(both, rates, 2025, opts);
+      expect(r2025.doubleTaxation.deduction.toFixed(2)).toBe("18.00");
+      expect(priorYear(r2025)).toEqual([{ year: "2024", reportYear: "2025", amount: "9.00" }]);
+      expect(unjoined(r2025)).toBeUndefined();
+    });
+
+    it(`control: a refund dated 8 January leaves 2024's tax, no prior-year warning, and 2025 names it (${method})`, () => {
+      const both = merged(dec2024, statement([msft("Withholding Tax", "10", "20250108"), ...goog]));
+      const r2024 = generateTaxReport(both, rates, 2024, opts);
+      expect(r2024.doubleTaxation.deduction.toFixed(2)).toBe("9.00");
+      expect(unjoined(r2024)).toBeUndefined();
+      const r2025 = generateTaxReport(both, rates, 2025, opts);
+      expect(priorYear(r2025)).toEqual([]);
+      expect(unjoined(r2025)?.context).toEqual({ count: "1", rows: "MSFT (08/01/2025, 10.00 USD)" });
+    });
+
+    it(`a 5 January refund larger than the 2024 tax: 2024 names the rest, as the 2025 warning counts it (${method})`, () => {
+      const both = merged(dec2024, statement([msft("Withholding Tax", "15", "20250105"), ...goog]));
+      const r2024 = generateTaxReport(both, rates, 2024, opts);
+      expect(r2024.doubleTaxation.deduction.toFixed(2)).toBe("0.00");
+      expect(unjoined(r2024)?.context).toEqual({ count: "1", rows: "MSFT (05/01/2025, 5.00 USD)" });
+      const r2025 = generateTaxReport(both, rates, 2025, opts);
+      expect(priorYear(r2025)).toEqual([{ year: "2024", reportYear: "2025", amount: "13.50" }]);
+      expect(unjoined(r2025)?.context).toEqual({ count: "1", rows: "MSFT (05/01/2025, 5.00 USD)" });
+    });
+  }
+
   it("the Spanish text is the es locale's, byte for byte", () => {
     const r = generateTaxReport(merged(statement([msft("Withholding Tax", "10", "20250701")])), rates, 2025);
     const m = unjoined(r)!;

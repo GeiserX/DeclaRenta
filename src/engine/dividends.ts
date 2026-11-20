@@ -110,10 +110,10 @@ const dateReaches = (w: CashTransaction, wTime: number, postedLate: boolean, div
  * A refund never takes more from a dividend than that dividend withheld: the
  * rest goes to the next dividend it can correct. A refund (or its rest) that
  * no dividend within 7 days can take goes to a dividend of its ISIN and broker
- * paid earlier in the refund's own year (issue #467). A dividend of the next
- * year withheld after the refund takes it only when none of those can. What
- * still finds no dividend is in `unjoined`, so the caller names it. No row
- * counts twice.
+ * paid earlier in the refund's own year, or in the previous year when it is
+ * dated 1-7 January (issue #467). A dividend of the next year withheld after
+ * the refund takes it only when none of those can. What still finds no
+ * dividend is in `unjoined`, so the caller names it. No row counts twice.
  */
 export function matchWithholdings(
   cashTransactions: CashTransaction[],
@@ -288,21 +288,29 @@ export function matchWithholdings(
   // 3c reach (issue #467): what 3b reaches, plus every dividend the refund
   // corrects paid on or before its date in the refund's own year. A broker
   // can reverse a dividend and its tax weeks later; that refund was dropped,
-  // so 0588 or 0597 kept the tax. A dividend of another year or broker is
-  // never in it, so a refund never lowers another year's or broker's tax.
+  // so 0588 or 0597 kept the tax. A refund dated 1-7 January also reaches a
+  // dividend of the previous year: the prior-year warning counts such a
+  // refund for that year and tells the user to recalculate it, so that year
+  // must then lose the tax (a 5 January refund of a 1 December dividend kept
+  // it). A row posted in a later year than its date never does. A dividend
+  // of another broker, or of any other year, is never in it.
   const lateReachOf = new Map<number, number[]>();
   const lateReach = (index: number): number[] => {
     let r = lateReachOf.get(index);
     if (!r) {
       const w = withholdings[index]!;
       const wTime = withholdingTimes[index]!;
-      r = (dividendIndexByIsin.get(w.isin) ?? []).filter(
-        (divIndex) =>
+      const date = normalizeDate(w.dateTime);
+      const ownYear = date.slice(0, 4);
+      const priorYear = !postedLate[index] && date.slice(5) <= "01-07" ? String(Number(ownYear) - 1) : null;
+      r = (dividendIndexByIsin.get(w.isin) ?? []).filter((divIndex) => {
+        const divYear = yearOf(dividends[divIndex]!.dateTime);
+        return (
           corrects(index, divIndex) &&
           !isLater(index, divIndex) &&
-          (reaches(index, divIndex) ||
-            (!isReversal[divIndex] && divTimes[divIndex]! <= wTime && yearOf(dividends[divIndex]!.dateTime) === yearOf(w.dateTime))),
-      );
+          (reaches(index, divIndex) || (!isReversal[divIndex] && divTimes[divIndex]! <= wTime && (divYear === ownYear || divYear === priorYear)))
+        );
+      });
       lateReachOf.set(index, r);
     }
     return r;

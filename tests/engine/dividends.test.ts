@@ -821,6 +821,25 @@ describe("withholding corrections: a refund near the year end (issue #467)", () 
     expect(run(rows)).toEqual({ tax: ["2026-01-02:0.00"], unjoined: [] });
   });
 
+  it("a refund dated 1-7 January lowers the previous year's dividend it refunds, weeks before", () => {
+    const rows = [row("d", "Dividends", "20241201", "10"), row("w", "Withholding Tax", "20241201", "-1.50"), row("r", "Withholding Tax", "20250105", "1.50")];
+    expect(run(rows)).toEqual({ tax: ["2024-12-01:0.00"], unjoined: [] });
+  });
+
+  it("control: a refund dated 8 January joins no dividend of the previous year", () => {
+    const rows = [row("d", "Dividends", "20241201", "10"), row("w", "Withholding Tax", "20241201", "-1.50"), row("r", "Withholding Tax", "20250108", "1.50")];
+    expect(run(rows)).toEqual({ tax: ["2024-12-01:1.50"], unjoined: ["r:1.50"] });
+  });
+
+  it("a row IBKR posted in a later year keeps to its own year, even when dated 5 January", () => {
+    const rows = [
+      row("d", "Dividends", "20241201", "10"),
+      row("w", "Withholding Tax", "20241201", "-1.50"),
+      row("r", "Withholding Tax", "20250105", "1.50", { reportDate: "2026-01-10" }),
+    ];
+    expect(run(rows)).toEqual({ tax: ["2024-12-01:1.50"], unjoined: ["r:1.50"] });
+  });
+
   it("a refund of 30 December still makes room by moving to next year's dividend when its own one is wanted, in either file order", () => {
     // B, posted next year, reaches only the 27 December dividend; A reaches it
     // and the 3 January one. A moves on, so B is not left unjoined.

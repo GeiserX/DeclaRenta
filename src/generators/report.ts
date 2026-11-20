@@ -1009,7 +1009,9 @@ export function generateTaxReport(
   const unvaluedDividendCurrencies = new Map<string, number>();
   // A refund (or its rest) that joins no dividend lowers no tax: it is named
   // (`report.withholding_refund_unjoined`) in the report of the year it is
-  // dated or posted in, never dropped in silence (issue #467).
+  // dated or posted in, never dropped in silence (issue #467). One dated 1-7
+  // January of next year, posted that year, is named here too: next year's
+  // prior-year warning counts it for this year and sends the user here.
   const unjoinedRefunds: string[] = [];
   let dividendEntries = calculateDividends(allCashTransactions, resolvedRateMap, {
     lookupRate: (date, currency) => lookupIncomeRate(date, currency, resolvedRateMap, manualRates),
@@ -1018,7 +1020,11 @@ export function generateTaxReport(
       unvaluedDividendCurrencies.set(div.currency, (unvaluedDividendCurrencies.get(div.currency) ?? 0) + 1);
     },
     onUnjoinedRefund: (refund, amount) => {
-      if (!refund.dateTime.startsWith(yearStr) && !refund.reportDate?.startsWith(yearStr)) return;
+      const date = normalizeDate(refund.dateTime);
+      const nextYear = String(year + 1);
+      const earlyNextJanuary =
+        date.startsWith(`${nextYear}-`) && date <= `${nextYear}-01-07` && (!refund.reportDate || normalizeDate(refund.reportDate).startsWith(`${nextYear}-`));
+      if (!refund.dateTime.startsWith(yearStr) && !refund.reportDate?.startsWith(yearStr) && !earlyNextJanuary) return;
       unjoinedRefunds.push(`${refund.symbol || refund.isin || refund.description} (${formatDateDmy(refund.dateTime)}, ${fmt2(amount)} ${refund.currency})`);
     },
   }).filter((d) => d.payDate.startsWith(yearStr));
