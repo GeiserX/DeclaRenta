@@ -1039,7 +1039,7 @@ const eu: TranslationKeys = {
   "report.withholding_refund_unjoined":
     "Fitxategiko {{count}} atxikipen-itzulketak ez du inongo dibidenduren atxikipena jaisten: {{rows}}. Datuetan ez dago balore, broker eta urte bereko dibidendurik, zuzen dezaketen atxikipenarekin. 0588 laukia edo 0597 laukia altuegia atera daiteke.",
   "report.withholding_refund_unjoined.hint":
-    "Itzulketa batek bere dibidenduaren atxikipena zuzentzen du. Dibidendu hori beste fitxategi batean badago, igo honekin batera. Dagoeneko aurkeztu zenuen urte batekoa bada, zuzendu urte hori. Bestela, kendu itzulketa eskuz bere dibidenduaren atxikipenari: 0588 laukian atzerrikoa bada, eta 0597 laukian Espainiakoa bada.",
+    "Itzulketa batek bere dibidenduaren atxikipena zuzentzen du. Dibidendu hori beste fitxategi batean badago, igo honekin batera. Dagoeneko aurkeztu zenuen urte batekoa bada, zuzendu urte hori. Bestela, kendu eskuz bere dibidenduaren atxikipenari benetan itzuli zizutena: brokerrak beste zenbateko bat atxiki bazuen berriro, aldea bakarrik. Egin 0588 laukian atxikipena atzerrikoa bada, eta 0597 laukian Espainiakoa bada.",
   "report.non_finite_disposal":
     "{{count}} salmentak zenbaki ez den zenbateko bat du (NaN edo infinitua) edo eurotan 12 zifra oso baino gehiago dituena: {{rows}}. Zenbateko hori ez da laukietan batzen. Urteko gainerako eragiketak bai.",
   "report.non_finite_disposal.hint":

@@ -181,6 +181,14 @@ describe("issue #438 — the real IBKR correction-only export", () => {
     const m = r.messages.find((x) => x.id === MSG_ID);
     expect(m?.context).toEqual({ year: "2022", reportYear: "2023", amount: new Decimal("0.39").mul("0.92").toFixed(2) });
   });
+
+  it("the 2022 and 2023 reports name the three refunds, which join no dividend (issue #467)", () => {
+    const rows = "EXMPL (01/04/2022, 0.66 USD), EXMPL (30/04/2022, 0.66 USD), EXMPL (01/12/2022, 0.66 USD)";
+    for (const year of [2022, 2023]) {
+      const m = generateTaxReport(st, rates, year).messages.find((x) => x.id === "report.withholding_refund_unjoined");
+      expect(m?.context, String(year)).toEqual({ count: "3", rows });
+    }
+  });
 });
 
 // Review of #438: corrections the first fix still got wrong, end to end in the

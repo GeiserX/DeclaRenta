@@ -1037,7 +1037,7 @@ const gl: TranslationKeys = {
   "report.withholding_refund_unjoined":
     "{{count}} devolución(s) de retención do ficheiro non baixan a retención de ningún dividendo: {{rows}}. Nos datos non hai un dividendo do mesmo valor, bróker e ano con retención que poidan corrixir. A casilla 0588 ou a 0597 pode saír alta.",
   "report.withholding_refund_unjoined.hint":
-    "Unha devolución corrixe a retención do seu dividendo. Se ese dividendo está noutro ficheiro, súbeo xunto con este. Se é dun ano que xa presentaches, corrixe ese ano. Se non, resta a man a devolución da retención do seu dividendo: na casilla 0588 se é estranxeira e na 0597 se é española.",
+    "Unha devolución corrixe a retención do seu dividendo. Se ese dividendo está noutro ficheiro, súbeo xunto con este. Se é dun ano que xa presentaches, corrixe ese ano. Se non, resta a man da retención do seu dividendo o que de verdade che devolveron: se o bróker volveu reter outro importe, só a diferenza. Faino na casilla 0588 se a retención é estranxeira e na 0597 se é española.",
   "report.non_finite_disposal":
     "{{count}} venda(s) teñen un importe que non é un número (NaN ou infinito) ou que pasa de 12 cifras enteiras en euros: {{rows}}. Ese importe non se suma ás casillas. O resto das operacións do ano si se suman.",
   "report.non_finite_disposal.hint":

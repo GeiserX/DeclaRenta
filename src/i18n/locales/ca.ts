@@ -1037,7 +1037,7 @@ const ca: TranslationKeys = {
   "report.withholding_refund_unjoined":
     "{{count}} devolució(ns) de retenció del fitxer no baixen la retenció de cap dividend: {{rows}}. A les dades no hi ha cap dividend del mateix valor, bròquer i any amb retenció que puguin corregir. La casella 0588 o la 0597 pot sortir alta.",
   "report.withholding_refund_unjoined.hint":
-    "Una devolució corregeix la retenció del seu dividend. Si aquest dividend és en un altre fitxer, puja'l juntament amb aquest. Si és d'un any que ja vas presentar, corregeix aquell any. Si no, resta a mà la devolució de la retenció del seu dividend: a la casella 0588 si és estrangera i a la 0597 si és espanyola.",
+    "Una devolució corregeix la retenció del seu dividend. Si aquest dividend és en un altre fitxer, puja'l juntament amb aquest. Si és d'un any que ja vas presentar, corregeix aquell any. Si no, resta a mà de la retenció del seu dividend el que de debò et van retornar: si el bròquer va tornar a retenir un altre import, només la diferència. Fes-ho a la casella 0588 si la retenció és estrangera i a la 0597 si és espanyola.",
   "report.non_finite_disposal":
     "{{count}} venda(es) tenen un import que no és un número (NaN o infinit) o que passa de 12 xifres enteres en euros: {{rows}}. Aquest import no es suma a les caselles. La resta d'operacions de l'any sí que es sumen.",
   "report.non_finite_disposal.hint":

@@ -1035,7 +1035,7 @@ const en: TranslationKeys = {
   "report.withholding_refund_unjoined":
     "{{count}} withholding refund(s) in the file lower no dividend's withholding: {{rows}}. The data has no dividend of the same security, broker and year with withholding they can correct. Box 0588 or box 0597 may come out too high.",
   "report.withholding_refund_unjoined.hint":
-    "A refund corrects the withholding of its dividend. If that dividend is in another file, upload it together with this one. If it is from a year you already filed, correct that year. If not, subtract the refund by hand from its dividend's withholding: in box 0588 if it is foreign and in box 0597 if it is Spanish.",
+    "A refund corrects the withholding of its dividend. If that dividend is in another file, upload it together with this one. If it is from a year you already filed, correct that year. If not, subtract by hand from its dividend's withholding what was really refunded to you: if the broker withheld another amount again, only the difference. Do it in box 0588 if the withholding is foreign and in box 0597 if it is Spanish.",
   "report.non_finite_disposal":
     "{{count}} sale(s) have an amount that is not a number (NaN or infinity) or that has more than 12 integer digits in euros: {{rows}}. That amount is not added to the boxes. The other operations of the year are added.",
   "report.non_finite_disposal.hint":
