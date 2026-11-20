@@ -1024,7 +1024,7 @@ const ca: TranslationKeys = {
   "kraken.ledger_trade_not_booked":
     "Kraken: {{count}} compravenda(es) del llibre major (Ledgers) no són a cap fitxer d'operacions (Trades) pujat i no es calculen: {{rows}}.",
   "kraken.ledger_trade_not_booked.hint":
-    "DeclaRenta llegeix les compres i les vendes de Kraken només del fitxer d'operacions (Trades). Cada fila porta el refid de l'operació i la data. Entre claudàtors hi ha les monedes i els imports que mou al llibre major. Descarrega de Kraken el fitxer Trades d'aquestes dates (History → Export → Trades) i puja'l amb el llibre major. Sense ell, pot faltar una venda a la teva declaració, o el cost d'una compra.",
+    "DeclaRenta llegeix les compres i les vendes de Kraken només del fitxer d'operacions (Trades). Cada fila porta el refid de l'operació i la data. Entre claudàtors hi ha les monedes i els imports que mou al llibre major. Descarrega de Kraken el fitxer Trades d'aquestes dates (History → Export → Trades) i puja'l amb el llibre major. Sense ell, pot faltar una venda a la teva declaració, o el cost d'una compra. Les compres i vendes instantànies (tipus spend i receive), les conversions (conversion) i les vendes (sale) poden no ser al fitxer Trades. Si no hi són, afegeix a mà a Renta Web cada venda i cada canvi d'una criptomoneda per una altra, i fes servir cada compra com a cost quan vengis aquesta moneda.",
   "kraken.fiat_conversion_not_booked":
     "Kraken: {{count}} operació(ns) canvien una moneda oficial per una altra (per exemple, euros per dòlars) i no es calculen: {{rows}}.",
   "kraken.fiat_conversion_not_booked.hint":
@@ -1033,6 +1033,10 @@ const ca: TranslationKeys = {
     "Kraken: {{count}} recompensa(es) de staking o Earn són negatives i no es calculen: {{rows}}.",
   "kraken.income_negative.hint":
     "Una recompensa negativa sol ser una recompensa que Kraken t'ha retirat. També surt negativa quan la comissió (fee) és més gran que l'import (amount). DeclaRenta no sap quina recompensa anul·la, així que no canvia cap import. Continua comptant les altres recompenses com a ingrés i les seves monedes com a comprades al seu valor d'aquell dia. Si la fila anul·la un ingrés de l'any que declares, treu-lo a mà a Renta Web. Si després vas vendre aquesta criptomoneda, el cost de la venda pot ser massa alt. Revisa a Renta Web el cost d'aquestes vendes.",
+  "kraken.ledger_rows_ignored":
+    "S'han ignorat {{count}} moviment(s) del llibre major de Kraken de tipus que no es processen: {{types}}.",
+  "kraken.ledger_rows_ignored.hint":
+    "DeclaRenta llegeix del llibre major només les recompenses de staking i Earn i els airdrops. Llegeix les compravendes del CSV d'operacions (Trades). Una transferència (transfer) que no mou monedes entre els teus propis comptes pot ser un ingrés, com una bifurcació (fork). Si ho és, declara-ho a mà a Renta Web.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} operació(ns) no tenen la comissió calculada, perquè els seus apunts de caixa no quadren amb l'operació: {{rows}}.",
   "flatex.commission.not_recovered.hint":

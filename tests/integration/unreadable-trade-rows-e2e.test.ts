@@ -3999,6 +3999,31 @@ describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and a
       expect(notBooked(r)?.context).toEqual({ count: "1", rows: ROWS });
     });
 
+    // An instant buy or sale in the Kraken app (spend and receive), a
+    // conversion and a sale are sales and swaps too. They were only counted
+    // by type in an info message, so the 6000 € gain of this sale vanished.
+    describe.each([
+      ["spend", "receive", "SR1 20250301 [spend XXBT -0.1, receive ZEUR 9000]"],
+      ["conversion", "conversion", "SR1 20250301 [conversion XXBT -0.1, conversion ZEUR 9000]"],
+      ["sale", "sale", "SR1 20250301 [sale XXBT -0.1, sale ZEUR 9000]"],
+    ])("ledger rows of type %s and %s", (out, into, rows) => {
+      const legs = [`"L1","SR1","2025-03-01 10:00:00","${out}","","currency","XXBT","-0.1","0","0"`,
+        `"L2","SR1","2025-03-01 10:00:00","${into}","","currency","ZEUR","9000","0","9000"`];
+      it.each(METHODS)("[%s] are named by refid, date and legs, never only counted by type", (method) => {
+        const parsed = ledger(...legs);
+        expect(parsed.parserMessages).toBeUndefined();
+        const r = run([[parsed, "Kraken"]], 2025, method);
+        expect(notBooked(r)?.context).toEqual({ count: "1", rows });
+        expect(r.messages.some((m) => m.id === "kraken.ledger_rows_ignored")).toBe(false);
+      });
+
+      it.each(METHODS)("[%s] control: a Trades CSV that books SR1 leaves nothing named and the sale gains 6000 €", (method) => {
+        const r = run([[ledger(...legs), "Kraken"], [kraken(krBuy, krSell("90000.00").replace('"T2"', '"SR1"')), "Kraken"]], 2025, method);
+        expect(notBooked(r)).toBeUndefined();
+        expect(net(r)).toBe("6000.00");
+      });
+    });
+
     it("two ledger files with the same trade name it once", () => {
       const r = run([[ledger(...saleLegs), "Kraken"], [ledger(...saleLegs), "Kraken"]], 2025, "multidivisa");
       expect(notBooked(r)?.context).toEqual({ count: "1", rows: ROWS });
@@ -4013,8 +4038,22 @@ describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and a
       for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
         expect(locale["kraken.ledger_trade_not_booked"]).toContain("{{rows}}");
         expect(locale["kraken.ledger_trade_not_booked.hint"]).toContain("Trades");
+        expect(locale["kraken.ledger_trade_not_booked.hint"]).toContain("spend");
       }
     });
+  });
+
+  it("the ignored ledger rows message is the es locale and exists in the five locales", () => {
+    const m = krakenParser.parse([`"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"`,
+      `"L1","R1","2025-03-01 00:00:00","adjustment","","currency","XXBT","-0.1","0","0"`].join("\n")).parserMessages!.find((x) => x.id === "kraken.ledger_rows_ignored")!;
+    const fill = (text: string): string => text.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => m.context?.[k] ?? "");
+    expect(m.message).toBe(fill((es as Record<string, string>)["kraken.ledger_rows_ignored"]!));
+    expect(m.hint).toBe((es as Record<string, string>)["kraken.ledger_rows_ignored.hint"]);
+    expect(m.hint).not.toContain("spend");
+    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+      expect(locale["kraken.ledger_rows_ignored"]).toContain("{{types}}");
+      expect(locale["kraken.ledger_rows_ignored.hint"]).toContain("Renta Web");
+    }
   });
 
   describe("a reward row that takes coins away", () => {
@@ -4090,7 +4129,7 @@ describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and a
     it("any other transfer, and an airdrop that is not positive, is named by type and subtype", () => {
       const parsed = ledger(transfer("L1", ""), transfer("L2", "fork"), transfer("L3", "fork"), transfer("L4", "airdrop", "-1500"), transfer("L5", "airdrop", "abc"));
       expect(parsed.cashTransactions).toEqual([]);
-      expect(ignored(parsed)?.context).toEqual({ count: "4" });
+      expect(ignored(parsed)?.context).toEqual({ count: "4", types: "transfer (1), transfer/fork (2), transfer/airdrop (1)" });
       expect(ignored(parsed)?.message).toContain("transfer (1), transfer/fork (2), transfer/airdrop (1).");
       expect(parsed.parserMessages?.find((m) => m.id === "parser.crypto_income_amount_unreadable")?.context?.rows).toBe('transfer airdrop FLR 20230110 [amount: "abc"]');
     });

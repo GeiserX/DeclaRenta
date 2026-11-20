@@ -1022,7 +1022,7 @@ const en: TranslationKeys = {
   "kraken.ledger_trade_not_booked":
     "Kraken: {{count}} trade(s) of the ledger (Ledgers) are in no uploaded trades file (Trades) and are not calculated: {{rows}}.",
   "kraken.ledger_trade_not_booked.hint":
-    "DeclaRenta reads Kraken purchases and sales only from the trades file (Trades). Each row shows the refid of the trade and its date. The square brackets show the coins and the amounts it moves in the ledger. Download the Trades file for those dates from Kraken (History → Export → Trades) and upload it with the ledger. Without it, a sale can be missing from your return, or the cost of a purchase.",
+    "DeclaRenta reads Kraken purchases and sales only from the trades file (Trades). Each row shows the refid of the trade and its date. The square brackets show the coins and the amounts it moves in the ledger. Download the Trades file for those dates from Kraken (History → Export → Trades) and upload it with the ledger. Without it, a sale can be missing from your return, or the cost of a purchase. Instant buys and sells (types spend and receive), conversions (conversion) and sales (sale) may not be in the Trades file. If they are not, add each sale and each swap of one cryptocurrency for another by hand in Renta Web, and use each purchase as the cost when you sell that coin.",
   "kraken.fiat_conversion_not_booked":
     "Kraken: {{count}} trade(s) exchange one fiat currency for another (for example, euros for dollars) and are not calculated: {{rows}}.",
   "kraken.fiat_conversion_not_booked.hint":
@@ -1031,6 +1031,10 @@ const en: TranslationKeys = {
     "Kraken: {{count}} staking or Earn reward(s) are negative and are not calculated: {{rows}}.",
   "kraken.income_negative.hint":
     "A negative reward is usually a reward that Kraken took back. It is also negative when the fee is larger than the amount. DeclaRenta does not know which reward it cancels, so it changes no amount. It still counts the other rewards as income, and their coins as bought at their value on that day. If the row cancels income of the year you file, remove it by hand in Renta Web. If you later sold that cryptocurrency, the cost of the sale may be too high. Check the cost of those sales in Renta Web.",
+  "kraken.ledger_rows_ignored":
+    "{{count}} Kraken ledger movement(s) of types that are not processed were ignored: {{types}}.",
+  "kraken.ledger_rows_ignored.hint":
+    "DeclaRenta reads from the ledger only staking and Earn rewards and airdrops. It reads purchases and sales from the trades CSV (Trades). A transfer that does not move coins between your own accounts can be income, such as a fork. If it is, declare it by hand in Renta Web.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} trade(s) have no calculated commission, because their cash entries do not match the trade: {{rows}}.",
   "flatex.commission.not_recovered.hint":

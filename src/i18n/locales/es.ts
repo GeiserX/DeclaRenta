@@ -1061,7 +1061,7 @@ const es = {
   "kraken.ledger_trade_not_booked":
     "Kraken: {{count}} compraventa(s) del libro mayor (Ledgers) no están en ningún archivo de operaciones (Trades) subido y no se calculan: {{rows}}.",
   "kraken.ledger_trade_not_booked.hint":
-    "DeclaRenta lee las compras y las ventas de Kraken solo del archivo de operaciones (Trades). Cada fila trae el refid de la operación y su fecha. Entre corchetes van las monedas y los importes que mueve en el libro mayor. Descarga de Kraken el archivo Trades de esas fechas (History → Export → Trades) y súbelo junto al libro mayor. Sin él, puede faltar una venta en tu declaración, o el coste de una compra.",
+    "DeclaRenta lee las compras y las ventas de Kraken solo del archivo de operaciones (Trades). Cada fila trae el refid de la operación y su fecha. Entre corchetes van las monedas y los importes que mueve en el libro mayor. Descarga de Kraken el archivo Trades de esas fechas (History → Export → Trades) y súbelo junto al libro mayor. Sin él, puede faltar una venta en tu declaración, o el coste de una compra. Las compras y ventas instantáneas (tipos spend y receive), las conversiones (conversion) y las ventas (sale) pueden no estar en el archivo Trades. Si no están, añade a mano en Renta Web cada venta y cada cambio de una criptomoneda por otra, y usa cada compra como coste cuando vendas esa moneda.",
   "kraken.fiat_conversion_not_booked":
     "Kraken: {{count}} operación(es) cambian una moneda oficial por otra (por ejemplo, euros por dólares) y no se calculan: {{rows}}.",
   "kraken.fiat_conversion_not_booked.hint":
@@ -1070,6 +1070,10 @@ const es = {
     "Kraken: {{count}} recompensa(s) de staking o Earn son negativas y no se calculan: {{rows}}.",
   "kraken.income_negative.hint":
     "Una recompensa negativa suele ser una recompensa que Kraken te ha retirado. También sale negativa cuando la comisión (fee) es mayor que el importe (amount). DeclaRenta no sabe qué recompensa anula, así que no cambia ningún importe. Sigue contando las demás recompensas como ingreso y sus monedas como compradas a su valor de ese día. Si la fila anula un ingreso del año que declaras, quítalo a mano en Renta Web. Si después vendiste esa criptomoneda, el coste de la venta puede ser demasiado alto. Revisa en Renta Web el coste de esas ventas.",
+  "kraken.ledger_rows_ignored":
+    "Se han ignorado {{count}} movimiento(s) del libro mayor de Kraken de tipos que no se procesan: {{types}}.",
+  "kraken.ledger_rows_ignored.hint":
+    "DeclaRenta lee del libro mayor solo las recompensas de staking y Earn y los airdrops. Lee las compraventas del CSV de operaciones (Trades). Una transferencia (transfer) que no mueve monedas entre tus propias cuentas puede ser un ingreso, como una bifurcación (fork). Si lo es, decláralo a mano en Renta Web.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} operación(es) no tienen la comisión calculada, porque sus apuntes de caja no cuadran con la operación: {{rows}}.",
   "flatex.commission.not_recovered.hint":

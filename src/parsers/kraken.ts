@@ -447,6 +447,13 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
 // Ledgers CSV parser
 // ---------------------------------------------------------------------------
 
+/**
+ * Ledger types that buy, sell or swap a coin. "trade" comes from the Trades
+ * CSV; an instant buy or sale in the Kraken app (spend and receive), a
+ * conversion or a sale may be in no Trades CSV at all (#467).
+ */
+const LEDGER_TRADE_TYPES = new Set(["trade", "spend", "receive", "conversion", "sale"]);
+
 /** Ledger transfer subtypes that move the user's own coins between wallets. */
 const OWN_COIN_TRANSFERS = new Set([
   "spottostaking", "stakingfromspot", "stakingtospot", "spotfromstaking", "spotfromfutures", "spottofutures",
@@ -562,14 +569,15 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
         taxBucket: isAirdrop ? "general" : "ahorro",
         rewardQuantity: netAmount.abs().toString(),
       });
-    } else if (type === "trade") {
+    } else if (LEDGER_TRADE_TYPES.has(type)) {
       // Trades are read from the Trades CSV, whose txid is this refid.
       // `finalizeMergedStatement` names each one no Kraken trade books (#467).
+      // A leg of another type than "trade" carries its type.
       const refid = (fields[cols.refid] ?? "").trim() || txid;
       const tradeDate = krakenDate(timeStr);
       const entry = ledgerTrades.get(refid) ?? { date: "", legs: [] };
       if (!entry.date && isReadableTradeDate(tradeDate)) entry.date = tradeDate;
-      entry.legs.push(`${asset || "—"} ${(fields[cols.amount] ?? "").trim() || "—"}`);
+      entry.legs.push(`${type === "trade" ? "" : `${type} `}${asset || "—"} ${(fields[cols.amount] ?? "").trim() || "—"}`);
       ledgerTrades.set(refid, entry);
     } else if (type === "transfer") {
       // Only moves between the user's own wallets are skipped with no word.
@@ -585,6 +593,7 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
   }
 
   const ignoredCount = [...ignoredTypes.values()].reduce((a, b) => a + b, 0);
+  const ignoredText = [...ignoredTypes].map(([t, n]) => `${t} (${n})`).join(", ");
   const parserMessages: TaxMessage[] = [...dropUndatedCash("Kraken", cashTransactions, "time"), ...cryptoIncomeUnidentifiedMessages("Kraken", unidentifiedIncome), ...cryptoIncomeAmountUnreadableMessages("Kraken", unreadableIncome), ...(negativeIncome.length > 0
     ? [{
         id: "kraken.income_negative",
@@ -597,9 +606,9 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
     ? [{
         id: "kraken.ledger_rows_ignored",
         severity: "info" as const,
-        message: `Se han ignorado ${ignoredCount} movimiento(s) del libro mayor de Kraken de tipos que no se procesan: ${[...ignoredTypes].map(([t, n]) => `${t} (${n})`).join(", ")}.`,
-        hint: "DeclaRenta lee del libro mayor solo las recompensas de staking y Earn y los airdrops. Lee las compraventas del CSV de operaciones (Trades). Una transferencia (transfer) que no mueve monedas entre tus propias cuentas puede ser un ingreso, como una bifurcación (fork). Si lo es, decláralo a mano en Renta Web. Las compras instantáneas (tipos spend y receive) pueden no aparecer en ese CSV. Si es tu caso, añádelas para que la moneda comprada tenga coste de adquisición.",
-        context: { count: String(ignoredCount) },
+        message: `Se han ignorado ${ignoredCount} movimiento(s) del libro mayor de Kraken de tipos que no se procesan: ${ignoredText}.`,
+        hint: "DeclaRenta lee del libro mayor solo las recompensas de staking y Earn y los airdrops. Lee las compraventas del CSV de operaciones (Trades). Una transferencia (transfer) que no mueve monedas entre tus propias cuentas puede ser un ingreso, como una bifurcación (fork). Si lo es, decláralo a mano en Renta Web.",
+        context: { count: String(ignoredCount), types: ignoredText },
       }]
     : [])];
 

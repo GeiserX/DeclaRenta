@@ -819,6 +819,13 @@ práctico Renta 2025. The decisions, each pinned in
       uploaded with no Trades CSV lost a sale with no word. At merge time,
       `kraken.ledger_trade_not_booked` names each ledger trade, by refid,
       date and legs, that no Kraken trade of the upload books.
+      Ledger rows of type `spend` and `receive` (an instant buy or sale in
+      the Kraken app), `conversion` and `sale` are sales and swaps too, and
+      may be in no Trades CSV. They were only counted by type in the info
+      message `kraken.ledger_rows_ignored`, so a sale's gain vanished. They
+      are now collected by refid like `trade` rows (each leg with its type)
+      and named by `kraken.ledger_trade_not_booked` when no Kraken trade of
+      the upload has that txid.
       Every ledger `transfer` was skipped with no word, so an airdrop
       (subtype `airdrop`, FLR or SGB) went undeclared. It is now crypto
       income of the base general (art. 33.1 LIRPF), as at Binance. Only the

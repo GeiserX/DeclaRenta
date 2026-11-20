@@ -178,7 +178,7 @@ function nameUnbookedKrakenLedgerTrades(statement: Statement): void {
     id: "kraken.ledger_trade_not_booked",
     severity: "warning",
     message: `Kraken: ${count} compraventa(s) del libro mayor (Ledgers) no están en ningún archivo de operaciones (Trades) subido y no se calculan: ${text}.`,
-    hint: "DeclaRenta lee las compras y las ventas de Kraken solo del archivo de operaciones (Trades). Cada fila trae el refid de la operación y su fecha. Entre corchetes van las monedas y los importes que mueve en el libro mayor. Descarga de Kraken el archivo Trades de esas fechas (History → Export → Trades) y súbelo junto al libro mayor. Sin él, puede faltar una venta en tu declaración, o el coste de una compra.",
+    hint: "DeclaRenta lee las compras y las ventas de Kraken solo del archivo de operaciones (Trades). Cada fila trae el refid de la operación y su fecha. Entre corchetes van las monedas y los importes que mueve en el libro mayor. Descarga de Kraken el archivo Trades de esas fechas (History → Export → Trades) y súbelo junto al libro mayor. Sin él, puede faltar una venta en tu declaración, o el coste de una compra. Las compras y ventas instantáneas (tipos spend y receive), las conversiones (conversion) y las ventas (sale) pueden no estar en el archivo Trades. Si no están, añade a mano en Renta Web cada venta y cada cambio de una criptomoneda por otra, y usa cada compra como coste cuando vendas esa moneda.",
     context: { count, rows: text },
   });
 }

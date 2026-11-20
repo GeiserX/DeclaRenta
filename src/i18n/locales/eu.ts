@@ -1026,7 +1026,7 @@ const eu: TranslationKeys = {
   "kraken.ledger_trade_not_booked":
     "Kraken: liburu nagusiko (Ledgers) {{count}} salerosketa ez daude igotako eragiketa-fitxategi batean ere (Trades), eta ez dira kalkulatzen: {{rows}}.",
   "kraken.ledger_trade_not_booked.hint":
-    "DeclaRentak Krakeneko erosketak eta salmentak eragiketa-fitxategitik (Trades) bakarrik irakurtzen ditu. Errenkada bakoitzak eragiketaren refid-a eta data ditu. Kortxete artean daude liburu nagusian mugitzen dituen monetak eta zenbatekoak. Deskargatu Krakenetik data horietako Trades fitxategia (History → Export → Trades), eta igo ezazu liburu nagusiarekin batera. Hura gabe, salmenta bat falta daiteke zure aitorpenean, edo erosketa baten kostua.",
+    "DeclaRentak Krakeneko erosketak eta salmentak eragiketa-fitxategitik (Trades) bakarrik irakurtzen ditu. Errenkada bakoitzak eragiketaren refid-a eta data ditu. Kortxete artean daude liburu nagusian mugitzen dituen monetak eta zenbatekoak. Deskargatu Krakenetik data horietako Trades fitxategia (History → Export → Trades), eta igo ezazu liburu nagusiarekin batera. Hura gabe, salmenta bat falta daiteke zure aitorpenean, edo erosketa baten kostua. Berehalako erosketak eta salmentak (spend eta receive motak), bihurketak (conversion) eta salmentak (sale) baliteke Trades fitxategian ez egotea. Ez badaude, gehitu eskuz Renta Web-en salmenta bakoitza eta kriptomoneta bat beste batengatik egindako aldaketa bakoitza, eta erabili erosketa bakoitza kostu gisa moneta hori saltzen duzunean.",
   "kraken.fiat_conversion_not_booked":
     "Kraken: {{count}} eragiketak moneta ofizial bat beste batengatik aldatzen dute (adibidez, euroak dolarrengatik), eta ez dira kalkulatzen: {{rows}}.",
   "kraken.fiat_conversion_not_booked.hint":
@@ -1035,6 +1035,10 @@ const eu: TranslationKeys = {
     "Kraken: staking edo Earn {{count}} sari negatiboak dira, eta ez dira kalkulatzen: {{rows}}.",
   "kraken.income_negative.hint":
     "Sari negatibo bat Krakenek kendu dizun sari bat izan ohi da. Komisioa (fee) zenbatekoa (amount) baino handiagoa denean ere negatiboa da. DeclaRentak ez daki zein sari baliogabetzen duen, beraz, ez du zenbatekorik aldatzen. Beste sariak diru-sarreratzat hartzen jarraitzen du, eta haien monetak egun horretako balioan erositakotzat. Errenkadak aitortzen duzun urteko diru-sarrera bat baliogabetzen badu, kendu eskuz Renta Web-en. Gero kriptomoneta hori saldu bazenuen, salmentaren kostua handiegia izan daiteke. Berrikusi Renta Web-en salmenta horien kostua.",
+  "kraken.ledger_rows_ignored":
+    "Krakeneko liburu nagusiko {{count}} mugimendu ez dira kontuan hartu, prozesatzen ez diren motakoak direlako: {{types}}.",
+  "kraken.ledger_rows_ignored.hint":
+    "DeclaRentak liburu nagusitik staking eta Earn sariak eta airdrop-ak bakarrik irakurtzen ditu. Salerosketak eragiketen CSVtik (Trades) irakurtzen ditu. Zure kontuen artean monetak mugitzen ez dituen transferentzia (transfer) bat diru-sarrera bat izan daiteke, adibidez bifurkazio bat (fork). Hala bada, aitortu eskuz Renta Web-en.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} eragiketak ez dute komisio kalkulaturik, haien kutxa-idazpenak eragiketarekin bat ez datozelako: {{rows}}.",
   "flatex.commission.not_recovered.hint":
