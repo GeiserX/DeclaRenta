@@ -227,6 +227,16 @@ describe("Lightyear Tax Amt.: a refund lowers the withholding, never raises it",
     expect(s.cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual(["Dividends 10", "Withholding Tax -1.5"]);
   });
 
+  it.each(METHODS)("[%s] a negative Tax Amt. whose Fee cannot be read is a refund, as with the Fee written", (method) => {
+    // MSFT 100 USD with 10 withheld, then a refund of 3 on a row with a fee of 5: 6.3 € of deduction.
+    const DIV10 = "10/05/2025 06:00:00,DD-9,MSFT,US5949181045,Dividend,,USD,,100.00,,,90.00,10.00";
+    const refund = (fee: string) => `12/05/2025 06:00:00,DD-11,MSFT,US5949181045,Dividend,,USD,,100.00,,${fee},98.00,-3.00`;
+    expect(report([DIV10, refund("5.00")], method).doubleTaxation.deduction.toString()).toBe("6.3");
+    for (const fee of ["n/a", "$", "-"]) {
+      expect(report([DIV10, refund(fee)], method).doubleTaxation.deduction.toString(), fee).toBe("6.3");
+    }
+  });
+
   it("a negative Tax Amt. whose Net cannot be read lowers the withholding (the conservative reading)", () => {
     const s = parse(["15/01/2025,REF001,VWRL,IE00B3RBWM25,Distribution,,USD,,10,1,0,n/a,-1.50"]);
     expect(s.cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual(["Dividends 10", "Withholding Tax 1.5"]);

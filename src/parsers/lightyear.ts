@@ -316,9 +316,12 @@ function parseLightyearCsv(lines: string[]): Statement {
       // refund): it lowers the withholding, never raises it, or the
       // double-taxation deduction grows (#467). It is withholding only when
       // a readable Net shows the money went out (Net ≤ Gross − Fee: the tax
-      // written with its sign).
+      // written with its sign). A Fee cell that is not blank but cannot be
+      // read is no zero fee: the test cannot be made, so the row is a refund,
+      // as with no readable Net (#467).
       const taxDec = new Decimal(taxAmount);
-      const withheld = !taxDec.isNegative() || (!quantityUnreadable(fields[cols.netAmount]) &&
+      const feeUnreadable = (fields[cols.fee] ?? "").trim() !== "" && quantityUnreadable(fields[cols.fee]);
+      const withheld = !taxDec.isNegative() || (!quantityUnreadable(fields[cols.netAmount]) && !feeUnreadable &&
         new Decimal(netAmount).lessThanOrEqualTo(new Decimal(grossAmount).minus(new Decimal(fee).abs())));
       if (!taxDec.isZero()) {
         cashTransactions.push({
