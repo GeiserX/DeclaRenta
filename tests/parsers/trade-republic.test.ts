@@ -101,22 +101,35 @@ describe("Trade Republic: crypto is keyed by ticker", () => {
   });
 });
 
-// Issue #96: TR converts a foreign dividend and credits EUR, so the taxpayer
-// never holds the USD. The parser keeps the dividend in USD (0029 at the ECB
-// rate) but flags it so the FX engine opens no lot.
+// TR converts a foreign dividend and credits EUR, so the taxpayer never holds
+// the USD. The dividend is the gross EUR amount TR writes in `amount`, with no
+// ECB rate (DGT V5732-26, #476). Only when `amount` gives nothing does the
+// parser keep the USD amount, flagged so the FX engine opens no lot (#96).
 describe("Trade Republic: foreign dividends credited in EUR", () => {
   const csv = [
     HEADER,
     '"2025-03-14T10:00:00Z","2025-03-14","DEFAULT","CASH","DIVIDEND","STOCK","Acme Corp","US0000001001","10","","9.00","","-1.35","EUR","10.00","USD","0.900000","Cash Dividend","tx-usd","","","",""',
     '"2025-04-14T10:00:00Z","2025-04-14","DEFAULT","CASH","DIVIDEND","STOCK","Euro Corp","DE0000001001","10","","5.00","","","EUR","","","","Cash Dividend","tx-eur","","","",""',
+    '"2025-05-14T10:00:00Z","2025-05-14","DEFAULT","CASH","DIVIDEND","STOCK","Acme Corp","US0000001001","10","","","","-1.35","EUR","10.00","USD","0.900000","Cash Dividend","tx-empty","","","",""',
+    '"2025-06-14T10:00:00Z","2025-06-14","DEFAULT","CASH","DIVIDEND","STOCK","Acme Corp","US0000001001","10","","abc","","-1.35","EUR","10.00","USD","0.900000","Cash Dividend","tx-abc","","","",""',
   ].join("\n");
   const cash = tradeRepublicParser.parse(csv).cashTransactions;
 
-  it("flags the USD dividend as converted by the broker", () => {
+  it("books the converted dividend at the gross EUR amount, never amount + tax (#476)", () => {
     const div = cash.find((c) => c.transactionID === "tx-usd")!;
-    expect(div.currency).toBe("USD");
-    expect(div.amount).toBe("10");
-    expect(div.brokerConvertedToBase).toBe(true);
+    expect(div.currency).toBe("EUR");
+    expect(div.amount).toBe("9");
+    expect(div.fxRateToBase).toBe("1");
+    expect(div.brokerConvertedToBase).toBeUndefined();
+  });
+
+  it("keeps the USD amount, flagged, when amount is empty or unreadable", () => {
+    for (const id of ["tx-empty", "tx-abc"]) {
+      const div = cash.find((c) => c.transactionID === id)!;
+      expect(div.currency).toBe("USD");
+      expect(div.amount).toBe("10");
+      expect(div.brokerConvertedToBase).toBe(true);
+    }
   });
 
   it("leaves the EUR withholding and an EUR dividend unflagged", () => {
