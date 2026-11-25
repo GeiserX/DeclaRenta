@@ -72,6 +72,7 @@ Las notas de arriba describen el método por defecto. Puedes elegir otro en el p
 - Los dividendos incluyen tanto dividendos ordinarios como "Payment In Lieu of Dividends" (dividendos sustitutivos en operaciones de préstamo de valores).
 - Las retenciones extranjeras NO se deducen aquí — se declaran en la casilla 0588.
 - El informe convierte a EUR con el tipo oficial del BCE (Ley 46/1998 art. 36) del día de pago que da el extracto. La regla de la DGT es el tipo vigente el día en que el cobro es exigible (V1024-11 para dividendos, V0463-21 para intereses). Normalmente coincide con el día de pago; si el bróker paga más tarde, los dos tipos pueden diferir.
+- Si el bróker abona el dividendo ya convertido a euros porque no tienes cuenta en esa divisa, se declaran los euros brutos del extracto, sin aplicar el tipo del BCE (DGT V5732-26). Es el caso de Trade Republic: DeclaRenta toma su columna `amount`, el bruto antes de la retención.
 - Los gastos genuinos de administración y depósito de valores negociables (cuando el bróker los detalla) sí son deducibles en la **Casilla 0037** (Art. 26.1.a LIRPF); la casilla 0027 recoge ingresos íntegros, nunca gastos.
 - Las cuotas de suscripción del bróker (p. ej. planes de trading de tarifa plana) NO son «gastos de administración y depósito de valores negociables», por lo que no son deducibles.
 

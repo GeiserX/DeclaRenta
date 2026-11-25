@@ -210,6 +210,8 @@ Las compraventas se leen solo del archivo Trades. Si subes también el libro may
 
 **Datos extraídos:** Operaciones de compraventa y dividendos.
 
+**Dividendos extranjeros:** Trade Republic los convierte a euros antes de abonarlos. DeclaRenta declara en la casilla 0029 el bruto en euros de la columna `amount` (`original_amount × fx_rate`), sin aplicar el tipo del BCE (DGT V5732-26). La retención va aparte, en la columna `tax`. Lo que entra en la cuenta es `amount + tax`, el neto. Solo si `amount` está vacía o es 0, DeclaRenta valora `original_amount` con el tipo del BCE del día de pago.
+
 ### Trading 212
 
 1. Inicia sesión en la **web de Trading 212**.

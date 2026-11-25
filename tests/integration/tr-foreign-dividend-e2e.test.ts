@@ -8,12 +8,13 @@ import type { Statement } from "../../src/types/broker.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
 // ===========================================================================
-// End-to-end: Trade Republic foreign dividends (issue #96).
+// End-to-end: Trade Republic foreign dividends (issues #96, #476).
 // ---------------------------------------------------------------------------
-// TR converts a US dividend to EUR before crediting it. Its CSV keeps the
-// original USD amount (`original_amount`/`original_currency`) and books the US
-// withholding in EUR (the `tax` column, account currency).
-//   - 0029: gross USD x ECB rate of the payment date (DGT V1024-11).
+// TR converts a US dividend to EUR before crediting it. Its CSV writes the
+// gross in EUR (`amount` = original_amount x fx_rate), keeps the original USD
+// amount (`original_amount`/`original_currency`) and books the US withholding
+// in EUR (the `tax` column, account currency).
+//   - 0029: the gross EUR TR writes, no ECB rate (DGT V5732-26, #476).
 //   - 0588: the EUR withholding, 1:1. It used to be 0 because the matcher
 //     required the dividend and the withholding to share a currency.
 //   - FX (1633/1637): the taxpayer never held the USD, so no FX lot. A TR lot
@@ -82,15 +83,15 @@ function merged(...files: [Statement, string][]): Statement {
 describe("Trade Republic USD dividend with EUR withholding (issue #96)", () => {
   const tr = () => merged([tradeRepublicParser.parse(TR_CSV), "Trade Republic"]);
 
-  it("declares 0029 at the ECB rate and credits the EUR withholding in 0588", () => {
+  it("declares 0029 at TR's gross EUR and credits the EUR withholding in 0588", () => {
     const r = generateTaxReport(tr(), RATES, 2025);
 
-    expect(r.dividends.entries.map((e) => e.currency)).toEqual(["USD", "USD"]);
-    // 0029 = 10 x 0.918 + 10 x 0.864 = 9.18 + 8.64 (ECB, not TR's 9.00 + 8.50).
-    expect(r.dividends.grossIncome.toFixed(2)).toBe("17.82");
+    expect(r.dividends.entries.map((e) => e.currency)).toEqual(["EUR", "EUR"]);
+    // 0029 = TR's 9.00 + 8.50 (not the ECB's 10 x 0.918 + 10 x 0.864 = 17.82).
+    expect(r.dividends.grossIncome.toFixed(2)).toBe("17.50");
     // Withholding 1:1 in EUR: 1.35 + 1.28 = 2.63 (never x the USD rate).
     expect(r.dividends.entries.map((e) => e.withholdingTaxEur.toFixed(2))).toEqual(["1.35", "1.28"]);
-    // 0588 US = min(2.63 paid, 15% x 17.82 = 2.673, 19% x 17.82 = 3.3858) = 2.63.
+    // 0588 US = min(2.63 paid, 15% x 17.50 = 2.625, 19% x 17.50 = 3.325).
     expect(r.doubleTaxation.byCountry["US"]!.taxPaid.toFixed(2)).toBe("2.63");
     expect(r.doubleTaxation.deduction.toFixed(2)).toBe("2.63");
   });
@@ -131,8 +132,8 @@ describe("Trade Republic USD dividend with EUR withholding (issue #96)", () => {
       rateMap({ "2025-05-15": "0.8945", "2025-02-13": "0.9620" }),
       2025,
     );
-    // The 15 May dividend: $0.54 x 0.8945 = 0.48303 gross, 0.07 EUR withheld.
-    // 0588 = min(0.07, 15% x 0.48303 = 0.0725) = 0.07.
+    // The 15 May dividend: TR's gross 0.48 EUR, 0.07 EUR withheld.
+    // 0588 = min(0.07, 15% x 0.48 = 0.072) = 0.07.
     expect(r.doubleTaxation.deduction.toFixed(2)).toBe("0.07");
   });
 });

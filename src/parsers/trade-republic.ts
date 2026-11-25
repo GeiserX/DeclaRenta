@@ -333,10 +333,6 @@ function parseTrCsv(lines: string[]): Statement {
       // amount is the account currency's, even when original_currency is
       // written. Booked in USD, 100 EUR were valued at 90.90 € (#467).
       const divCurrency = fromOriginal ? originalCurrency : currency;
-      const fxToBase = fxRate || "1";
-      // TR converts a foreign dividend and credits the account currency: the
-      // taxpayer never holds the USD, so it must not open an FX lot (#96).
-      const brokerConverted = divCurrency !== currency;
       // A negative dividend reverses one (a storno). Its tax is a refund of
       // the reversed withholding, whatever its sign: read as a new
       // withholding, a reversed dividend gave its credit twice (#467).
@@ -358,7 +354,21 @@ function parseTrCsv(lines: string[]): Statement {
           continue;
         }
       }
-      const taxRow = (): string => cashIncomeRowText(field(fields, cols.type), `${dividendSecurity(name, symbol)} ${divAmount}`, divCurrency, tradeDate,
+      // TR converts a foreign dividend before crediting it, so the taxpayer
+      // receives euros: the dividend is the gross EUR amount TR writes, and
+      // no official rate applies (DGT V5732-26, #476). That is the `amount`
+      // cell (original_amount × fx_rate), never amount + tax, which is the
+      // net credit. original_amount values the row at the ECB rate only when
+      // `amount` is empty, unreadable or 0.
+      const accountGross = fromOriginal && !quantityUnreadable(fields[cols.amount]) ? toFiniteDecimal(field(fields, cols.amount)) : null;
+      const fromAccount = accountGross !== null && !accountGross.isZero();
+      const bookAmount = fromAccount ? accountGross.toString() : divAmount;
+      const bookCurrency = fromAccount ? currency : divCurrency;
+      // A dividend still in the original currency was converted by TR too:
+      // the taxpayer never holds the USD, so it must not open an FX lot (#96).
+      const brokerConverted = bookCurrency !== currency;
+      const fxToBase = brokerConverted ? fxRate || "1" : "1";
+      const taxRow = (): string => cashIncomeRowText(field(fields, cols.type), `${dividendSecurity(name, symbol)} ${bookAmount}`, bookCurrency, tradeDate,
         [unreadableCell(headers[cols.tax] ?? "tax", fields[cols.tax])]);
       // A tax cell that cannot be read is no withholding. A dividend is then
       // booked in full with none, which can only raise the tax; a reversal is
@@ -392,10 +402,10 @@ function parseTrCsv(lines: string[]): Statement {
       // dividend of its ISIN within 7 days, never below 0. It is named too:
       // with no dividend that close the report leaves it out (#467). A
       // written zero with no tax stays as the file writes it.
-      if (new Decimal(divAmount).isZero() && !taxDec.isZero()) {
+      if (new Decimal(bookAmount).isZero() && !taxDec.isZero()) {
         const amountCol = fromOriginal ? cols.originalAmount : cols.amount;
         if (taxDec.isNegative()) {
-          unreadableIncome.push(cashIncomeRowText(field(fields, cols.type), dividendSecurity(name, symbol), divCurrency, tradeDate,
+          unreadableIncome.push(cashIncomeRowText(field(fields, cols.type), dividendSecurity(name, symbol), bookCurrency, tradeDate,
             [unreadableCell(headers[amountCol] ?? "amount", fields[amountCol])], dividendTaxText()));
         } else {
           pushWithholding(taxDec.toString());
@@ -411,10 +421,10 @@ function parseTrCsv(lines: string[]): Statement {
         symbol: name,
         description: `${isinCountry} Dividend - ${name}`,
         isin: symbol,
-        currency: divCurrency,
+        currency: bookCurrency,
         dateTime: tradeDate,
         settleDate: tradeDate,
-        amount: divAmount,
+        amount: bookAmount,
         fxRateToBase: fxToBase,
         type: "Dividends",
         ...(brokerConverted ? { brokerConvertedToBase: true } : {}),
