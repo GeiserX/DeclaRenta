@@ -497,20 +497,21 @@ describe("fixture file integration", () => {
     it("should parse exact dividend amounts and withholding tax values", () => {
       const r = tradeRepublicParser.parse(csv);
 
-      // Dividend with no tax: tx-div-001 — original 0.02 USD.
+      // Dividend with no tax: tx-div-001 — original 0.02 USD, credited as the
+      // gross EUR TR writes in `amount` (#476).
       const div1 = r.cashTransactions.find((t) => t.transactionID === "tx-div-001")!;
       expect(div1).toBeDefined();
       expect(div1.type).toBe("Dividends");
       expect(div1.amount).toBe("0.02");
-      expect(div1.currency).toBe("USD");
+      expect(div1.currency).toBe("EUR");
 
-      // Dividend WITH withholding: tx-div-002 — gross original 0.54 USD,
-      // WHT 0.07 → emitted as a negative Withholding Tax row.
+      // Dividend WITH withholding: tx-div-002 — gross original 0.54 USD, gross
+      // EUR 0.48, WHT 0.07 → emitted as a negative Withholding Tax row.
       const div2 = r.cashTransactions.find((t) => t.transactionID === "tx-div-002")!;
       expect(div2).toBeDefined();
       expect(div2.type).toBe("Dividends");
-      expect(div2.amount).toBe("0.54");
-      expect(div2.currency).toBe("USD");
+      expect(div2.amount).toBe("0.48");
+      expect(div2.currency).toBe("EUR");
 
       const wht2 = r.cashTransactions.find((t) => t.transactionID === "tx-div-002-wht")!;
       expect(wht2).toBeDefined();

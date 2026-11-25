@@ -112,11 +112,11 @@ const SELL = (o: Partial<Record<string, string>> = {}) => row({
 });
 
 describe("Trade Republic dividend tax: a tax cell that cannot be read never stops the report and never books a withholding", () => {
-  it.each(METHODS)("[%s] control: 110 USD with a tax of -15.00 gives 0029 99.99 and 0588 15.00", (method) => {
+  it.each(METHODS)("[%s] control: 100 EUR for 110 USD with a tax of -15.00 gives 0029 100.00 and 0588 15.00", (method) => {
     const s = tr(DIV({ tax: "-15.00" }));
     expect(s.parserMessages).toBeUndefined();
     const r = report(s, method);
-    expect(r.dividends.grossIncome.toFixed(2)).toBe("99.99");
+    expect(r.dividends.grossIncome.toFixed(2)).toBe("100.00");
     expect(r.doubleTaxation.deduction.toFixed(2)).toBe("15.00");
   });
 
@@ -124,9 +124,9 @@ describe("Trade Republic dividend tax: a tax cell that cannot be read never stop
     for (const tax of ["-15.00 EUR", "-15abc", "-1.234.5", "-Infinity"]) {
       const s = tr(DIV({ tax }));
       expect(s.cashTransactions.map((c) => c.type), tax).toEqual(["Dividends"]);
-      expect(rowsOf(s, "trade_republic.tax_unreadable"), tax).toBe(`DIVIDEND Acme Corp (US0000001001) 110 USD 20250515 [tax: ${JSON.stringify(tax)}]`);
+      expect(rowsOf(s, "trade_republic.tax_unreadable"), tax).toBe(`DIVIDEND Acme Corp (US0000001001) 100 EUR 20250515 [tax: ${JSON.stringify(tax)}]`);
       const r = report(s, method);
-      expect(r.dividends.grossIncome.toFixed(2), tax).toBe("99.99");
+      expect(r.dividends.grossIncome.toFixed(2), tax).toBe("100.00");
       expect(r.doubleTaxation.deduction.toFixed(2), tax).toBe("0.00");
     }
   });
@@ -144,10 +144,10 @@ describe("Trade Republic dividend tax: a tax cell that cannot be read never stop
 
   it.each(METHODS)("[%s] a reversal whose tax cannot be read is not booked: the dividend it reverses keeps its income and its withholding", (method) => {
     const s = tr(DIV({ tax: "-5.00" }), DIV({ amount: "-100.00", original_amount: "-110", tax: "+5abc" }));
-    expect(s.cashTransactions.map((c) => [c.type, c.amount])).toEqual([["Dividends", "110"], ["Withholding Tax", "-5.00"]]);
-    expect(rowsOf(s, "trade_republic.tax_unreadable")).toBe('DIVIDEND Acme Corp (US0000001001) -110 USD 20250515 [tax: "+5abc"]');
+    expect(s.cashTransactions.map((c) => [c.type, c.amount])).toEqual([["Dividends", "100"], ["Withholding Tax", "-5.00"]]);
+    expect(rowsOf(s, "trade_republic.tax_unreadable")).toBe('DIVIDEND Acme Corp (US0000001001) -100 EUR 20250515 [tax: "+5abc"]');
     const r = report(s, method);
-    expect(r.dividends.grossIncome.toFixed(2)).toBe("99.99");
+    expect(r.dividends.grossIncome.toFixed(2)).toBe("100.00");
     expect(r.doubleTaxation.deduction.toFixed(2)).toBe("5.00");
   });
 
@@ -170,7 +170,7 @@ describe("Trade Republic dividend reversal: the tax of a reversed dividend is a 
       const s = tr(DIV({ tax: "-5.00" }), DIV({ amount: "-100.00", original_amount: "-110", tax: refund }), DIV({ tax: "-5.00" }));
       expect(s.cashTransactions.filter((c) => c.type === "Withholding Tax").map((c) => c.amount), refund).toEqual(["-5.00", "5", "-5.00"]);
       const r = report(s, method);
-      expect(r.dividends.grossIncome.toFixed(2), refund).toBe("99.99");
+      expect(r.dividends.grossIncome.toFixed(2), refund).toBe("100.00");
       expect(r.doubleTaxation.deduction.toFixed(2), refund).toBe("5.00");
     }
   });
@@ -186,13 +186,13 @@ describe("Trade Republic dividend reversal: the tax of a reversed dividend is a 
   });
 
   it("a positive tax on a positive dividend stays a withholding, as before", () => {
-    expect(tr(DIV({ tax: "5.00" })).cashTransactions.map((c) => c.amount)).toEqual(["110", "-5"]);
+    expect(tr(DIV({ tax: "5.00" })).cashTransactions.map((c) => c.amount)).toEqual(["100", "-5"]);
   });
 });
 
 describe("Trade Republic dividend currency: the currency is the one of the amount that was read", () => {
-  it.each(METHODS)("[%s] control: 100 EUR credited for 110 USD gives 0029 99.99", (method) => {
-    expect(report(tr(DIV()), method).dividends.grossIncome.toFixed(2)).toBe("99.99");
+  it.each(METHODS)("[%s] control: 100 EUR credited for 110 USD gives 0029 100.00, the euros TR credits (#476)", (method) => {
+    expect(report(tr(DIV()), method).dividends.grossIncome.toFixed(2)).toBe("100.00");
   });
 
   it.each(METHODS)("[%s] original_currency USD with an empty original_amount books the 100 EUR in EUR", (method) => {
@@ -457,10 +457,10 @@ describe("Trade Republic dividend of a written zero with a tax: a withholding wi
 
   it.each(METHODS)("[%s] a US dividend with no tax and a later row of original_amount 0 with a tax of -15.00 gives 0588 0.00, not 15.00", (method) => {
     const s = tr(DIV(), DIV({ date: "2025-05-20", original_amount: "0", amount: "0", tax: "-15.00" }));
-    expect(s.cashTransactions.map((c) => [c.type, c.amount])).toEqual([["Dividends", "110"]]);
+    expect(s.cashTransactions.map((c) => [c.type, c.amount])).toEqual([["Dividends", "100"]]);
     expect(rowsOf(s, "parser.cash_income_amount_unreadable")).toBe('DIVIDEND Acme Corp (US0000001001) USD 20250520 (tax -15.00) [original_amount: "0"]');
     const r = report(s, method);
-    expect([r.dividends.grossIncome.toFixed(2), r.doubleTaxation.deduction.toFixed(2)]).toEqual(["99.99", "0.00"]);
+    expect([r.dividends.grossIncome.toFixed(2), r.doubleTaxation.deduction.toFixed(2)]).toEqual(["100.00", "0.00"]);
   });
 
   it.each(METHODS)("[%s] a row of amount 0 with a tax of +5.00 is a refund, and named: alone it gives 0597 0.00, after a dividend with -19 it gives 14.00, not 24.00", (method) => {
@@ -525,16 +525,16 @@ describe("Trade Republic: the refund hint says where the report takes a refund (
 });
 
 describe("Trade Republic dividend whose amount and original_amount disagree in sign is not booked and is named", () => {
-  it.each(METHODS)("[%s] control: 100 EUR for 110 USD with -15 gives 0029 99.99 and 0588 15.00; a reversal of both signs nets 0", (method) => {
+  it.each(METHODS)("[%s] control: 100 EUR for 110 USD with -15 gives 0029 100.00 and 0588 15.00; a reversal of both signs nets 0", (method) => {
     const r = report(tr(DIV({ tax: "-15.00" })), method);
-    expect([r.dividends.grossIncome.toFixed(2), r.doubleTaxation.deduction.toFixed(2)]).toEqual(["99.99", "15.00"]);
+    expect([r.dividends.grossIncome.toFixed(2), r.doubleTaxation.deduction.toFixed(2)]).toEqual(["100.00", "15.00"]);
     const reversed = tr(DIV({ tax: "-15.00" }), DIV({ amount: "-100.00", original_amount: "-110", tax: "15.00" }));
     expect(reversed.parserMessages).toBeUndefined();
     const rr = report(reversed, method);
     expect([rr.dividends.grossIncome.toFixed(2), rr.doubleTaxation.deduction.toFixed(2)]).toEqual(["0.00", "0.00"]);
   });
 
-  it.each(METHODS)("[%s] amount 100.00 with original_amount -110 books no negative income: 0029 0.00, not -99.99, and the row is named", (method) => {
+  it.each(METHODS)("[%s] amount 100.00 with original_amount -110 books no negative income: 0029 0.00, not -100.00, and the row is named", (method) => {
     const s = tr(DIV({ original_amount: "-110", tax: "-15.00" }));
     expect(s.cashTransactions).toEqual([]);
     expect(rowsOf(s, "parser.cash_income_amount_unreadable")).toBe(
@@ -545,16 +545,16 @@ describe("Trade Republic dividend whose amount and original_amount disagree in s
 
   it.each(METHODS)("[%s] next to a dividend, it never cancels that dividend's income", (method) => {
     const r = report(tr(DIV({ tax: "-15.00" }), DIV({ date: "2025-05-20", original_amount: "-110", tax: "15.00" })), method);
-    expect([r.dividends.grossIncome.toFixed(2), r.doubleTaxation.deduction.toFixed(2)]).toEqual(["99.99", "15.00"]);
+    expect([r.dividends.grossIncome.toFixed(2), r.doubleTaxation.deduction.toFixed(2)]).toEqual(["100.00", "15.00"]);
   });
 
-  it.each(METHODS)("[%s] amount -100.00 with an unsigned original_amount 110 is not booked as a second dividend: 0029 99.99, not 199.98", (method) => {
+  it.each(METHODS)("[%s] amount -100.00 with an unsigned original_amount 110 is not booked as a second dividend: 0029 100.00, not 200.00", (method) => {
     const s = tr(DIV({ tax: "-15.00" }), DIV({ amount: "-100.00", original_amount: "110", tax: "15.00" }));
-    expect(s.cashTransactions.map((c) => [c.type, c.amount])).toEqual([["Dividends", "110"], ["Withholding Tax", "-15.00"]]);
+    expect(s.cashTransactions.map((c) => [c.type, c.amount])).toEqual([["Dividends", "100"], ["Withholding Tax", "-15.00"]]);
     expect(rowsOf(s, "parser.cash_income_amount_unreadable")).toBe(
       'DIVIDEND Acme Corp (US0000001001) USD 20250515 (tax 15.00) [amount: "-100.00", original_amount: "110"]');
     const r = report(s, method);
-    expect([r.dividends.grossIncome.toFixed(2), r.doubleTaxation.deduction.toFixed(2)]).toEqual(["99.99", "15.00"]);
+    expect([r.dividends.grossIncome.toFixed(2), r.doubleTaxation.deduction.toFixed(2)]).toEqual(["100.00", "15.00"]);
   });
 
   it.each(METHODS)("[%s] amount 100.00 with original_amount 0 never books 0 income in silence", (method) => {
